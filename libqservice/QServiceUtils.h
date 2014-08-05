@@ -78,6 +78,10 @@ inline android::status_t toggleScreenUpdate(uint32_t on) {
     return sendSingleParam(qService::IQService::TOGGLE_SCREEN_UPDATE, on);
 }
 
+inline android::status_t setPartialUpdate(uint32_t enable) {
+    return sendSingleParam(qService::IQService::SET_PARTIAL_UPDATE, enable);
+}
+
 inline android::status_t setExtOrientation(uint32_t orientation) {
     return sendSingleParam(qService::IQService::EXTERNAL_ORIENTATION,
             orientation);
