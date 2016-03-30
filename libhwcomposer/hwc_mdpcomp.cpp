@@ -1423,6 +1423,18 @@ bool MDPComp::isYUVDoable(hwc_context_t* ctx, hwc_layer_1_t* layer) {
         return false;
     }
 
+    hwc_rect_t crop = integerizeSourceCrop(layer->sourceCropf);
+    private_handle_t *hnd = (private_handle_t *)layer->handle;
+    int aWidth = 0, aHeight = 0;
+    AdrenoMemInfo::getInstance().getAlignedWidthAndHeight(crop.right - crop.left,
+        crop.bottom - crop.top, hnd->format, 0, aWidth, aHeight);
+    if(qdutils::MDPVersion::getInstance().is8x16() && has90Transform(layer) &&
+         hnd && ((aWidth < getWidth(hnd)) || (aHeight < getHeight(hnd)))) {
+        ALOGD_IF(isDebug(), "%s: Can not support YUV layer with crop",__FUNCTION__);
+        return false;
+    }
+
+
     if(isSecuring(ctx, layer)) {
         ALOGD_IF(isDebug(), "%s: MDP securing is active", __FUNCTION__);
         return false;
