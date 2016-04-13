@@ -232,6 +232,9 @@ DisplayError HWInfo::GetHWResourceInfo(HWResourceInfo *hw_resource) {
 
   Sys::fclose_(fileptr);
 
+  if (hw_resource->num_vig_pipe >= 4)
+    hw_resource->num_vig_pipe = 3;  //reserve 2 pipes for LK splash and RVC
+
   DLOGI("SDE Version = %d, SDE Revision = %x, RGB = %d, VIG = %d, DMA = %d, Cursor = %d",
         hw_resource->hw_version, hw_resource->hw_revision, hw_resource->num_rgb_pipe,
         hw_resource->num_vig_pipe, hw_resource->num_dma_pipe, hw_resource->num_cursor_pipe);
