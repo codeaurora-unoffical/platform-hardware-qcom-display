@@ -63,7 +63,6 @@ int getPluggableNode() {
             size_t len = PAGE_SIZE;
             ssize_t read;
             char *readLine = (char *) malloc (len);
-            char property[PROPERTY_VALUE_MAX];
             while((read = getline((char **)&readLine, &len,
                             panelInfoNodeFP)) != -1) {
                 int token_ct = 0;
