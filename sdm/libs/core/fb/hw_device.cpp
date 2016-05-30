@@ -507,6 +507,7 @@ DisplayError HWDevice::SetFormat(const LayerBufferFormat &source, uint32_t *targ
   case kFormatRGBX8888Ubwc:             *target = MDP_RGBX_8888_UBWC;    break;
   case kFormatBGR565Ubwc:               *target = MDP_RGB_565_UBWC;      break;
   case kFormatYCbCr420SPVenusUbwc:      *target = MDP_Y_CBCR_H2V2_UBWC;  break;
+  case kFormatCbYCrY422H2V1Packed:      *target = MDP_CBYCRY_H2V1;       break;
   default:
     DLOGE("Unsupported format type %d", source);
     return kErrorParameters;
@@ -553,6 +554,7 @@ DisplayError HWDevice::SetStride(HWDeviceType device_type, LayerBufferFormat for
     *target = width;
     break;
   case kFormatYCbCr422H2V1Packed:
+  case kFormatCbYCrY422H2V1Packed:
   case kFormatYCrCb422H2V1SemiPlanar:
   case kFormatYCrCb422H1V2SemiPlanar:
   case kFormatYCbCr422H2V1SemiPlanar:

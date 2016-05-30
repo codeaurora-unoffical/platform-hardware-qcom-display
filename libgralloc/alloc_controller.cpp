@@ -190,6 +190,7 @@ bool isUncompressedRgbFormat(int format)
         case HAL_PIXEL_FORMAT_R_8:
         case HAL_PIXEL_FORMAT_RG_88:
         case HAL_PIXEL_FORMAT_BGRX_8888:    // Intentional fallthrough
+        case HAL_PIXEL_FORMAT_BGR_888:
             is_rgb_format = true;
             break;
         default:
@@ -245,6 +246,7 @@ void AdrenoMemInfo::getAlignedWidthAndHeight(int width, int height, int format,
         case HAL_PIXEL_FORMAT_YCrCb_422_SP:
         case HAL_PIXEL_FORMAT_YCbCr_422_I:
         case HAL_PIXEL_FORMAT_YCrCb_422_I:
+        case HAL_PIXEL_FORMAT_CbYCrY_422_I:
             aligned_w = ALIGN(width, 16);
             break;
         case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
@@ -591,6 +593,7 @@ unsigned int getSize(int format, int width, int height, int usage,
         case HAL_PIXEL_FORMAT_YCrCb_422_SP:
         case HAL_PIXEL_FORMAT_YCbCr_422_I:
         case HAL_PIXEL_FORMAT_YCrCb_422_I:
+        case HAL_PIXEL_FORMAT_CbYCrY_422_I:
             if(width & 1) {
                 ALOGE("width is odd for the YUV422_SP format");
                 return 0;
@@ -806,6 +809,7 @@ int getYUVPlaneInfo(private_handle_t* hnd, struct android_ycbcr* ycbcr)
             ycbcr->chroma_step = 1;
         break;
         //Unsupported formats
+        case HAL_PIXEL_FORMAT_CbYCrY_422_I:
         case HAL_PIXEL_FORMAT_YCbCr_422_I:
         case HAL_PIXEL_FORMAT_YCrCb_422_I:
         case HAL_PIXEL_FORMAT_YCbCr_420_SP_TILED:
