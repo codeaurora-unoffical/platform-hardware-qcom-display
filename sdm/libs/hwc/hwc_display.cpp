@@ -955,6 +955,7 @@ LayerBufferFormat HWCDisplay::GetSDMFormat(const int32_t &source, const int flag
   case HAL_PIXEL_FORMAT_YCbCr_420_SP:             format = kFormatYCbCr420SemiPlanar;       break;
   case HAL_PIXEL_FORMAT_YCbCr_422_SP:             format = kFormatYCbCr422H2V1SemiPlanar;   break;
   case HAL_PIXEL_FORMAT_YCbCr_422_I:              format = kFormatYCbCr422H2V1Packed;       break;
+  case HAL_PIXEL_FORMAT_CbYCrY_422_I:             format = kFormatCbYCrY422H2V1Packed;       break;
   default:
     DLOGW("Unsupported format type = %d", source);
     return kFormatInvalid;

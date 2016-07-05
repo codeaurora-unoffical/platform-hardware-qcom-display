@@ -109,6 +109,8 @@
 #define HAL_PIXEL_FORMAT_NV21_ZSL                0x113
 #define HAL_PIXEL_FORMAT_YCrCb_420_SP_VENUS      0x114
 #define HAL_PIXEL_FORMAT_BGR_565                 0x115
+#define HAL_PIXEL_FORMAT_CbYCrY_422_I            0x116
+#define HAL_PIXEL_FORMAT_BGR_888                 0x117
 #define HAL_PIXEL_FORMAT_INTERLACE               0x180
 
 //v4l2_fourcc('Y', 'U', 'Y', 'L'). 24 bpp YUYV 4:2:2 10 bit per component
