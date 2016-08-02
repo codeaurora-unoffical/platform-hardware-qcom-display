@@ -808,8 +808,17 @@ int getYUVPlaneInfo(private_handle_t* hnd, struct android_ycbcr* ycbcr)
             ycbcr->cstride = cstride;
             ycbcr->chroma_step = 1;
         break;
-        //Unsupported formats
         case HAL_PIXEL_FORMAT_CbYCrY_422_I:
+            ystride = width * 2;
+            cstride = 0;
+            ycbcr->y  = (void*)hnd->base;
+            ycbcr->cr = NULL;
+            ycbcr->cb = NULL;
+            ycbcr->ystride = ystride;
+            ycbcr->cstride = 0;
+            ycbcr->chroma_step = 0;
+        break;
+        //Unsupported formats
         case HAL_PIXEL_FORMAT_YCbCr_422_I:
         case HAL_PIXEL_FORMAT_YCrCb_422_I:
         case HAL_PIXEL_FORMAT_YCbCr_420_SP_TILED:
