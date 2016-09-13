@@ -701,6 +701,7 @@ const char * DisplayBase::GetName(const LayerBufferFormat &format) {
   case kFormatYCrCb422H2V1SemiPlanar:   return "Y_CRCB_422_H2V2";
   case kFormatYCbCr420SPVenusUbwc:      return "Y_CBCR_420_VENUS_UBWC";
   case kFormatYCbCr422H2V1Packed:       return "YCBYCR_422_H2V1";
+  case kFormatCbYCrY422H2V1Packed:      return "CBYCRY_422_H2V1";
   default:                              return "UNKNOWN";
   }
 }
