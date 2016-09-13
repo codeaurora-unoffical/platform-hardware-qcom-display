@@ -331,8 +331,8 @@ static bool getMdpArbNotification(const char* strUdata,
                 l = strlen(p);
                 token = strtok_r(p, delimit, &last);
                 i = 0;
-                c = (token == NULL) ? 0 : strlen(token);
-                while((NULL != token) && (c <= l)) {
+                c = 0;
+                while((NULL != token) && (c < l)) {
                     if (!strncmp(token, "hwc", strlen("hwc"))) {
                         fbIdx[idx] = i;
                         idx++;
@@ -354,8 +354,8 @@ static bool getMdpArbNotification(const char* strUdata,
                 token = strtok_r(p, delimit, &last);
                 i = 0;
                 j = 0;
-                c = (token == NULL) ? 0 : strlen(token);
-                while((token) && (j < idx) && (c <= l)) {
+                c = 0;
+                while((token) && (j < idx) && (c < l)) {
                     if (i == fbIdx[j]) {
                         if (token) {
                             fbIdx[j] = atoi(token);
