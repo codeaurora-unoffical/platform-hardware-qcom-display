@@ -32,6 +32,7 @@
 #include "strategy_interface.h"
 #include "resource_interface.h"
 #include "rotator_interface.h"
+#include "dpps_control_interface.h"
 
 namespace sdm {
 
@@ -76,6 +77,7 @@ class ExtensionInterface {
                                      BufferSyncHandler *buffer_sync_handler,
                                      RotatorInterface **intf) = 0;
   virtual DisplayError DestroyRotator(RotatorInterface *intf) = 0;
+  virtual DisplayError CreateDppsControlExtn(DppsControlInterface **dpps_control_interface) = 0;
 
  protected:
   virtual ~ExtensionInterface() { }

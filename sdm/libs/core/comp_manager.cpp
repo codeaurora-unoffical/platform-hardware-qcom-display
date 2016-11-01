@@ -39,16 +39,24 @@ DisplayError CompManager::Init(const HWResourceInfo &hw_res_info,
   SCOPE_LOCK(locker_);
 
   DisplayError error = kErrorNone;
+  DisplayError dpps_error = kErrorNone;
 
   if (extension_intf) {
     error = extension_intf->CreateResourceExtn(hw_res_info, &resource_intf_, buffer_sync_handler);
+    dpps_error = extension_intf->CreateDppsControlExtn(&dpps_ctrl_intf_);
   } else {
     resource_intf_ = &resource_default_;
     error = resource_default_.Init(hw_res_info);
+    dpps_error = kErrorNotSupported;
   }
 
   if (error != kErrorNone) {
+    delete dpps_ctrl_intf_;
     return error;
+  }
+
+  if (dpps_error != kErrorNone) {
+    dpps_ctrl_intf_ = new DppsControlDefault();
   }
 
   hw_res_info_ = hw_res_info;
@@ -66,6 +74,7 @@ DisplayError CompManager::Deinit() {
     resource_default_.Deinit();
   }
 
+  delete dpps_ctrl_intf_;
   return kErrorNone;
 }
 
