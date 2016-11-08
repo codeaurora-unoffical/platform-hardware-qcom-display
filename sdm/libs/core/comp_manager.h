@@ -91,6 +91,7 @@ class CompManager : public DumpImpl {
     // Using primary panel flag of hw panel to configure Constraints. We do not need other hw
     // panel parameters for now.
     bool is_primary_panel = false;
+    bool scaled_composition = false;
     bool valid_cursor = false;
     PUConstraints pu_constraints = {};
   };
