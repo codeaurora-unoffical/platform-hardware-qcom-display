@@ -133,6 +133,7 @@ DisplayError Strategy::GetNextStrategy(StrategyConstraints *constraints) {
 
   for (uint32_t i = 0; i < hw_layers_info_->app_layer_count; i++) {
     layer_stack->layers.at(i)->composition = kCompositionGPU;
+    layer_stack->layers.at(i)->request.flags.request_flags = 0;  // Reset layer request
   }
 
   Layer *gpu_target_layer = layer_stack->layers.at(hw_layers_info_->gpu_target_index);
@@ -204,5 +205,14 @@ DisplayError Strategy::Reconfigure(const HWPanelInfo &hw_panel_info,
   return strategy_intf_->Reconfigure(hw_panel_info_.mode, hw_panel_info_.s3d_mode, mixer_attributes,
                                      fb_config);
 }
+
+DisplayError Strategy::Purge() {
+  if (strategy_intf_) {
+    return strategy_intf_->Purge();
+  }
+
+  return kErrorNone;
+}
+
 
 }  // namespace sdm
