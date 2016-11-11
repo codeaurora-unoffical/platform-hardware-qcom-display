@@ -1,5 +1,5 @@
 sdm-libs := sdm/libs
-display-hals := include libqservice libqdutils $(sdm-libs)/utils $(sdm-libs)/core
+display-hals := include libqservice libqdutils $(sdm-libs)/utils $(sdm-libs)/core gpu_tonemapper
 
 ifneq ($(TARGET_IS_HEADLESS), true)
     display-hals += libcopybit liblight libmemtrack hdmi_cec \
