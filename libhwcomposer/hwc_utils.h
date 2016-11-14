@@ -40,6 +40,9 @@
 #define MDP_ARB_DEV_PATH "/dev/mdp_arb"
 #define HWC_FB_DISP_ID_SYS_PATH "/sys/class/graphics/fb%d/msm_fb_disp_id"
 
+#define HWC_MDP_ARB_CLIENT_NAME "hwc"
+#define HWC_MDP_ARB_EVENT_NAME "switch-reverse"
+
 #ifndef HWC_DISPLAY_SECONDARY
 #define HWC_DISPLAY_SECONDARY HWC_DISPLAY_EXTERNAL
 #define HWC_DISPLAY_SECONDARY_BIT (1 << HWC_DISPLAY_SECONDARY)
@@ -511,6 +514,12 @@ struct hwc_context_t {
     qhwc::KPILog mKpiLog;
     // Track if the power on call is the first one from the system.
     bool mFirstPowerOnCompleted;
+    // flag to indicate if handshake is done between hwc and mdp arbitrator
+    bool mHandshakeDone;
+    // flag to indicate whether boot is completed
+    bool mBootCompleted;
+    // flag to indicate if notification is sent to mdp arbitrator
+    bool mNotifyDone;
 };
 
 namespace qhwc {

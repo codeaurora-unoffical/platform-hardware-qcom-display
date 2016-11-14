@@ -21,6 +21,7 @@
 #include <fcntl.h>
 #include <errno.h>
 
+#include <linux/msm_mdp.h>
 #include <cutils/log.h>
 #include <cutils/atomic.h>
 #include <EGL/egl.h>
@@ -253,11 +254,44 @@ static int hwc_prepare_virtual(hwc_composer_device_1 *dev,
     return 0;
 }
 
+int checkRVCState(hwc_context_t *ctx)
+{
+    int i = 0, ret = 0;
+    mdp_arb_event event;
+
+    if (ctx && ctx->mMDPArbSuppport) {
+        for (i = 0; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i++) {
+            memset(&event, 0x00, sizeof(event));
+            strlcpy(event.name, HWC_MDP_ARB_EVENT_NAME, MDP_ARB_NAME_LEN);
+            ret = ioctl(ctx->dpyAttr[i].arb_fd, MSMFB_ARB_GET_STATE, &event);
+            if (ret) {
+                ALOGE("%s MDP_GET_STATE fails=%d, display=%d", __FUNCTION__,
+                    ret, i);
+                break;
+            } else {
+                if (event.event.get_state == 1) {
+                    ctx->dpyAttr[i].inOptimizeMode = true;
+                } else {
+                    ctx->dpyAttr[i].inOptimizeMode = false;
+                }
+                ctx->mHandshakeDone= true;
+                ALOGD_IF(isDebug(), "%s, handshake done\n", __FUNCTION__);
+                ALOGD_IF(isDebug(), "%s,%d event=%s state=%d disp=%d " \
+                    "optimize=%d", __FUNCTION__, __LINE__,
+                    HWC_MDP_ARB_EVENT_NAME, event.event.get_state, i,
+                    ctx->dpyAttr[i].inOptimizeMode);
+            }
+        }
+    }
+
+    return ret;
+}
 
 static int hwc_prepare(hwc_composer_device_1 *dev, size_t numDisplays,
                        hwc_display_contents_1_t** displays)
 {
     int ret = 0;
+    char value[PROPERTY_VALUE_MAX];
     hwc_context_t* ctx = (hwc_context_t*)(dev);
 
     if (ctx->mPanelResetStatus) {
@@ -269,6 +303,35 @@ static int hwc_prepare(hwc_composer_device_1 *dev, size_t numDisplays,
     ctx->mDrawLock.lock();
     reset(ctx, numDisplays, displays);
 
+    //this code should only be executing untill hwc-arb handshake is complete
+    if(!ctx->mHandshakeDone) {
+       property_get("sys.boot_completed", value, "0");
+       ctx->mBootCompleted = atoi(value);
+
+       if(ctx->mBootCompleted == true){
+          ALOGD_IF(isDebug(), "%s boot completed\n", __FUNCTION__);
+          // notify the MDP arb that hwc is ready to handle events
+          if(!ctx->mNotifyDone) {
+              unsigned int notify = 0x01;
+              for(size_t i = 0; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i++) {
+                 ret = ioctl(ctx->dpyAttr[i].arb_fd, MSMFB_ARB_CLIENT_READY, &notify);
+                 if (ret) {
+                    ALOGE("%s mdp arb client ready notify fails=%d, fb - %d",
+                                                          __FUNCTION__, ret, i);
+                    break;
+                 } else {
+                    ALOGD_IF(isDebug(), "%s client ready for disp=%d\n", __FUNCTION__, i);
+                    ctx->mNotifyDone = true;
+                 }
+              }
+          }
+
+          //check for the current rvc state
+          if (checkRVCState(ctx) < 0) {
+              ALOGE("%s: failed to check rvc state!!", __FUNCTION__);
+          }
+       }
+    }
     ctx->mOverlay->configBegin();
     ctx->mRotMgr->configBegin();
     ctx->mNeedsRotator = false;

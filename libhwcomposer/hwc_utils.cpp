@@ -52,8 +52,6 @@ namespace ovutils = overlay::utils;
 #define REVERSE_CAMERA_PATH "/sys/class/switch/reverse/state"
 namespace qhwc {
 #define HWC_FB_DEV_PATH "/dev/graphics/fb%u"
-#define HWC_MDP_ARB_CLIENT_NAME "hwc"
-#define HWC_MDP_ARB_EVENT_NAME "switch-reverse"
 #define HWC_WATCHPROPS_THREAD_NAME "hwcWatchpropsThread"
 bool mHwcDebugLogs = false;
 
@@ -263,6 +261,7 @@ static int registerMdpArbitrator(hwc_context_t *ctx)
         arbReg.priority = 1;
         arbReg.notification_support_mask = (MDP_ARB_NOTIFICATION_DOWN |
             MDP_ARB_NOTIFICATION_UP | MDP_ARB_NOTIFICATION_OPTIMIZE);
+        arbReg.delay_events = 1;
         ret = ioctl(fd, MSMFB_ARB_REGISTER, &arbReg);
         if (ret) {
             ALOGE("%s MDP_ARB_REGISTER fails=%d, display=%d", __FUNCTION__,
@@ -367,8 +366,11 @@ void initContext(hwc_context_t *ctx)
         ALOGE("%s: failed to open MDP arbitrator!!", __FUNCTION__);
     }
 
-    if (checkMdpArbitratorEvent(ctx) < 0) {
-        ALOGE("%s: failed to check MDP arbitrator event!!", __FUNCTION__);
+    //enforce hwc to operate in optimization mode
+    if (ctx && ctx->mMDPArbSuppport) {
+        for (int i = 0; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i++) {
+             ctx->dpyAttr[i].inOptimizeMode = true;
+        }
     }
 
     ctx->mMDP.version = qdutils::MDPVersion::getInstance().getMDPVersion();
