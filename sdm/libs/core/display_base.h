@@ -115,6 +115,8 @@ class DisplayBase : public DisplayInterface, DumpImpl {
  protected:
   DisplayError BuildLayerStackStats(LayerStack *layer_stack);
   virtual DisplayError ValidateGPUTargetParams();
+  void CommitLayerParams(LayerStack *layer_stack);
+  void PostCommitLayerParams(LayerStack *layer_stack);
 
   // DumpImpl method
   void AppendDump(char *buffer, uint32_t length);

@@ -31,7 +31,6 @@ std::atomic<hwc2_layer_t> HWCLayer::next_id_(1);
 // Layer operations
 HWCLayer::HWCLayer(hwc2_display_t display_id) : id_(next_id_++), display_id_(display_id) {
   layer_ = new Layer();
-  layer_->input_buffer = new LayerBuffer();
   // Fences are deferred, so the first time this layer is presented, return -1
   // TODO(user): Verify that fences are properly obtained on suspend/resume
   release_fences_.push(-1);
@@ -45,9 +44,6 @@ HWCLayer::~HWCLayer() {
   }
 
   if (layer_) {
-    if (layer_->input_buffer) {
-      delete (layer_->input_buffer);
-    }
     delete layer_;
   }
 }
@@ -64,7 +60,7 @@ HWC2::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, int32_t acquire_fen
   }
 
   const private_handle_t *handle = static_cast<const private_handle_t *>(buffer);
-  LayerBuffer *layer_buffer = layer_->input_buffer;
+  LayerBuffer *layer_buffer = &layer_->input_buffer;
   layer_buffer->width = UINT32(handle->width);
   layer_buffer->height = UINT32(handle->height);
   layer_buffer->format = GetSDMFormat(handle->format, handle->flags);
@@ -127,7 +123,7 @@ HWC2::Error HWCLayer::SetLayerBlendMode(HWC2::BlendMode mode) {
 
 HWC2::Error HWCLayer::SetLayerColor(hwc_color_t color) {
   layer_->solid_fill_color = GetUint32Color(color);
-  layer_->input_buffer->format = kFormatARGB8888;
+  layer_->input_buffer.format = kFormatARGB8888;
   DLOGD("Layer color set to: %u", layer_->solid_fill_color);
   DLOGD("[%" PRIu64 "][%" PRIu64 "] Layer color set to %u  %" PRIu64, display_id_, id_,
         layer_->solid_fill_color);
@@ -421,7 +417,7 @@ LayerBufferS3DFormat HWCLayer::GetS3DFormat(uint32_t s3d_format) {
 
 DisplayError HWCLayer::SetMetaData(const private_handle_t *pvt_handle, Layer *layer) {
   const MetaData_t *meta_data = reinterpret_cast<MetaData_t *>(pvt_handle->base_metadata);
-  LayerBuffer *layer_buffer = layer->input_buffer;
+  LayerBuffer *layer_buffer = &layer->input_buffer;
 
   if (!meta_data) {
     return kErrorNone;

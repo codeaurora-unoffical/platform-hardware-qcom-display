@@ -301,6 +301,8 @@ DisplayError DisplayBase::Commit(LayerStack *layer_stack) {
     }
   }
 
+  CommitLayerParams(layer_stack);
+
   if (rotator_intf_ && IsRotationRequired(&hw_layers_)) {
     error = rotator_intf_->Commit(display_rotator_ctx_, &hw_layers_);
     if (error != kErrorNone) {
@@ -328,6 +330,8 @@ DisplayError DisplayBase::Commit(LayerStack *layer_stack) {
     }
   }
 
+  PostCommitLayerParams(layer_stack);
+
   if (partial_update_control_) {
     comp_manager_->ControlPartialUpdate(display_comp_ctx_, true /* enable */);
   }
@@ -347,8 +351,7 @@ DisplayError DisplayBase::Flush() {
   if (!active_) {
     return kErrorPermission;
   }
-
-  hw_layers_.info.count = 0;
+  hw_layers_.info.hw_layers.clear();
   error = hw_intf_->Flush();
   if (error == kErrorNone) {
     // Release all the rotator sessions.
@@ -433,7 +436,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state) {
 
   switch (state) {
   case kStateOff:
-    hw_layers_.info.count = 0;
+    hw_layers_.info.hw_layers.clear();
     error = hw_intf_->Flush();
     if (error == kErrorNone) {
       // Release all the rotator sessions.
@@ -534,7 +537,7 @@ void DisplayBase::AppendDump(char *buffer, uint32_t length) {
 
   uint32_t num_hw_layers = 0;
   if (hw_layers_.info.stack) {
-    num_hw_layers = hw_layers_.info.count;
+    num_hw_layers = UINT32(hw_layers_.info.hw_layers.size());
   }
 
   if (num_hw_layers == 0) {
@@ -576,13 +579,16 @@ void DisplayBase::AppendDump(char *buffer, uint32_t length) {
 
   for (uint32_t i = 0; i < num_hw_layers; i++) {
     uint32_t layer_index = hw_layers_.info.index[i];
-    Layer *layer = hw_layers_.info.stack->layers.at(layer_index);
-    LayerBuffer *input_buffer = layer->input_buffer;
+    // sdm-layer from client layer stack
+    Layer *sdm_layer = hw_layers_.info.stack->layers.at(layer_index);
+    // hw-layer from hw layers info
+    Layer &hw_layer = hw_layers_.info.hw_layers.at(i);
+    LayerBuffer *input_buffer = &hw_layer.input_buffer;
     HWLayerConfig &layer_config = hw_layers_.config[i];
     HWRotatorSession &hw_rotator_session = layer_config.hw_rotator_session;
 
     char idx[8] = { 0 };
-    const char *comp_type = GetName(layer->composition);
+    const char *comp_type = GetName(sdm_layer->composition);
     const char *buffer_format = GetFormatString(input_buffer->format);
     const char *rotate_split[2] = { "Rot-1", "Rot-2" };
     const char *comp_split[2] = { "Comp-1", "Comp-2" };
@@ -631,10 +637,10 @@ void DisplayBase::AppendDump(char *buffer, uint32_t length) {
       LayerRect &dst_roi = pipe.dst_roi;
 
       snprintf(z_order, sizeof(z_order), "%d", pipe.z_order);
-      snprintf(flags, sizeof(flags), "0x%08x", layer->flags.flags);
+      snprintf(flags, sizeof(flags), "0x%08x", hw_layer.flags.flags);
       snprintf(decimation, sizeof(decimation), "%3d x %3d", pipe.horizontal_decimation,
                pipe.vertical_decimation);
-      ColorMetaData &color_metadata = layer->input_buffer->color_metadata;
+      ColorMetaData &color_metadata = hw_layer.input_buffer.color_metadata;
       snprintf(color_primary, sizeof(color_primary), "%d", color_metadata.colorPrimaries);
       snprintf(range, sizeof(range), "%d", color_metadata.range);
 
@@ -658,7 +664,7 @@ bool DisplayBase::IsRotationRequired(HWLayers *hw_layers) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   HWLayersInfo &layer_info = hw_layers->info;
 
-  for (uint32_t i = 0; i < layer_info.count; i++) {
+  for (uint32_t i = 0; i < layer_info.hw_layers.size(); i++) {
     HWRotatorSession *hw_rotator_session = &hw_layers->config[i].hw_rotator_session;
 
     if (hw_rotator_session->hw_block_count) {
@@ -945,9 +951,8 @@ bool DisplayBase::NeedsMixerReconfiguration(LayerStack *layer_stack, uint32_t *n
 
   for (uint32_t i = 0; i < layer_count; i++) {
     Layer *layer = layers.at(i);
-    LayerBuffer *layer_buffer = layer->input_buffer;
 
-    if (!layer_buffer->flags.video) {
+    if (!layer->input_buffer.flags.video) {
       continue;
     }
 
@@ -1064,6 +1069,68 @@ DisplayError DisplayBase::GetDisplayPort(DisplayPort *port) {
   *port = hw_panel_info_.port;
 
   return kErrorNone;
+}
+
+void DisplayBase::CommitLayerParams(LayerStack *layer_stack) {
+  // Copy the acquire fence from clients layers  to HWLayers
+  uint32_t hw_layers_count = UINT32(hw_layers_.info.hw_layers.size());
+
+  for (uint32_t i = 0; i < hw_layers_count; i++) {
+    Layer *sdm_layer = layer_stack->layers.at(hw_layers_.info.index[i]);
+    Layer &hw_layer = hw_layers_.info.hw_layers.at(i);
+
+    hw_layer.input_buffer.planes[0].fd = sdm_layer->input_buffer.planes[0].fd;
+    hw_layer.input_buffer.planes[0].offset = sdm_layer->input_buffer.planes[0].offset;
+    hw_layer.input_buffer.planes[0].stride = sdm_layer->input_buffer.planes[0].stride;
+    hw_layer.input_buffer.size = sdm_layer->input_buffer.size;
+    hw_layer.input_buffer.acquire_fence_fd = sdm_layer->input_buffer.acquire_fence_fd;
+  }
+
+  return;
+}
+
+void DisplayBase::PostCommitLayerParams(LayerStack *layer_stack) {
+  // Copy the release fence from HWLayers to clients layers
+    uint32_t hw_layers_count = UINT32(hw_layers_.info.hw_layers.size());
+
+  std::vector<uint32_t> fence_dup_flag = {};
+
+  for (uint32_t i = 0; i < hw_layers_count; i++) {
+    uint32_t sdm_layer_index = hw_layers_.info.index[i];
+    Layer *sdm_layer = layer_stack->layers.at(sdm_layer_index);
+    Layer &hw_layer = hw_layers_.info.hw_layers.at(i);
+
+    // Copy the release fence only once for a SDM Layer.
+    // In S3D use case, two hw layers can share the same input buffer, So make sure to merge the
+    // output fence fd and assign it to layer's input buffer release fence fd.
+    if (std::find(fence_dup_flag.begin(), fence_dup_flag.end(), sdm_layer_index) ==
+        fence_dup_flag.end()) {
+      sdm_layer->input_buffer.release_fence_fd = hw_layer.input_buffer.release_fence_fd;
+      fence_dup_flag.push_back(sdm_layer_index);
+    } else {
+      int temp = -1;
+      buffer_sync_handler_->SyncMerge(hw_layer.input_buffer.release_fence_fd,
+                                      sdm_layer->input_buffer.release_fence_fd, &temp);
+
+      if (hw_layer.input_buffer.release_fence_fd >= 0) {
+        Sys::close_(hw_layer.input_buffer.release_fence_fd);
+        hw_layer.input_buffer.release_fence_fd = -1;
+      }
+
+      if (sdm_layer->input_buffer.release_fence_fd >= 0) {
+        Sys::close_(sdm_layer->input_buffer.release_fence_fd);
+        sdm_layer->input_buffer.release_fence_fd = -1;
+      }
+
+      sdm_layer->input_buffer.release_fence_fd = temp;
+    }
+
+    // Reset the sync fence fds of HWLayer
+    hw_layer.input_buffer.acquire_fence_fd = -1;
+    hw_layer.input_buffer.release_fence_fd = -1;
+  }
+
+  return;
 }
 
 }  // namespace sdm
