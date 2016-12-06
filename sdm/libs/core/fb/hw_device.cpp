@@ -837,6 +837,28 @@ void HWDevice::GetHWPanelInfoByNode(int device_node, HWPanelInfo *panel_info) {
         panel_info->is_primary_panel = atoi(tokens[1]);
       } else if (!strncmp(tokens[0], "is_pluggable", strlen("is_pluggable"))) {
         panel_info->is_pluggable = atoi(tokens[1]);
+      } else if (!strncmp(tokens[0], "is_hdr_enabled", strlen("is_hdr_enabled"))) {
+        panel_info->hdr_info.enabled = atoi(tokens[1]);
+      } else if (!strncmp(tokens[0], "peak_brightness", strlen("peak_brightness"))) {
+        panel_info->hdr_info.peak_brightness = UINT32(atoi(tokens[1]));
+      } else if (!strncmp(tokens[0], "blackness_level", strlen("blackness_level"))) {
+        panel_info->hdr_info.blackness_level = UINT32(atoi(tokens[1]));
+      } else if (!strncmp(tokens[0], "white_chromaticity_x", strlen("white_chromaticity_x"))) {
+        panel_info->hdr_info.white.x = UINT32(atoi(tokens[1]));
+      } else if (!strncmp(tokens[0], "white_chromaticity_y", strlen("white_chromaticity_y"))) {
+        panel_info->hdr_info.white.y = UINT32(atoi(tokens[1]));
+      } else if (!strncmp(tokens[0], "red_chromaticity_x", strlen("red_chromaticity_x"))) {
+        panel_info->hdr_info.red.x = UINT32(atoi(tokens[1]));
+      } else if (!strncmp(tokens[0], "red_chromaticity_y", strlen("red_chromaticity_y"))) {
+        panel_info->hdr_info.red.y = UINT32(atoi(tokens[1]));
+      } else if (!strncmp(tokens[0], "green_chromaticity_x", strlen("green_chromaticity_x"))) {
+        panel_info->hdr_info.green.x = UINT32(atoi(tokens[1]));
+      } else if (!strncmp(tokens[0], "green_chromaticity_y", strlen("green_chromaticity_y"))) {
+        panel_info->hdr_info.green.y = UINT32(atoi(tokens[1]));
+      } else if (!strncmp(tokens[0], "blue_chromaticity_x", strlen("blue_chromaticity_x"))) {
+        panel_info->hdr_info.blue.x = UINT32(atoi(tokens[1]));
+      } else if (!strncmp(tokens[0], "blue_chromaticity_y", strlen("blue_chromaticity_y"))) {
+        panel_info->hdr_info.blue.y = UINT32(atoi(tokens[1]));
       }
     }
   }

@@ -213,6 +213,21 @@ enum HWS3DMode {
   kS3DModeMax,
 };
 
+struct HWPrimaries {
+  uint32_t x = 0;
+  uint32_t y = 0;
+};
+
+struct HWPanelHDRInfo {
+  bool enabled = false;               // HDR feature
+  uint32_t peak_brightness = 0;       // Panel's peak brightness level
+  uint32_t blackness_level = 0;       // Panel's blackness level
+  HWPrimaries white;                  // Panel's white point
+  HWPrimaries red;                    // Panel's red primary
+  HWPrimaries green;                  // Panel's green primary
+  HWPrimaries blue;                   // Panel's blue primary
+};
+
 struct HWPanelInfo {
   DisplayPort port = kPortDefault;    // Display port
   HWDisplayMode mode = kModeDefault;  // Display mode
@@ -234,6 +249,7 @@ struct HWPanelInfo {
   char panel_name[256] = {0};         // Panel name
   HWS3DMode s3d_mode = kS3DModeNone;  // Panel's current s3d mode.
   int panel_max_brightness = 0;       // Max panel brightness
+  HWPanelHDRInfo hdr_info;            // Panel HDR configuration
 
   bool operator !=(const HWPanelInfo &panel_info) {
     return ((port != panel_info.port) || (mode != panel_info.mode) ||
