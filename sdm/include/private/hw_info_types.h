@@ -187,6 +187,7 @@ struct HWResourceInfo {
   HWRotatorInfo hw_rot_info;
   HWDestScalarInfo hw_dest_scalar_info;
   bool has_avr = false;
+  bool has_hdr = false;
 
   void Reset() { *this = HWResourceInfo(); }
 };
