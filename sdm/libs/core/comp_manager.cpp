@@ -504,5 +504,19 @@ DisplayError CompManager::SetDetailEnhancerData(Handle display_ctx,
   return resource_intf_->SetDetailEnhancerData(display_comp_ctx->display_resource_ctx, de_data);
 }
 
+DisplayError CompManager::ControlDpps(bool enable) {
+  if (!dpps_state_) {
+    dpps_ctrl_intf_->Init();
+    dpps_state_ = true;
+  }
+
+  if (enable) {
+    dpps_ctrl_intf_->On();
+  } else {
+    dpps_ctrl_intf_->Off();
+  }
+  return kErrorNone;
+}
+
 }  // namespace sdm
 

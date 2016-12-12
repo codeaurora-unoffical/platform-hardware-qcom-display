@@ -69,6 +69,7 @@ class CompManager : public DumpImpl {
   DisplayError SetMaxBandwidthMode(HWBwModes mode);
   DisplayError GetScaleLutConfig(HWScaleLutInfo *lut_info);
   DisplayError SetDetailEnhancerData(Handle display_ctx, const DisplayDetailEnhancerData &de_data);
+  DisplayError ControlDpps(bool enable);
 
   // DumpImpl method
   virtual void AppendDump(char *buffer, uint32_t length);
@@ -106,6 +107,7 @@ class CompManager : public DumpImpl {
   uint32_t max_layers_ = kMaxSDELayers;
   uint32_t max_sde_ext_layers_ = 0;
   DppsControlInterface *dpps_ctrl_intf_ = NULL;
+  bool dpps_state_ = false;
 };
 
 }  // namespace sdm
