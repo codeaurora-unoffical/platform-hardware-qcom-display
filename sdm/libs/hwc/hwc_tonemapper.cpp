@@ -46,6 +46,7 @@
 
 #include "hwc_debugger.h"
 #include "hwc_tonemapper.h"
+#include "hwc_display.h"
 
 #define __CLASS__ "HWCToneMapper"
 
@@ -75,11 +76,15 @@ int HWCToneMapper::HandleToneMap(hwc_display_contents_1_t *content_list, LayerSt
   hwc_layer_1_t *hwc_layer = NULL;
   const private_handle_t *dst_hnd = NULL;
   const private_handle_t *src_hnd = NULL;
+  bool yuv_tonemap_request = false;
 
   for (; i < layer_count; i++) {
     layer = layer_stack->layers.at(i);
     if (layer->request.flags.tone_map) {
       tonemap_layer_index.push_back(i);
+      if (layer->input_buffer.flags.video) {
+        yuv_tonemap_request = true;
+      }
       break;
     }
     if (layer->composition == kCompositionGPU) {
@@ -92,7 +97,7 @@ int HWCToneMapper::HandleToneMap(hwc_display_contents_1_t *content_list, LayerSt
   }
   // gpu count can be 0 when a layer is on FB and in next cycle it doesn't update and SDM marks
   // it as SDE comp
-  if (gpu_count == 0) {
+  if (gpu_count == 0 && !yuv_tonemap_request) {
     // TODO(akumarkr): Remove goto when added multiple instance support
     // intermediate buffer can be null
     goto update_fd;
@@ -101,11 +106,16 @@ int HWCToneMapper::HandleToneMap(hwc_display_contents_1_t *content_list, LayerSt
   if (intermediate_buffer_[0] == NULL) {
     DLOGI("format = %d width = %d height = %d", layer->request.format, layer->request.width,
          layer->request.height);
-     // TODO(akumarkr): use flags from LayerRequestFlags for format change etc.,
-     uint32_t usage = GRALLOC_USAGE_PRIVATE_IOMMU_HEAP | GRALLOC_USAGE_HW_TEXTURE |
-                      GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
-     AllocateIntermediateBuffers(layer->input_buffer.width, layer->input_buffer.height,
-                                 HAL_PIXEL_FORMAT_RGBA_8888, usage);
+    int usage = INT(GRALLOC_USAGE_PRIVATE_IOMMU_HEAP);
+    int error = 0;
+    if (layer->request.flags.secure) {
+      usage = INT(GRALLOC_USAGE_PRIVATE_MM_HEAP);
+      usage |= INT(GRALLOC_USAGE_PROTECTED);
+    }
+    int format;
+    error = buffer_allocator_.SetBufferInfo(layer->request.format, &format, &usage);
+
+    AllocateIntermediateBuffers(layer->request.width, layer->request.height, format, usage);
   }
   current_intermediate_buffer_index_ =
     (current_intermediate_buffer_index_ + 1) % kNumIntermediateBuffers;
@@ -117,7 +127,9 @@ int HWCToneMapper::HandleToneMap(hwc_display_contents_1_t *content_list, LayerSt
       grid_entries = layer->lut_3d.gridEntries;
       grid_size = INT(layer->lut_3d.gridSize);
     }
-    gpu_tone_mapper_ = TonemapperFactory_GetInstance(TONEMAP_INVERSE, layer->lut_3d.lutEntries,
+    // HDR -> SDR = FORWARD and SDR - > HDR is INVERSE
+    int tonemap_type = layer->input_buffer.flags.hdr ? TONEMAP_FORWARD : TONEMAP_INVERSE;
+    gpu_tone_mapper_ = TonemapperFactory_GetInstance(tonemap_type, layer->lut_3d.lutEntries,
                                                      layer->lut_3d.dim, grid_entries, grid_size);
     if (gpu_tone_mapper_ == NULL) {
       DLOGE("Get Tonemapper failed");
@@ -129,8 +141,11 @@ int HWCToneMapper::HandleToneMap(hwc_display_contents_1_t *content_list, LayerSt
   dst_hnd = intermediate_buffer_[current_intermediate_buffer_index_];
   src_hnd = static_cast<const private_handle_t *>(hwc_layer->handle);
   acquire_fd = dup(layer->input_buffer.acquire_fence_fd);
-  buffer_sync_handler_.SyncMerge(acquire_fd, release_fence_fd_[current_intermediate_buffer_index_],
-                                 &merged_fd);
+  if (acquire_fd != -1 || release_fence_fd_[current_intermediate_buffer_index_] !=-1) {
+    // atleast one fd must be valid to merge
+    buffer_sync_handler_.SyncMerge(release_fence_fd_[current_intermediate_buffer_index_],
+                                   acquire_fd, &merged_fd);
+  }
   if (acquire_fd >= 0) {
     CloseFd(&acquire_fd);
   }
@@ -159,8 +174,8 @@ update_fd:
   return 0;
 }
 
-int HWCToneMapper::AllocateIntermediateBuffers(uint32_t width, uint32_t height, uint32_t format,
-                                               uint32_t usage) {
+int HWCToneMapper::AllocateIntermediateBuffers(uint32_t width, uint32_t height, int32_t format,
+                                               int32_t usage) {
   int status = 0;
   if (width <= 0 || height <= 0) {
     return false;

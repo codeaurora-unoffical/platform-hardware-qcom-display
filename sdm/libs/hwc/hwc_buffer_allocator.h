@@ -52,13 +52,13 @@ class HWCBufferAllocator : public BufferAllocator {
   DisplayError GetAlignedWidthHeight(BufferConfig *buffer_config, uint32_t *aligned_width,
                                      uint32_t *aligned_height);
 
+  int SetBufferInfo(LayerBufferFormat format, int *target, int *flags);
+
  private:
   struct MetaBufferInfo {
     int alloc_type;              //!< Specifies allocation type set by the buffer allocator.
     void *base_addr;             //!< Specifies the base address of the allocated output buffer.
   };
-
-  int SetBufferInfo(LayerBufferFormat format, int *target, int *flags);
 
   gralloc::IAllocController *alloc_controller_;
 };
