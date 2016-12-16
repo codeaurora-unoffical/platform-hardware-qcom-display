@@ -242,4 +242,39 @@ int HWCBufferAllocator::SetBufferInfo(LayerBufferFormat format, int *target, int
   return 0;
 }
 
+DisplayError HWCBufferAllocator::GetAlignedWidthHeight(BufferConfig *buffer_config,
+                                                       uint32_t *aligned_width,
+                                                       uint32_t *aligned_height) {
+  int alloc_flags = INT(GRALLOC_USAGE_PRIVATE_IOMMU_HEAP);
+  int width = INT(buffer_config->width);
+  int height = INT(buffer_config->height);
+  int format;
+
+  if (buffer_config->secure) {
+    alloc_flags = INT(GRALLOC_USAGE_PRIVATE_MM_HEAP);
+    alloc_flags |= INT(GRALLOC_USAGE_PROTECTED);
+  }
+
+  if (buffer_config->cache == false) {
+    // Allocate uncached buffers
+    alloc_flags |= GRALLOC_USAGE_PRIVATE_UNCACHED;
+  }
+
+  int error = SetBufferInfo(buffer_config->format, &format, &alloc_flags);
+  if (error) {
+    DLOGE("Failed: format = %d or width = %d height = %d", buffer_config->format, width, height);
+    return kErrorNotSupported;
+  }
+
+  int width_aligned = 0, height_aligned = 0;
+  uint32_t buffer_size = 0;
+  buffer_size = getBufferSizeAndDimensions(width, height, format, alloc_flags,
+                                           width_aligned, height_aligned);
+
+  *aligned_width = UINT32(width_aligned);
+  *aligned_height = UINT32(height_aligned);
+
+  return kErrorNone;
+}
+
 }  // namespace sdm

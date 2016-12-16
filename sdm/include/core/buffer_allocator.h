@@ -119,6 +119,19 @@ class BufferAllocator {
   */
   virtual uint32_t GetBufferSize(BufferInfo *buffer_info) = 0;
 
+  /*! @brief Method to get the aligned width and height.
+
+    @details This method returns the aligned width and height a specific configuration mentioned in buffer info.
+
+    @param[in] buffer_info \link BufferConfig \endlink
+
+    @param[out] aligned width and height.
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError GetAlignedWidthHeight(BufferConfig *buffer_config, uint32_t *aligned_width,
+                                            uint32_t *aligned_height) = 0;
+
  protected:
   virtual ~BufferAllocator() { }
 };
