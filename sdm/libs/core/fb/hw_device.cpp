@@ -844,9 +844,9 @@ void HWDevice::GetHWPanelInfoByNode(int device_node, HWPanelInfo *panel_info) {
       } else if (!strncmp(tokens[0], "blackness_level", strlen("blackness_level"))) {
         panel_info->hdr_info.blackness_level = UINT32(atoi(tokens[1]));
       } else if (!strncmp(tokens[0], "white_chromaticity_x", strlen("white_chromaticity_x"))) {
-        panel_info->hdr_info.white.x = UINT32(atoi(tokens[1]));
+        panel_info->hdr_info.white_point.x = UINT32(atoi(tokens[1]));
       } else if (!strncmp(tokens[0], "white_chromaticity_y", strlen("white_chromaticity_y"))) {
-        panel_info->hdr_info.white.y = UINT32(atoi(tokens[1]));
+        panel_info->hdr_info.white_point.y = UINT32(atoi(tokens[1]));
       } else if (!strncmp(tokens[0], "red_chromaticity_x", strlen("red_chromaticity_x"))) {
         panel_info->hdr_info.red.x = UINT32(atoi(tokens[1]));
       } else if (!strncmp(tokens[0], "red_chromaticity_y", strlen("red_chromaticity_y"))) {
