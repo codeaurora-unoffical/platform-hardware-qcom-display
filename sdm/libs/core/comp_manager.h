@@ -34,7 +34,6 @@
 #include "resource_default.h"
 #include "hw_interface.h"
 #include "dump_impl.h"
-#include "dpps_control_default.h"
 
 namespace sdm {
 
@@ -108,7 +107,6 @@ class CompManager : public DumpImpl {
   uint32_t max_layers_ = kMaxSDELayers;
   uint32_t max_sde_ext_layers_ = 0;
   DppsControlInterface *dpps_ctrl_intf_ = NULL;
-  bool dpps_state_ = false;
 };
 
 }  // namespace sdm

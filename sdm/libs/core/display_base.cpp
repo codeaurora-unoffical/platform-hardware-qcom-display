@@ -1192,7 +1192,7 @@ DisplayError DisplayBase::HandleHDR(LayerStack *layer_stack) {
       hdr_playback_mode_ = false;
       DLOGI("Setting color mode = %s", current_color_mode_.c_str());
       error = SetColorModeInternal(current_color_mode_);
-      comp_manager_->ControlDpps(true);
+      comp_manager_->ControlDpps(true); // Enable Dpps
     }
   } else {
     // hdr is present
@@ -1201,7 +1201,7 @@ DisplayError DisplayBase::HandleHDR(LayerStack *layer_stack) {
       hdr_playback_mode_ = true;
       DLOGI("Setting HDR color mode = %s", hdr_color_mode_.c_str());
       error = SetColorModeInternal(hdr_color_mode_);
-      comp_manager_->ControlDpps(false);
+      comp_manager_->ControlDpps(false); // Disable Dpps
     }
   }
 

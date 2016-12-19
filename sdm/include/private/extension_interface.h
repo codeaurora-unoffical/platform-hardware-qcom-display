@@ -77,7 +77,9 @@ class ExtensionInterface {
                                      BufferSyncHandler *buffer_sync_handler,
                                      RotatorInterface **intf) = 0;
   virtual DisplayError DestroyRotator(RotatorInterface *intf) = 0;
-  virtual DisplayError CreateDppsControlExtn(DppsControlInterface **dpps_control_interface) = 0;
+  virtual DisplayError CreateDppsControlExtn(DppsControlInterface **dpps_control_interface,
+                                             SocketHandler *socket_handler) = 0;
+  virtual DisplayError DestroyDppsControlExtn(DppsControlInterface *interface) = 0;
 
  protected:
   virtual ~ExtensionInterface() { }

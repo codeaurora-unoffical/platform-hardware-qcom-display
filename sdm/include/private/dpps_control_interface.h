@@ -30,9 +30,8 @@ namespace sdm {
 class DppsControlInterface {
  public:
   virtual ~DppsControlInterface() { }
-  virtual int Init() = 0;
-  virtual int On() = 0;
-  virtual int Off() = 0;
+  virtual DisplayError On() = 0;
+  virtual DisplayError Off() = 0;
 };
 
 }  // namespace sdm
