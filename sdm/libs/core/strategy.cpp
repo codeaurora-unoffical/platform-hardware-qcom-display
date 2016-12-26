@@ -31,23 +31,26 @@
 
 namespace sdm {
 
-Strategy::Strategy(ExtensionInterface *extension_intf, DisplayType type,
+Strategy::Strategy(ExtensionInterface *extension_intf, BufferAllocator *buffer_allocator,
+                   DisplayType type,
                    const HWResourceInfo &hw_resource_info, const HWPanelInfo &hw_panel_info,
                    const HWMixerAttributes &mixer_attributes,
                    const HWDisplayAttributes &display_attributes,
                    const DisplayConfigVariableInfo &fb_config)
   : extension_intf_(extension_intf), display_type_(type), hw_resource_info_(hw_resource_info),
     hw_panel_info_(hw_panel_info), mixer_attributes_(mixer_attributes),
-    display_attributes_(display_attributes), fb_config_(fb_config) {
+    display_attributes_(display_attributes), fb_config_(fb_config),
+    buffer_allocator_(buffer_allocator) {
 }
 
 DisplayError Strategy::Init() {
   DisplayError error = kErrorNone;
 
   if (extension_intf_) {
-    error = extension_intf_->CreateStrategyExtn(display_type_, hw_panel_info_.mode,
-                                                hw_panel_info_.s3d_mode, mixer_attributes_,
-                                                fb_config_, &strategy_intf_);
+    error = extension_intf_->CreateStrategyExtn(display_type_, buffer_allocator_,
+                                                hw_panel_info_, hw_resource_info_,
+                                                mixer_attributes_, fb_config_,
+                                                &strategy_intf_);
     if (error != kErrorNone) {
       DLOGE("Failed to create strategy");
       return error;
@@ -80,19 +83,6 @@ DisplayError Strategy::Start(HWLayersInfo *hw_layers_info, uint32_t *max_attempt
   hw_layers_info_ = hw_layers_info;
   extn_start_success_ = false;
   tried_default_ = false;
-  uint32_t i = 0;
-  LayerStack *layer_stack = hw_layers_info_->stack;
-  uint32_t layer_count = UINT32(layer_stack->layers.size());
-  for (; i < layer_count; i++) {
-    if (layer_stack->layers.at(i)->composition == kCompositionGPUTarget) {
-      fb_layer_index_ = i;
-      break;
-    }
-  }
-
-  if (i == layer_count) {
-    return kErrorUndefined;
-  }
 
   if (partial_update_intf_) {
     partial_update_intf_->ControlPartialUpdate(partial_update_enable);
@@ -130,6 +120,11 @@ DisplayError Strategy::GetNextStrategy(StrategyConstraints *constraints) {
     }
   }
 
+  // Default composition is not possible if GPU composition is not supported.
+  if (!hw_layers_info_->gpu_target_index) {
+    return kErrorNotSupported;
+  }
+
   // Default composition is already tried.
   if (tried_default_) {
     return kErrorUndefined;
@@ -138,27 +133,23 @@ DisplayError Strategy::GetNextStrategy(StrategyConstraints *constraints) {
   // Mark all application layers for GPU composition. Find GPU target buffer and store its index for
   // programming the hardware.
   LayerStack *layer_stack = hw_layers_info_->stack;
-  uint32_t &hw_layer_count = hw_layers_info_->count;
-  hw_layer_count = 0;
 
-  for (uint32_t i = 0; i < layer_stack->layers.size(); i++) {
-    Layer *layer = layer_stack->layers.at(i);
-    LayerComposition &composition = layer->composition;
-    if (composition == kCompositionGPUTarget) {
-      hw_layers_info_->updated_src_rect[hw_layer_count] = layer->src_rect;
-      hw_layers_info_->updated_dst_rect[hw_layer_count] = layer->dst_rect;
-      hw_layers_info_->index[hw_layer_count++] = i;
-    } else if (composition != kCompositionBlitTarget) {
-      composition = kCompositionGPU;
-    }
+  for (uint32_t i = 0; i < hw_layers_info_->app_layer_count; i++) {
+    layer_stack->layers.at(i)->composition = kCompositionGPU;
+    layer_stack->layers.at(i)->request.flags.request_flags = 0;  // Reset layer request
   }
+
+  Layer *gpu_target_layer = layer_stack->layers.at(hw_layers_info_->gpu_target_index);
+
+  Layer layer = *gpu_target_layer;
+  hw_layers_info_->index[0] = hw_layers_info_->gpu_target_index;
+  layer.src_rect = gpu_target_layer->src_rect;
+  layer.dst_rect = gpu_target_layer->dst_rect;
+
+  hw_layers_info_->hw_layers.clear();
+  hw_layers_info_->hw_layers.push_back(layer);
 
   tried_default_ = true;
-
-  // There can be one and only one GPU target buffer.
-  if (hw_layer_count != 1) {
-    return kErrorParameters;
-  }
 
   return kErrorNone;
 }
@@ -214,8 +205,16 @@ DisplayError Strategy::Reconfigure(const HWPanelInfo &hw_panel_info,
                                        mixer_attributes_, display_attributes_,
                                        &partial_update_intf_);
 
-  return strategy_intf_->Reconfigure(hw_panel_info_.mode, hw_panel_info_.s3d_mode, mixer_attributes,
-                                     fb_config);
+  return strategy_intf_->Reconfigure(hw_panel_info_, hw_resource_info_, mixer_attributes, fb_config);
 }
+
+DisplayError Strategy::Purge() {
+  if (strategy_intf_) {
+    return strategy_intf_->Purge();
+  }
+
+  return kErrorNone;
+}
+
 
 }  // namespace sdm

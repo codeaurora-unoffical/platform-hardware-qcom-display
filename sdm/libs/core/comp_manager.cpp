@@ -35,23 +35,30 @@ namespace sdm {
 
 DisplayError CompManager::Init(const HWResourceInfo &hw_res_info,
                                ExtensionInterface *extension_intf,
-                               BufferSyncHandler *buffer_sync_handler) {
+                               BufferAllocator *buffer_allocator,
+                               BufferSyncHandler *buffer_sync_handler,
+                               SocketHandler *socket_handler) {
   SCOPE_LOCK(locker_);
 
   DisplayError error = kErrorNone;
 
   if (extension_intf) {
     error = extension_intf->CreateResourceExtn(hw_res_info, &resource_intf_, buffer_sync_handler);
+    extension_intf->CreateDppsControlExtn(&dpps_ctrl_intf_, socket_handler);
   } else {
     resource_intf_ = &resource_default_;
     error = resource_default_.Init(hw_res_info);
   }
 
   if (error != kErrorNone) {
+    if (extension_intf) {
+      extension_intf->DestroyDppsControlExtn(dpps_ctrl_intf_);
+    }
     return error;
   }
 
   hw_res_info_ = hw_res_info;
+  buffer_allocator_ = buffer_allocator;
   extension_intf_ = extension_intf;
 
   return error;
@@ -62,6 +69,7 @@ DisplayError CompManager::Deinit() {
 
   if (extension_intf_) {
     extension_intf_->DestroyResourceExtn(resource_intf_);
+    extension_intf_->DestroyDppsControlExtn(dpps_ctrl_intf_);
   } else {
     resource_default_.Deinit();
   }
@@ -85,8 +93,8 @@ DisplayError CompManager::RegisterDisplay(DisplayType type,
   }
 
   Strategy *&strategy = display_comp_ctx->strategy;
-  strategy = new Strategy(extension_intf_, type, hw_res_info_, hw_panel_info, mixer_attributes,
-                          display_attributes, fb_config);
+  strategy = new Strategy(extension_intf_, buffer_allocator_, type, hw_res_info_, hw_panel_info,
+                          mixer_attributes, display_attributes, fb_config);
   if (!strategy) {
     DLOGE("Unable to create strategy");
     delete display_comp_ctx;
@@ -355,6 +363,8 @@ void CompManager::Purge(Handle display_ctx) {
                              reinterpret_cast<DisplayCompositionContext *>(display_ctx);
 
   resource_intf_->Purge(display_comp_ctx->display_resource_ctx);
+
+  display_comp_ctx->strategy->Purge();
 }
 
 void CompManager::ProcessIdleTimeout(Handle display_ctx) {
@@ -491,6 +501,14 @@ DisplayError CompManager::SetDetailEnhancerData(Handle display_ctx,
                              reinterpret_cast<DisplayCompositionContext *>(display_ctx);
 
   return resource_intf_->SetDetailEnhancerData(display_comp_ctx->display_resource_ctx, de_data);
+}
+
+DisplayError CompManager::ControlDpps(bool enable) {
+  if (dpps_ctrl_intf_) {
+    return enable ? dpps_ctrl_intf_->On() : dpps_ctrl_intf_->Off();
+  }
+
+  return kErrorNone;
 }
 
 }  // namespace sdm

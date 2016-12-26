@@ -197,14 +197,14 @@ DisplayError ResourceDefault::Acquire(Handle display_ctx, HWLayers *hw_layers) {
 
   DLOGV_IF(kTagResources, "==== Resource reserving start: hw_block = %d ====", hw_block_id);
 
-  if (layer_info.count > 1) {
+  if (layer_info.hw_layers.size() > 1) {
     DLOGV_IF(kTagResources, "More than one FB layers");
     return kErrorResources;
   }
 
-  Layer *layer = layer_info.stack->layers.at(layer_info.index[0]);
+  const Layer &layer = layer_info.hw_layers.at(0);
 
-  if (layer->composition != kCompositionGPUTarget) {
+  if (layer.composition != kCompositionGPUTarget) {
     DLOGV_IF(kTagResources, "Not an FB layer");
     return kErrorParameters;
   }
@@ -502,9 +502,9 @@ DisplayError ResourceDefault::Config(DisplayResourceContext *display_resource_ct
                                 HWLayers *hw_layers) {
   HWLayersInfo &layer_info = hw_layers->info;
   DisplayError error = kErrorNone;
-  Layer *layer = layer_info.stack->layers.at(layer_info.index[0]);
+  const Layer &layer = layer_info.hw_layers.at(0);
 
-  error = ValidateLayerParams(layer);
+  error = ValidateLayerParams(&layer);
   if (error != kErrorNone) {
     return error;
   }
@@ -513,15 +513,15 @@ DisplayError ResourceDefault::Config(DisplayResourceContext *display_resource_ct
   HWPipeInfo &left_pipe = layer_config->left_pipe;
   HWPipeInfo &right_pipe = layer_config->right_pipe;
 
-  LayerRect src_rect = layer->src_rect;
-  LayerRect dst_rect = layer->dst_rect;
+  LayerRect src_rect = layer.src_rect;
+  LayerRect dst_rect = layer.dst_rect;
 
   error = ValidateDimensions(src_rect, dst_rect);
   if (error != kErrorNone) {
     return error;
   }
 
-  bool ubwc_tiled = IsUBWCFormat(layer->input_buffer->format);
+  bool ubwc_tiled = IsUBWCFormat(layer.input_buffer.format);
   error = ValidateScaling(src_rect, dst_rect, false /*rotated90 */, ubwc_tiled,
                           false /* use_rotator_downscale */);
   if (error != kErrorNone) {
@@ -538,7 +538,7 @@ DisplayError ResourceDefault::Config(DisplayResourceContext *display_resource_ct
     return error;
   }
 
-  error = AlignPipeConfig(layer, &left_pipe, &right_pipe);
+  error = AlignPipeConfig(&layer, &left_pipe, &right_pipe);
   if (error != kErrorNone) {
     return error;
   }
@@ -547,8 +547,8 @@ DisplayError ResourceDefault::Config(DisplayResourceContext *display_resource_ct
   left_pipe.z_order = 0;
 
   DLOGV_IF(kTagResources, "==== FB layer Config ====");
-  Log(kTagResources, "input layer src_rect", layer->src_rect);
-  Log(kTagResources, "input layer dst_rect", layer->dst_rect);
+  Log(kTagResources, "input layer src_rect", layer.src_rect);
+  Log(kTagResources, "input layer dst_rect", layer.dst_rect);
   Log(kTagResources, "cropped src_rect", src_rect);
   Log(kTagResources, "cropped dst_rect", dst_rect);
   Log(kTagResources, "left pipe src", layer_config->left_pipe.src_roi);
@@ -628,10 +628,10 @@ bool ResourceDefault::CalculateCropRects(const LayerRect &scissor, LayerRect *cr
 DisplayError ResourceDefault::ValidateLayerParams(const Layer *layer) {
   const LayerRect &src = layer->src_rect;
   const LayerRect &dst = layer->dst_rect;
-  const LayerBuffer *input_buffer = layer->input_buffer;
+  const LayerBuffer &input_buffer = layer->input_buffer;
 
-  if (input_buffer->format == kFormatInvalid) {
-    DLOGV_IF(kTagResources, "Invalid input buffer format %d", input_buffer->format);
+  if (input_buffer.format == kFormatInvalid) {
+    DLOGV_IF(kTagResources, "Invalid input buffer format %d", input_buffer.format);
     return kErrorNotSupported;
   }
 
@@ -642,7 +642,7 @@ DisplayError ResourceDefault::ValidateLayerParams(const Layer *layer) {
   }
 
   // Make sure source in integral only if it is a non secure layer.
-  if (!input_buffer->flags.secure &&
+  if (!input_buffer.flags.secure &&
       ((src.left - roundf(src.left) != 0.0f) ||
        (src.top - roundf(src.top) != 0.0f) ||
        (src.right - roundf(src.right) != 0.0f) ||
@@ -847,7 +847,7 @@ DisplayError ResourceDefault::AlignPipeConfig(const Layer *layer, HWPipeInfo *le
     return kErrorNotSupported;
   }
 
-  bool ubwc_tiled = IsUBWCFormat(layer->input_buffer->format);
+  bool ubwc_tiled = IsUBWCFormat(layer->input_buffer.format);
   error = ValidatePipeParams(left_pipe, ubwc_tiled);
   if (error != kErrorNone) {
     goto PipeConfigExit;

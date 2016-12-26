@@ -187,6 +187,7 @@ struct HWResourceInfo {
   HWRotatorInfo hw_rot_info;
   HWDestScalarInfo hw_dest_scalar_info;
   bool has_avr = false;
+  bool has_hdr = false;
 
   void Reset() { *this = HWResourceInfo(); }
 };
@@ -213,6 +214,21 @@ enum HWS3DMode {
   kS3DModeMax,
 };
 
+struct HWPrimaries {
+  uint32_t x = 0;
+  uint32_t y = 0;
+};
+
+struct HWHDRInfo {
+  bool enabled = false;               // HDR feature
+  uint32_t peak_brightness = 0;       // Panel's peak brightness level
+  uint32_t blackness_level = 0;       // Panel's blackness level
+  HWPrimaries white_point = {};       // Panel's white point
+  HWPrimaries red = {};               // Panel's red primary
+  HWPrimaries green = {};             // Panel's green primary
+  HWPrimaries blue = {};              // Panel's blue primary
+};
+
 struct HWPanelInfo {
   DisplayPort port = kPortDefault;    // Display port
   HWDisplayMode mode = kModeDefault;  // Display mode
@@ -234,6 +250,7 @@ struct HWPanelInfo {
   char panel_name[256] = {0};         // Panel name
   HWS3DMode s3d_mode = kS3DModeNone;  // Panel's current s3d mode.
   int panel_max_brightness = 0;       // Max panel brightness
+  HWHDRInfo hdr_info = {};            // Panel HDR configuration
 
   bool operator !=(const HWPanelInfo &panel_info) {
     return ((port != panel_info.port) || (mode != panel_info.mode) ||
@@ -418,15 +435,13 @@ struct HWLayerConfig {
 
 struct HWLayersInfo {
   LayerStack *stack = NULL;        // Input layer stack. Set by the caller.
+  uint32_t app_layer_count = 0;    // Total number of app layers. Must not be 0.
+  uint32_t gpu_target_index = 0;   // GPU target layer index. 0 if not present.
+
+  std::vector<Layer> hw_layers = {};  // Layers which need to be programmed on the HW
 
   uint32_t index[kMaxSDELayers];   // Indexes of the layers from the layer stack which need to be
                                    // programmed on hardware.
-  LayerRect updated_src_rect[kMaxSDELayers];  // Updated layer src rects in s3d mode
-  LayerRect updated_dst_rect[kMaxSDELayers];  // Updated layer dst rects in s3d mode
-  bool updating[kMaxSDELayers] = {0};  // Updated by strategy, considering plane_alpha+updating
-
-  uint32_t count = 0;              // Total number of layers which need to be set on hardware.
-
   int sync_handle = -1;
 
   LayerRect left_partial_update;   // Left ROI.

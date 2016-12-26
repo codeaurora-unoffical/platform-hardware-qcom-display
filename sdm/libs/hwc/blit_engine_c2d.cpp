@@ -207,17 +207,17 @@ void BlitEngineC2d::PostCommit(LayerStack *layer_stack) {
 
   for (uint32_t i = blit_target_start_index_-2; (i > 0) && (count < num_blit_target_); i--) {
     Layer *layer = layer_stack->layers.at(i);
-    LayerBuffer *layer_buffer = layer->input_buffer;
+    LayerBuffer &layer_buffer = layer->input_buffer;
     if (layer->composition == kCompositionBlit) {
       int index = blit_target_start_index_ + count;
-      layer_buffer->release_fence_fd =
-        layer_stack->layers.at(index)->input_buffer->release_fence_fd;
-      fence_fd = layer_buffer->release_fence_fd;
-      close(layer_buffer->acquire_fence_fd);
-      layer_buffer->acquire_fence_fd = -1;
-      layer_stack->layers.at(index)->input_buffer->release_fence_fd = -1;
-      fd = layer_stack->layers.at(index)->input_buffer->acquire_fence_fd;
-      layer_stack->layers.at(index)->input_buffer->acquire_fence_fd = -1;
+      layer_buffer.release_fence_fd =
+        layer_stack->layers.at(index)->input_buffer.release_fence_fd;
+      fence_fd = layer_buffer.release_fence_fd;
+      close(layer_buffer.acquire_fence_fd);
+      layer_buffer.acquire_fence_fd = -1;
+      layer_stack->layers.at(index)->input_buffer.release_fence_fd = -1;
+      fd = layer_stack->layers.at(index)->input_buffer.acquire_fence_fd;
+      layer_stack->layers.at(index)->input_buffer.acquire_fence_fd = -1;
       count++;
     }
   }
@@ -262,7 +262,7 @@ int BlitEngineC2d::Prepare(LayerStack *layer_stack) {
     Layer *layer = layer_stack->layers.at(i);
 
     // No 10 bit support for C2D
-    if (Is10BitFormat(layer->input_buffer->format)) {
+    if (Is10BitFormat(layer->input_buffer.format)) {
       return -1;
     }
 
@@ -281,9 +281,9 @@ int BlitEngineC2d::Prepare(LayerStack *layer_stack) {
   blit_target_start_index_ = ++i;
   num_blit_target_ = layer_count - blit_target_start_index_;
 
-  LayerBuffer *layer_buffer = layer_stack->layers.at(gpu_target_index)->input_buffer;
-  int fbwidth = INT(layer_buffer->width);
-  int fbheight = INT(layer_buffer->height);
+  LayerBuffer &layer_buffer = layer_stack->layers.at(gpu_target_index)->input_buffer;
+  int fbwidth = INT(layer_buffer.width);
+  int fbheight = INT(layer_buffer.height);
   if ((fbwidth < 0) || (fbheight < 0)) {
     return -1;
   }
@@ -293,12 +293,11 @@ int BlitEngineC2d::Prepare(LayerStack *layer_stack) {
 
   for (uint32_t j = 0; j < num_blit_target_; j++, k++) {
     Layer *layer = layer_stack->layers.at(k);
-    LayerBuffer *layer_buffer = layer->input_buffer;
+    LayerBuffer &layer_buffer = layer->input_buffer;
 
     // Set the buffer height and width
-    layer_buffer->width = fbwidth;
-    layer_buffer->height = fbheight/3;
-
+    layer_buffer.width = fbwidth;
+    layer_buffer.height = fbheight/3;
     layer->plane_alpha = 0xFF;
     layer->blending = kBlendingOpaque;
     layer->composition = kCompositionBlitTarget;
@@ -367,14 +366,14 @@ int BlitEngineC2d::PreCommit(hwc_display_contents_1_t *content_list, LayerStack 
       Layer *layer = layer_stack->layers.at(j + content_list->numHwLayers);
       private_handle_t *target_buffer = blit_target_buffer_[current_blit_target_index_];
       // Set the fd information
-        layer->input_buffer->width = target_width;
-        layer->input_buffer->height = target_height;
+        layer->input_buffer.width = target_width;
+        layer->input_buffer.height = target_height;
       if (target_buffer->flags & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED) {
-          layer->input_buffer->format = kFormatRGBA8888Ubwc;
+          layer->input_buffer.format = kFormatRGBA8888Ubwc;
       }
-      layer->input_buffer->planes[0].fd = target_buffer->fd;
-      layer->input_buffer->planes[0].offset = 0;
-      layer->input_buffer->planes[0].stride = target_buffer->width;
+      layer->input_buffer.planes[0].fd = target_buffer->fd;
+      layer->input_buffer.planes[0].offset = 0;
+      layer->input_buffer.planes[0].stride = target_buffer->width;
     }
   }
 
@@ -424,7 +423,7 @@ int BlitEngineC2d::Commit(hwc_display_contents_1_t *content_list, LayerStack *la
 
     for (uint32_t k = 0; k <= i; k++) {
       Layer *bottom_layer = layer_stack->layers.at(k);
-      LayerBuffer *layer_buffer = bottom_layer->input_buffer;
+      LayerBuffer &layer_buffer = bottom_layer->input_buffer;
       // if layer below the blit layer does not intersect, ignore that layer
       LayerRect inter_sect = Intersection(layer->dst_rect, bottom_layer->dst_rect);
       if (bottom_layer->composition != kCompositionHybrid && !IsValid(inter_sect)) {
@@ -437,12 +436,12 @@ int BlitEngineC2d::Commit(hwc_display_contents_1_t *content_list, LayerStack *la
       }
 
       // For each layer marked as Hybrid, wait for acquire fence and then blit using the C2D
-      if (layer_buffer->acquire_fence_fd >= 0) {
+      if (layer_buffer.acquire_fence_fd >= 0) {
         // Wait for acquire fence on the App buffers.
-        if (sync_wait(layer_buffer->acquire_fence_fd, 1000) < 0) {
+        if (sync_wait(layer_buffer.acquire_fence_fd, 1000) < 0) {
           DLOGE("sync_wait error!! error no = %d err str = %s", errno, strerror(errno));
         }
-        layer_buffer->acquire_fence_fd = -1;
+        layer_buffer.acquire_fence_fd = -1;
       }
       hwc_layer_1_t *hwc_layer = &content_list->hwLayers[k];
       LayerRect &src_rect = bottom_layer->blit_regions.at(processed_blit);
@@ -473,8 +472,8 @@ int BlitEngineC2d::Commit(hwc_display_contents_1_t *content_list, LayerStack *la
     uint32_t layer_count = UINT32(layer_stack->layers.size());
     for (uint32_t k = blit_target_start_index_; k < layer_count; k++) {
       Layer *layer = layer_stack->layers.at(k);
-      LayerBuffer *layer_buffer = layer->input_buffer;
-      layer_buffer->acquire_fence_fd = fd;
+      LayerBuffer &layer_buffer = layer->input_buffer;
+      layer_buffer.acquire_fence_fd = fd;
     }
   }
 
@@ -485,7 +484,7 @@ int BlitEngineC2d::DrawRectUsingCopybit(hwc_layer_1_t *hwc_layer, Layer *layer,
                                         LayerRect blit_rect, LayerRect blit_dest_Rect) {
   private_handle_t *target_buffer = blit_target_buffer_[current_blit_target_index_];
   const private_handle_t *hnd = static_cast<const private_handle_t *>(hwc_layer->handle);
-  LayerBuffer *layer_buffer = layer->input_buffer;
+  LayerBuffer &layer_buffer = layer->input_buffer;
 
   // Set the Copybit Source
   copybit_image_t src;
@@ -524,7 +523,7 @@ int BlitEngineC2d::DrawRectUsingCopybit(hwc_layer_1_t *hwc_layer, Layer *layer,
   region.count = 1;
   region.rect  = &region_rect;
   RegionIterator copybitRegion(region);
-  int acquireFd = layer_buffer->acquire_fence_fd;
+  int acquireFd = layer_buffer.acquire_fence_fd;
 
   // FRAMEBUFFER_WIDTH/HEIGHT for c2d is the target buffer w/h
   blit_engine_c2d_->set_parameter(blit_engine_c2d_, COPYBIT_FRAMEBUFFER_WIDTH,

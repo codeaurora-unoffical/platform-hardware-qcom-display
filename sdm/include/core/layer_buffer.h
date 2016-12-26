@@ -30,20 +30,11 @@
 #define __LAYER_BUFFER_H__
 
 #include <stdint.h>
+#include <color_metadata.h>
 
 #include "sdm_types.h"
 
 namespace sdm {
-
-/*! @brief This enum represents display layer color space conversion (CSC) matrix types.
-
-  @sa Layer
-*/
-enum LayerCSC {
-  kCSCLimitedRange601,    //!< 601 limited range color space.
-  kCSCFullRange601,       //!< 601 full range color space.
-  kCSCLimitedRange709,    //!< 709 limited range color space.
-};
 
 /*! @brief This enum represents display layer inverse gamma correction (IGC) types.
 
@@ -208,6 +199,9 @@ struct LayerBufferFlags {
       uint32_t secure_display : 1;  //!< This flag shall be set by the client to indicate that the
                                     //!< secure display session is in progress. Secure display
                                     //!< session can not coexist with non-secure session.
+
+      uint32_t hdr : 1;             //!< This flag shall be set by the client to indicate that the
+                                    //!< the content is HDR.
     };
 
     uint32_t flags = 0;             //!< For initialization purpose only.
@@ -226,7 +220,7 @@ struct LayerBuffer {
   uint32_t height = 0;          //!< Actual height of the Layer that this buffer is for.
   uint32_t size = 0;            //!< Size of a single buffer (even if multiple clubbed together)
   LayerBufferFormat format = kFormatRGBA8888;     //!< Format of the buffer content.
-  LayerCSC csc = kCSCFullRange601;                //!< Color Space of the layer.
+  ColorMetaData color_metadata = {};              //!< CSC + Range + Transfer + Matrix + HDR Info
   LayerIGC igc = kIGCNotSpecified;                //!< IGC that will be applied on this layer.
   LayerBufferPlane planes[4] = {};
                                 //!< Array of planes that this buffer contains. RGB buffer formats
