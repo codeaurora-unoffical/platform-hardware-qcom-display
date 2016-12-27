@@ -74,6 +74,14 @@ class ColorInterface {
                                                 uint32_t disp_id, SDEDisplayMode *modes,
                                                 uint32_t *mode_cnt) = 0;
 
+  virtual DisplayError ColorIntfGetActiveColorParam(PPFeaturesConfig *out_features,
+                                                    uint32_t disp_id, uint32_t feature_id,
+                                                    void *data) = 0;
+
+  virtual DisplayError ColorIntfSetActiveColorParam(PPFeaturesConfig *out_features,
+                                                    uint32_t disp_id, uint32_t feature_id,
+                                                    void *data) = 0;
+
  protected:
   virtual ~ColorInterface() {}
 };

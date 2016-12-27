@@ -70,6 +70,8 @@ class ColorManagerProxy {
   DisplayError ColorMgrGetModes(uint32_t *mode_cnt, SDEDisplayMode *modes);
   DisplayError ColorMgrSetMode(int32_t color_mode_id);
   DisplayError ColorMgrSetColorTransform(uint32_t length, const double *trans_data);
+  DisplayError ColorMgrGetActiveColorParam(uint32_t feature_id, void* data);
+  DisplayError ColorMgrSetActiveColorParam(uint32_t feature_id, void* data);
   bool NeedsPartialUpdateDisable();
   DisplayError Commit();
 

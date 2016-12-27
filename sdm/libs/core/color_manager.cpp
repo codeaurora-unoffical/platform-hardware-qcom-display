@@ -232,4 +232,12 @@ DisplayError ColorManagerProxy::ColorMgrSetColorTransform(uint32_t length,
   return color_intf_->ColorIntfSetColorTransform(&pp_features_, 0, length, trans_data);
 }
 
+DisplayError ColorManagerProxy::ColorMgrGetActiveColorParam(uint32_t feature_id, void* data) {
+  return color_intf_->ColorIntfGetActiveColorParam(&pp_features_, 0, feature_id, data);
+}
+
+DisplayError ColorManagerProxy::ColorMgrSetActiveColorParam(uint32_t feature_id, void* data) {
+  return color_intf_->ColorIntfSetActiveColorParam(&pp_features_, 0, feature_id, data);
+}
+
 }  // namespace sdm
