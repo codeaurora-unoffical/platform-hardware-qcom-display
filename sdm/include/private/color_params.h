@@ -268,6 +268,16 @@ class SDEPADitherWrapper : private SDEPADitherData {
   uint32_t *buffer_ = NULL;
 };
 
+struct PPPAConfig {
+  uint32_t enable;
+  uint32_t flags;
+  int32_t hue;
+  float saturation;
+  float value;
+  float contrast;
+  float sat_thresh;
+};
+
 struct SDEPaMemColorData {
   uint32_t adjust_p0 = 0;
   uint32_t adjust_p1 = 0;
