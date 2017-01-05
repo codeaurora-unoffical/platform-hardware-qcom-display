@@ -223,7 +223,8 @@ struct private_handle_t : public native_handle {
             // Buffer is allocated with UBWC alignment
             PRIV_FLAGS_UBWC_ALIGNED       = 0x08000000,
             // Buffer allocated will be consumed by SF/HWC
-            PRIV_FLAGS_DISP_CONSUMER      = 0x10000000
+            PRIV_FLAGS_DISP_CONSUMER      = 0x10000000,
+            PRIV_FLAGS_RAW_ONLY           = 0x20000000
         };
 
         // file-descriptors
