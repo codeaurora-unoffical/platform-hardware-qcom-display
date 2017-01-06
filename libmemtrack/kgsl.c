@@ -21,6 +21,7 @@
 #include <sys/mman.h>
 
 #include <hardware/memtrack.h>
+#include <cutils/log.h>
 
 #include "memtrack_msm.h"
 
@@ -106,9 +107,29 @@ int kgsl_memtrack_get_memory(pid_t pid, enum memtrack_type type,
             continue;
         }
 
+        if (size == 0) {
+            ALOGE("%s : Invalid value for size", __FUNCTION__);
+            return -EINVAL;
+        }
+
+        if (unaccounted_size + size < size) {
+            ALOGE("%s : Invalid range for size", __FUNCTION__);
+            return -ERANGE;
+        }
+
         if (type == MEMTRACK_TYPE_GL && strcmp(line_type, "gpumem") == 0) {
 
             if (flags[5] == 'Y') {
+                if (mapsize > size) {
+                    ALOGE("%s : Invalid value for mapsize", __FUNCTION__);
+                    return -EINVAL;
+                }
+
+                if (accounted_size + mapsize < accounted_size) {
+                    ALOGE("%s : Invalid range for mapsize", __FUNCTION__);
+                    return -ERANGE;
+                }
+
                 accounted_size += mapsize;
                 unaccounted_size += size - mapsize;
             } else {
