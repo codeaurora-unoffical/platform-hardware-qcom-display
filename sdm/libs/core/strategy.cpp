@@ -77,7 +77,7 @@ DisplayError Strategy::Deinit() {
 }
 
 DisplayError Strategy::Start(HWLayersInfo *hw_layers_info, uint32_t *max_attempts,
-                             bool partial_update_enable) {
+                             const PUConstraints &pu_constraints) {
   DisplayError error = kErrorNone;
 
   hw_layers_info_ = hw_layers_info;
@@ -85,7 +85,7 @@ DisplayError Strategy::Start(HWLayersInfo *hw_layers_info, uint32_t *max_attempt
   tried_default_ = false;
 
   if (partial_update_intf_) {
-    partial_update_intf_->ControlPartialUpdate(partial_update_enable);
+    partial_update_intf_->Start(pu_constraints);
   }
   GenerateROI();
 
@@ -139,15 +139,17 @@ DisplayError Strategy::GetNextStrategy(StrategyConstraints *constraints) {
     layer_stack->layers.at(i)->request.flags.request_flags = 0;  // Reset layer request
   }
 
-  Layer *gpu_target_layer = layer_stack->layers.at(hw_layers_info_->gpu_target_index);
+  if (!extn_start_success_) {
+    Layer *gpu_target_layer = layer_stack->layers.at(hw_layers_info_->gpu_target_index);
 
-  Layer layer = *gpu_target_layer;
-  hw_layers_info_->index[0] = hw_layers_info_->gpu_target_index;
-  layer.src_rect = gpu_target_layer->src_rect;
-  layer.dst_rect = gpu_target_layer->dst_rect;
+    Layer layer = *gpu_target_layer;
+    hw_layers_info_->index[0] = hw_layers_info_->gpu_target_index;
+    layer.src_rect = gpu_target_layer->src_rect;
+    layer.dst_rect = gpu_target_layer->dst_rect;
 
-  hw_layers_info_->hw_layers.clear();
-  hw_layers_info_->hw_layers.push_back(layer);
+    hw_layers_info_->hw_layers.clear();
+    hw_layers_info_->hw_layers.push_back(layer);
+  }
 
   tried_default_ = true;
 

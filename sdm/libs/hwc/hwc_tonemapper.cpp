@@ -164,8 +164,13 @@ int HWCToneMapper::HandleToneMap(hwc_display_contents_1_t *content_list, LayerSt
 update_fd:
   // Acquire fence will be closed by HWC Display
   // Fence returned by GPU will be closed in PostCommit
-  layer->input_buffer.acquire_fence_fd = fence_fd;
-  layer->input_buffer.planes[0].fd = intermediate_buffer_[current_intermediate_buffer_index_]->fd;
+  if (intermediate_buffer_[current_intermediate_buffer_index_]) {
+    layer->input_buffer.acquire_fence_fd = fence_fd;
+    layer->input_buffer.planes[0].fd = intermediate_buffer_[current_intermediate_buffer_index_]->fd;
+  } else {
+    DLOGE("Intermediate Buffers not allocated yet for index (%d). Should never come here!!!",
+          current_intermediate_buffer_index_);
+  }
 
   active_ = true;
 
