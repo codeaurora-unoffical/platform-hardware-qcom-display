@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2016, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2017, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -841,6 +841,8 @@ void HWDevice::GetHWPanelInfoByNode(int device_node, HWPanelInfo *panel_info) {
         panel_info->hdr_info.enabled = atoi(tokens[1]);
       } else if (!strncmp(tokens[0], "peak_brightness", strlen("peak_brightness"))) {
         panel_info->hdr_info.peak_brightness = UINT32(atoi(tokens[1]));
+      } else if (!strncmp(tokens[0], "average_brightness", strlen("average_brightness"))) {
+        panel_info->hdr_info.average_brightness = UINT32(atoi(tokens[1]));
       } else if (!strncmp(tokens[0], "blackness_level", strlen("blackness_level"))) {
         panel_info->hdr_info.blackness_level = UINT32(atoi(tokens[1]));
       } else if (!strncmp(tokens[0], "white_chromaticity_x", strlen("white_chromaticity_x"))) {
