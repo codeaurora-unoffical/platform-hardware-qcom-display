@@ -212,6 +212,7 @@ class HWCDisplay : public DisplayEventHandler {
   std::map<int, LayerBufferS3DFormat> s3d_format_hwc_to_sdm_;
   bool animating_ = false;
   HWCToneMapper *tone_mapper_ = NULL;
+  int disable_hdr_handling_ = 0;
 
  private:
   void DumpInputBuffers(hwc_display_contents_1_t *content_list);
