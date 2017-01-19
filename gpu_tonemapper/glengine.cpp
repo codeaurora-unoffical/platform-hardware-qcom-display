@@ -29,6 +29,7 @@ static EGLContext eglContext;
 static EGLSurface eglSurface;
 
 static bool isEngineInitialized = false;
+static int refCount = 0;
 
 //-----------------------------------------------------------------------------
 // Make Current
@@ -44,8 +45,10 @@ void engine_bind()
 bool engine_initialize()
 //-----------------------------------------------------------------------------
 {
-  if (isEngineInitialized)
+  if (isEngineInitialized) {
+    refCount++;
     return true;
+  }
 
   EGLBoolean result = false;
 
@@ -78,6 +81,8 @@ bool engine_initialize()
   result = (EGL_TRUE == eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext));
 
   isEngineInitialized = result;
+  if (isEngineInitialized)
+    refCount = 1;
 
   ALOGI("In %s result = %d context = %p", __FUNCTION__, result, (void *)eglContext);
 
@@ -89,6 +94,14 @@ bool engine_initialize()
 void engine_shutdown()
 //-----------------------------------------------------------------------------
 {
+  if (!isEngineInitialized)
+    return;
+
+  if (refCount > 1) {
+    refCount--;
+    return;
+  }
+
   EGL(eglMakeCurrent(eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT));
   EGL(eglDestroySurface(eglDisplay, eglSurface));
   EGL(eglDestroyContext(eglDisplay, eglContext));
@@ -97,6 +110,7 @@ void engine_shutdown()
   eglContext = EGL_NO_CONTEXT;
   eglSurface = EGL_NO_SURFACE;
   isEngineInitialized = false;
+  refCount = 0;
 }
 
 //-----------------------------------------------------------------------------
