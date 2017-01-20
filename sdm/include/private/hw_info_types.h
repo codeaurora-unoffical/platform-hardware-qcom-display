@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
+* Copyright (c) 2015-2017, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -222,6 +222,7 @@ struct HWPrimaries {
 struct HWHDRInfo {
   bool enabled = false;               // HDR feature
   uint32_t peak_brightness = 0;       // Panel's peak brightness level
+  uint32_t average_brightness = 0;    // Panel's average brightness level
   uint32_t blackness_level = 0;       // Panel's blackness level
   HWPrimaries white_point = {};       // Panel's white point
   HWPrimaries red = {};               // Panel's red primary

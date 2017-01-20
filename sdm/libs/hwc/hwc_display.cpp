@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2016, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2017, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -76,6 +76,11 @@ int HWCDisplay::Init() {
     DLOGE("Display create failed. Error = %d display_type %d event_handler %p disp_intf %p",
       error, type_, this, &display_intf_);
     return -EINVAL;
+  }
+
+  HWCDebugHandler::Get()->GetProperty("sys.hwc_disable_hdr", &disable_hdr_handling_);
+  if (disable_hdr_handling_) {
+    DLOGI("HDR Handling disabled");
   }
 
   int property_swap_interval = 1;
@@ -356,6 +361,12 @@ int HWCDisplay::PrepareLayerParams(hwc_layer_1_t *hwc_layer, Layer* layer) {
     layer_buffer.width = UINT32(pvt_handle->width);
     layer_buffer.height = UINT32(pvt_handle->height);
 
+    layer->flags.skip = ((hwc_layer->flags & HWC_SKIP_LAYER) > 0);
+    layer->flags.solid_fill = (hwc_layer->flags & kDimLayer) || solid_fill_enable_;
+    if (layer->flags.skip || layer->flags.solid_fill) {
+      layer->dirty_regions.clear();
+    }
+
     if (SetMetaData(pvt_handle, layer) != kErrorNone) {
       return -EINVAL;
     }
@@ -451,12 +462,6 @@ int HWCDisplay::PrePrepareLayerStack(hwc_display_contents_1_t *content_list) {
 
     if (ret != kErrorNone) {
       return ret;
-    }
-
-    layer->flags.skip = ((hwc_layer.flags & HWC_SKIP_LAYER) > 0);
-    layer->flags.solid_fill = (hwc_layer.flags & kDimLayer) || solid_fill_enable_;
-    if (layer->flags.skip || layer->flags.solid_fill) {
-      layer->dirty_regions.clear();
     }
 
     hwc_rect_t scaled_display_frame = hwc_layer.displayFrame;
@@ -1237,9 +1242,11 @@ DisplayError HWCDisplay::SetMetaData(const private_handle_t *pvt_handle, Layer *
       return kErrorNotSupported;
   }
 
-  if (layer_buffer.color_metadata.colorPrimaries == ColorPrimaries_BT2020 &&
-     (layer_buffer.color_metadata.transfer == Transfer_SMPTE_ST2084 ||
-      layer_buffer.color_metadata.transfer == Transfer_HLG)) {
+  bool hdr_layer = layer_buffer.color_metadata.colorPrimaries == ColorPrimaries_BT2020 &&
+                   (layer_buffer.color_metadata.transfer == Transfer_SMPTE_ST2084 ||
+                   layer_buffer.color_metadata.transfer == Transfer_HLG);
+  if (hdr_layer && !layer->flags.skip && !disable_hdr_handling_) {
+    // dont honor hdr if skip is set or hdr handling is disabled
     layer_buffer.flags.hdr = true;
     layer_stack_.flags.hdr_present = true;
   }
@@ -1359,6 +1366,10 @@ int HWCDisplay::GetDisplayConfigCount(uint32_t *count) {
 int HWCDisplay::GetDisplayAttributesForConfig(int config,
                                             DisplayConfigVariableInfo *display_attributes) {
   return display_intf_->GetConfig(UINT32(config), display_attributes) == kErrorNone ? 0 : -1;
+}
+
+int HWCDisplay::GetDisplayFixedConfig(DisplayConfigFixedInfo *fixed_info) {
+  return display_intf_->GetConfig(fixed_info) == kErrorNone ? 0 : -1;
 }
 
 // TODO(user): HWC needs to know updating for dyn_fps, cpu hint features,

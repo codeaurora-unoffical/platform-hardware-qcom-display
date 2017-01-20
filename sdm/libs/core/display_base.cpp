@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2016, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2017, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -411,9 +411,20 @@ DisplayError DisplayBase::GetConfig(uint32_t index, DisplayConfigVariableInfo *v
   return kErrorNotSupported;
 }
 
-DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *variable_info) {
+DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
-  variable_info->is_cmdmode = (hw_panel_info_.mode == kModeCommand);
+  fixed_info->is_cmdmode = (hw_panel_info_.mode == kModeCommand);
+
+  HWHDRInfo &hdr_info = hw_panel_info_.hdr_info;
+  HWResourceInfo hw_resource_info = HWResourceInfo();
+  hw_info_intf_->GetHWResourceInfo(&hw_resource_info);
+  bool hdr_supported = (hw_resource_info.has_hdr && hdr_info.enabled);
+  // hdr can be supported by display when target and panel supports HDR.
+  fixed_info->hdr_supported = hdr_supported;
+  // Populate luminance values only if hdr will be supported on that display
+  fixed_info->max_luminance = hdr_supported ? hdr_info.peak_brightness: 0;
+  fixed_info->average_luminance = hdr_supported ? hdr_info.average_brightness : 0;
+  fixed_info->min_luminance = hdr_supported ?  hdr_info.blackness_level: 0;
 
   return kErrorNone;
 }

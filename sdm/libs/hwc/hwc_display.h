@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2016, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2017, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -109,6 +109,7 @@ class HWCDisplay : public DisplayEventHandler {
   virtual int GetDisplayConfigCount(uint32_t *count);
   virtual int GetDisplayAttributesForConfig(int config,
                                             DisplayConfigVariableInfo *display_attributes);
+  virtual int GetDisplayFixedConfig(DisplayConfigFixedInfo *fixed_info);
 
   int SetPanelBrightness(int level);
   int GetPanelBrightness(int *level);
@@ -212,6 +213,7 @@ class HWCDisplay : public DisplayEventHandler {
   std::map<int, LayerBufferS3DFormat> s3d_format_hwc_to_sdm_;
   bool animating_ = false;
   HWCToneMapper *tone_mapper_ = NULL;
+  int disable_hdr_handling_ = 0;
 
  private:
   void DumpInputBuffers(hwc_display_contents_1_t *content_list);
