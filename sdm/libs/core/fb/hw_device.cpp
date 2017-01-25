@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2016, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2017, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -875,6 +875,30 @@ void HWDevice::GetHWPanelInfoByNode(int device_node, HWPanelInfo *panel_info) {
       } else if (!strncmp(tokens[0], "pu_roi_cnt", strlen("pu_roi_cnt"))) {
         panel_info->left_roi_count = UINT32(atoi(tokens[1]));
         panel_info->right_roi_count = UINT32(atoi(tokens[1]));
+      } else if (!strncmp(tokens[0], "is_hdr_enabled", strlen("is_hdr_enabled"))) {
+        panel_info->hdr_enabled = atoi(tokens[1]);
+      } else if (!strncmp(tokens[0], "peak_brightness", strlen("peak_brightness"))) {
+        panel_info->peak_luminance = UINT32(atoi(tokens[1]));
+      } else if (!strncmp(tokens[0], "average_brightness", strlen("average_brightness"))) {
+        panel_info->average_luminance = UINT32(atoi(tokens[1]));
+      } else if (!strncmp(tokens[0], "blackness_level", strlen("blackness_level"))) {
+        panel_info->blackness_level = UINT32(atoi(tokens[1]));
+      } else if (!strncmp(tokens[0], "white_chromaticity_x", strlen("white_chromaticity_x"))) {
+        panel_info->primaries.white_point[0] = UINT32(atoi(tokens[1]));
+      } else if (!strncmp(tokens[0], "white_chromaticity_y", strlen("white_chromaticity_y"))) {
+        panel_info->primaries.white_point[1] = UINT32(atoi(tokens[1]));
+      } else if (!strncmp(tokens[0], "red_chromaticity_x", strlen("red_chromaticity_x"))) {
+        panel_info->primaries.red[0] = UINT32(atoi(tokens[1]));
+      } else if (!strncmp(tokens[0], "red_chromaticity_y", strlen("red_chromaticity_y"))) {
+        panel_info->primaries.red[1] = UINT32(atoi(tokens[1]));
+      } else if (!strncmp(tokens[0], "green_chromaticity_x", strlen("green_chromaticity_x"))) {
+        panel_info->primaries.green[0] = UINT32(atoi(tokens[1]));
+      } else if (!strncmp(tokens[0], "green_chromaticity_y", strlen("green_chromaticity_y"))) {
+        panel_info->primaries.green[1] = UINT32(atoi(tokens[1]));
+      } else if (!strncmp(tokens[0], "blue_chromaticity_x", strlen("blue_chromaticity_x"))) {
+        panel_info->primaries.blue[0] = UINT32(atoi(tokens[1]));
+      } else if (!strncmp(tokens[0], "blue_chromaticity_y", strlen("blue_chromaticity_y"))) {
+        panel_info->primaries.blue[1] = UINT32(atoi(tokens[1]));
       }
     }
   }
@@ -1017,7 +1041,7 @@ int HWDevice::ParseLine(const char *input, const char *delim, char *tokens[],
 
 bool HWDevice::EnableHotPlugDetection(int enable) {
   char hpdpath[kMaxStringLength];
-  char value = enable ? '1' : '0';
+  const char *value = enable ? "1" : "0";
 
   // Enable HPD for all pluggable devices.
   for (int i = 0; i < kFBNodeMax; i++) {
@@ -1026,7 +1050,7 @@ bool HWDevice::EnableHotPlugDetection(int enable) {
     if (panel_info.is_pluggable == true) {
       snprintf(hpdpath , sizeof(hpdpath), "%s%d/hpd", fb_path_, i);
 
-      ssize_t length = SysFsWrite(hpdpath, &value, sizeof(value));
+      ssize_t length = SysFsWrite(hpdpath, value, 1);
       if (length <= 0) {
         return false;
       }
