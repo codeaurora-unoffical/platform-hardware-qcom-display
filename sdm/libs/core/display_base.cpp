@@ -1193,8 +1193,8 @@ DisplayError DisplayBase::InitializeColorModes() {
 DisplayError DisplayBase::HandleHDR(LayerStack *layer_stack) {
   DisplayError error = kErrorNone;
 
-  if (!color_mgr_) {
-    // TODO(user): Handle the case where color_mgr is not present
+  if ((!color_mgr_) || (display_type_ != kPrimary)) {
+    // Handling is needed for only primary displays
     return kErrorNone;
   }
 
