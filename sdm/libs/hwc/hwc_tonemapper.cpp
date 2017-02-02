@@ -266,7 +266,6 @@ void HWCToneMapper::Terminate() {
   delete gpu_tone_mapper_;
   gpu_tone_mapper_ = NULL;
 
-  TonemapperFactory_Destroy();
   FreeIntermediateBuffers();
   active_ = false;
 }
