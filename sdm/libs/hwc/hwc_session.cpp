@@ -138,6 +138,12 @@ int HWCSession::Init() {
     return -EINVAL;
   }
 
+  if (pthread_create(&uevent_thread_, NULL, &HWCUeventThread, this) < 0) {
+    DLOGE("Failed to start = %s, error = %s", uevent_thread_name_, strerror(errno));
+    CoreInterface::DestroyCore();
+    return -errno;
+  }
+
   // Read which display is first, and create it and store it in primary slot
   HWDisplayInterfaceInfo hw_disp_info;
   error = core_intf_->GetFirstDisplayInterfaceType(&hw_disp_info);
@@ -227,25 +233,15 @@ int HWCSession::Init() {
       }
     }
     CoreInterface::DestroyCore();
-    return -EINVAL;
+    uevent_thread_exit_ = true;
+    pthread_join(uevent_thread_, NULL);
+    return status;
   }
 
 
   color_mgr_ = HWCColorManager::CreateColorManager();
   if (!color_mgr_) {
     DLOGW("Failed to load HWCColorManager.");
-  }
-
-  if (pthread_create(&uevent_thread_, NULL, &HWCUeventThread, this) < 0) {
-    DLOGE("Failed to start = %s, error = %s", uevent_thread_name_, strerror(errno));
-    for (uint32_t i = 0; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i ++) {
-      if (hwc_display_[i] != NULL) {
-         HWCDisplayPrimary::Destroy(hwc_display_[i]);
-         hwc_display_[i] = 0;
-      }
-    }
-    CoreInterface::DestroyCore();
-    return -errno;
   }
 
   connected_displays_[HWC_DISPLAY_PRIMARY] = 1;
