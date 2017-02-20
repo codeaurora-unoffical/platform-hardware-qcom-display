@@ -29,11 +29,22 @@ class EngineContext {
     EGLDisplay eglDisplay;
     EGLContext eglContext;
     EGLSurface eglSurface;
+
+    EGLDisplay eglPrevDisplay;
+    EGLContext eglPrevContext;
+    EGLSurface eglPrevReadSurface;
+    EGLSurface eglPrevDrawSurface;
+
     EngineContext()
     {
         eglDisplay = EGL_NO_DISPLAY;
         eglContext = EGL_NO_CONTEXT;
         eglSurface = EGL_NO_SURFACE;
+
+        eglPrevDisplay = EGL_NO_DISPLAY;
+        eglPrevContext = EGL_NO_CONTEXT;
+        eglPrevReadSurface = EGL_NO_SURFACE;
+        eglPrevDrawSurface = EGL_NO_SURFACE;
     }
 };
 
@@ -43,6 +54,10 @@ void engine_bind(void* context)
 //-----------------------------------------------------------------------------
 {
   EngineContext* engineContext = (EngineContext*)(context);
+  engineContext->eglPrevDisplay = eglGetCurrentDisplay();
+  engineContext->eglPrevContext = eglGetCurrentContext();
+  engineContext->eglPrevReadSurface = eglGetCurrentSurface(EGL_READ);
+  engineContext->eglPrevDrawSurface = eglGetCurrentSurface(EGL_DRAW);
   EGL(eglMakeCurrent(engineContext->eglDisplay, engineContext->eglSurface, engineContext->eglSurface, engineContext->eglContext));
 }
 
@@ -100,6 +115,12 @@ void engine_shutdown(void* context)
   engineContext->eglDisplay = EGL_NO_DISPLAY;
   engineContext->eglContext = EGL_NO_CONTEXT;
   engineContext->eglSurface = EGL_NO_SURFACE;
+  EGL(eglMakeCurrent(engineContext->eglPrevDisplay, engineContext->eglPrevDrawSurface,
+                     engineContext->eglPrevReadSurface, engineContext->eglPrevContext));
+  engineContext->eglPrevDisplay = EGL_NO_DISPLAY;
+  engineContext->eglPrevContext = EGL_NO_CONTEXT;
+  engineContext->eglPrevReadSurface = EGL_NO_SURFACE;
+  engineContext->eglPrevDrawSurface = EGL_NO_SURFACE;
 }
 
 //-----------------------------------------------------------------------------
