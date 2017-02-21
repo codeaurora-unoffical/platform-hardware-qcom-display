@@ -37,6 +37,7 @@
 #include <utils/debug.h>
 #include <sync/sync.h>
 #include <cutils/properties.h>
+#include <qd_utils.h>
 #include <map>
 #include <utility>
 #include <vector>
@@ -99,6 +100,24 @@ const std::vector<std::string> &HWCColorMode::GetColorModes() {
   return color_modes_;
 }
 
+int HWCColorMode::SetColorTransform(uint32_t matrix_count, const float *matrix) {
+  if (matrix_count > kColorTransformMatrixCount) {
+    DLOGE("Transform matrix count = %d, exceeds max = %d", matrix_count,
+          kColorTransformMatrixCount);
+    return -1;
+  }
+
+  double color_matrix[kColorTransformMatrixCount] = {0};
+  CopyColorTransformMatrix(matrix, color_matrix);
+  DisplayError error = display_intf_->SetColorTransform(matrix_count, color_matrix);
+  if (error != kErrorNone) {
+    DLOGE("Failed!");
+    return -1;
+  }
+
+  return 0;
+}
+
 int HWCColorMode::PopulateColorModes() {
   uint32_t color_mode_count = 0;
   DisplayError error = display_intf_->GetColorModeCount(&color_mode_count);
@@ -133,6 +152,11 @@ int HWCDisplay::Init() {
     DLOGE("Display create failed. Error = %d display_type %d event_handler %p disp_intf %p",
       error, type_, this, &display_intf_);
     return -EINVAL;
+  }
+
+  HWCDebugHandler::Get()->GetProperty("sys.hwc_disable_hdr", &disable_hdr_handling_);
+  if (disable_hdr_handling_) {
+    DLOGI("HDR Handling disabled");
   }
 
   int property_swap_interval = 1;
@@ -494,6 +518,7 @@ void HWCDisplay::CommitLayerParams(hwc_layer_1_t *hwc_layer, Layer *layer) {
     layer_buffer.planes[0].offset = pvt_handle->offset;
     layer_buffer.planes[0].stride = UINT32(pvt_handle->width);
     layer_buffer.size = pvt_handle->size;
+    layer_buffer.fb_id = pvt_handle->fb_id;
   }
 
   // if swapinterval property is set to 0 then close and reset the acquireFd
@@ -542,7 +567,7 @@ int HWCDisplay::PrePrepareLayerStack(hwc_display_contents_1_t *content_list) {
         bool secure = (pvt_handle->flags & private_handle_t::PRIV_FLAGS_SECURE_BUFFER) ||
                 (pvt_handle->flags & private_handle_t::PRIV_FLAGS_PROTECTED_BUFFER) ||
                 (pvt_handle->flags & private_handle_t::PRIV_FLAGS_SECURE_DISPLAY);
-        if (NonIntegralSourceCrop && !secure) {
+        if (NonIntegralSourceCrop && (!secure && pvt_handle->bufferType != BUFFER_TYPE_VIDEO)) {
             layer->flags.skip = true;
         }
     }
@@ -991,6 +1016,7 @@ LayerBufferFormat HWCDisplay::GetSDMFormat(const int32_t &source, const int flag
   case HAL_PIXEL_FORMAT_YCbCr_420_SP:             format = kFormatYCbCr420SemiPlanar;       break;
   case HAL_PIXEL_FORMAT_YCbCr_422_SP:             format = kFormatYCbCr422H2V1SemiPlanar;   break;
   case HAL_PIXEL_FORMAT_YCbCr_422_I:              format = kFormatYCbCr422H2V1Packed;       break;
+  case HAL_PIXEL_FORMAT_CbYCrY_422_I:             format = kFormatCbYCrY422H2V1Packed;      break;
   case HAL_PIXEL_FORMAT_RGBA_1010102:             format = kFormatRGBA1010102;              break;
   case HAL_PIXEL_FORMAT_ARGB_2101010:             format = kFormatARGB2101010;              break;
   case HAL_PIXEL_FORMAT_RGBX_1010102:             format = kFormatRGBX1010102;              break;
@@ -1048,7 +1074,7 @@ void HWCDisplay::DumpInputBuffers(hwc_display_contents_1_t *content_list) {
 
       snprintf(dump_file_name, sizeof(dump_file_name), "%s/input_layer%d_%dx%d_%s_frame%d.raw",
                dir_path, i, pvt_handle->width, pvt_handle->height,
-               GetHALPixelFormatString(pvt_handle->format), dump_frame_index_);
+               qdutils::GetHALPixelFormatString(pvt_handle->format), dump_frame_index_);
 
       FILE* fp = fopen(dump_file_name, "w+");
       if (fp) {
@@ -1101,81 +1127,6 @@ void HWCDisplay::DumpOutputBuffer(const BufferInfo& buffer_info, void *base, int
     }
 
     DLOGI("Frame Dump of %s is %s", dump_file_name, result ? "Successful" : "Failed");
-  }
-}
-
-const char *HWCDisplay::GetHALPixelFormatString(int format) {
-  switch (format) {
-  case HAL_PIXEL_FORMAT_RGBA_8888:
-    return "RGBA_8888";
-  case HAL_PIXEL_FORMAT_RGBX_8888:
-    return "RGBX_8888";
-  case HAL_PIXEL_FORMAT_RGB_888:
-    return "RGB_888";
-  case HAL_PIXEL_FORMAT_RGB_565:
-    return "RGB_565";
-  case HAL_PIXEL_FORMAT_BGR_565:
-    return "BGR_565";
-  case HAL_PIXEL_FORMAT_BGRA_8888:
-    return "BGRA_8888";
-  case HAL_PIXEL_FORMAT_RGBA_5551:
-    return "RGBA_5551";
-  case HAL_PIXEL_FORMAT_RGBA_4444:
-    return "RGBA_4444";
-  case HAL_PIXEL_FORMAT_YV12:
-    return "YV12";
-  case HAL_PIXEL_FORMAT_YCbCr_422_SP:
-    return "YCbCr_422_SP_NV16";
-  case HAL_PIXEL_FORMAT_YCrCb_420_SP:
-    return "YCrCb_420_SP_NV21";
-  case HAL_PIXEL_FORMAT_YCbCr_422_I:
-    return "YCbCr_422_I_YUY2";
-  case HAL_PIXEL_FORMAT_YCrCb_422_I:
-    return "YCrCb_422_I_YVYU";
-  case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
-    return "NV12_ENCODEABLE";
-  case HAL_PIXEL_FORMAT_YCbCr_420_SP_TILED:
-    return "YCbCr_420_SP_TILED_TILE_4x2";
-  case HAL_PIXEL_FORMAT_YCbCr_420_SP:
-    return "YCbCr_420_SP";
-  case HAL_PIXEL_FORMAT_YCrCb_420_SP_ADRENO:
-    return "YCrCb_420_SP_ADRENO";
-  case HAL_PIXEL_FORMAT_YCrCb_422_SP:
-    return "YCrCb_422_SP";
-  case HAL_PIXEL_FORMAT_R_8:
-    return "R_8";
-  case HAL_PIXEL_FORMAT_RG_88:
-    return "RG_88";
-  case HAL_PIXEL_FORMAT_INTERLACE:
-    return "INTERLACE";
-  case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
-    return "YCbCr_420_SP_VENUS";
-  case HAL_PIXEL_FORMAT_YCrCb_420_SP_VENUS:
-    return "YCrCb_420_SP_VENUS";
-  case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC:
-    return "YCbCr_420_SP_VENUS_UBWC";
-  case HAL_PIXEL_FORMAT_RGBA_1010102:
-    return "RGBA_1010102";
-  case HAL_PIXEL_FORMAT_ARGB_2101010:
-    return "ARGB_2101010";
-  case HAL_PIXEL_FORMAT_RGBX_1010102:
-    return "RGBX_1010102";
-  case HAL_PIXEL_FORMAT_XRGB_2101010:
-    return "XRGB_2101010";
-  case HAL_PIXEL_FORMAT_BGRA_1010102:
-    return "BGRA_1010102";
-  case HAL_PIXEL_FORMAT_ABGR_2101010:
-    return "ABGR_2101010";
-  case HAL_PIXEL_FORMAT_BGRX_1010102:
-    return "BGRX_1010102";
-  case HAL_PIXEL_FORMAT_XBGR_2101010:
-    return "XBGR_2101010";
-  case HAL_PIXEL_FORMAT_YCbCr_420_P010:
-    return "YCbCr_420_P010";
-  case HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC:
-    return "YCbCr_420_TP10_UBWC";
-  default:
-    return "Unknown_format";
   }
 }
 
@@ -1365,9 +1316,11 @@ DisplayError HWCDisplay::SetMetaData(const private_handle_t *pvt_handle, Layer *
     return kErrorNotSupported;
   }
 
-  if (layer_buffer.color_metadata.colorPrimaries == ColorPrimaries_BT2020 &&
-     (layer_buffer.color_metadata.transfer == Transfer_SMPTE_ST2084 ||
-      layer_buffer.color_metadata.transfer == Transfer_HLG)) {
+  bool hdr_layer = layer_buffer.color_metadata.colorPrimaries == ColorPrimaries_BT2020 &&
+                   (layer_buffer.color_metadata.transfer == Transfer_SMPTE_ST2084 ||
+                   layer_buffer.color_metadata.transfer == Transfer_HLG);
+  if (hdr_layer && !disable_hdr_handling_) {
+    // dont honor HDR when its handling is disabled
     layer_buffer.flags.hdr = true;
     layer_stack_.flags.hdr_present = true;
   }
@@ -1479,6 +1432,10 @@ int HWCDisplay::GetDisplayConfigCount(uint32_t *count) {
 int HWCDisplay::GetDisplayAttributesForConfig(int config,
                                             DisplayConfigVariableInfo *display_attributes) {
   return display_intf_->GetConfig(UINT32(config), display_attributes) == kErrorNone ? 0 : -1;
+}
+
+int HWCDisplay::GetDisplayFixedConfig(DisplayConfigFixedInfo *fixed_info) {
+  return display_intf_->GetConfig(fixed_info) == kErrorNone ? 0 : -1;
 }
 
 // TODO(user): HWC needs to know updating for dyn_fps, cpu hint features,

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014, 2016, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014, 2016-2017, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -149,6 +149,7 @@ enum LayerBufferFormat {
                                       //!<    y(0), u(0), y(1), v(0), y(2), u(2), y(3), v(2)
                                       //!<    y(n-1), u(n-1), y(n), v(n-1)
 
+  kFormatCbYCrY422H2V1Packed,
   kFormatInvalid = 0xFFFFFFFF,
 };
 
@@ -265,6 +266,7 @@ struct LayerBuffer {
                                 //!< could be modified by both client and SDM.
   uint64_t buffer_id __attribute__((aligned(8))) = 0;
                                 //!< Specifies the buffer id.
+  uint32_t fb_id = 0;  // DRM f/w registered framebuffer id
 };
 
 // This enum represents buffer layout types.
