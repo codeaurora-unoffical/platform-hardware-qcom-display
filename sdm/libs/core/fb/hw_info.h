@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015, The Linux Foundation. All rights reserved.
+* Copyright (c) 2015 - 2016, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -26,17 +26,29 @@
 #define __HW_INFO_H__
 
 #include <core/sdm_types.h>
+#include <core/core_interface.h>
 #include <private/hw_info_types.h>
+#include <linux/msm_mdp.h>
+#include <bitset>
+
 #include "hw_info_interface.h"
+
+#ifndef MDP_IMGTYPE_END
+#define MDP_IMGTYPE_LIMIT1 0x100
+#endif
 
 namespace sdm {
 
 class HWInfo: public HWInfoInterface {
  public:
   virtual DisplayError GetHWResourceInfo(HWResourceInfo *hw_resource);
-  virtual DisplayError GetHWDisplayInfo(HWDisplayInfo *hw_disp);
+  virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info);
 
  private:
+  virtual DisplayError GetHWRotatorInfo(HWResourceInfo *hw_resource);
+  virtual DisplayError GetMDSSRotatorInfo(HWResourceInfo *hw_resource);
+  virtual DisplayError GetV4L2RotatorInfo(HWResourceInfo *hw_resource);
+
   // TODO(user): Read Mdss version from the driver
   static const int kHWMdssVersion5 = 500;  // MDSS_V5
   static const int kMaxStringLength = 1024;
@@ -44,9 +56,21 @@ class HWInfo: public HWInfoInterface {
   // However, we rely on reading the capabalities from fbO since this
   // is guaranteed to be available.
   static const int kHWCapabilitiesNode = 0;
+  static const std::bitset<8> kDefaultFormatSupport[kHWSubBlockMax][
+                                                        BITS_TO_BYTES(MDP_IMGTYPE_LIMIT1)];
+  static constexpr const char *kRotatorCapsPath = "/sys/devices/virtual/rotator/mdss_rotator/caps";
+  static constexpr const char *kBWModeBitmap
+                                  = "/sys/devices/virtual/graphics/fb0/mdp/bw_mode_bitmap";
 
-  static int ParseLine(char *input, char *tokens[], const uint32_t max_token, uint32_t *count);
+  static int ParseString(const char *input, char *tokens[], const uint32_t max_token,
+                         const char *delim, uint32_t *count);
   DisplayError GetDynamicBWLimits(HWResourceInfo *hw_resource);
+  LayerBufferFormat GetSDMFormat(int mdp_format);
+  void InitSupportedFormatMap(HWResourceInfo *hw_resource);
+  void ParseFormats(char *tokens[], uint32_t token_count, HWSubBlockType sub_block_type,
+                    HWResourceInfo *hw_resource);
+  void PopulateSupportedFormatMap(const std::bitset<8> *format_supported, uint32_t format_count,
+                                  HWSubBlockType sub_blk_type, HWResourceInfo *hw_resource);
 };
 
 }  // namespace sdm

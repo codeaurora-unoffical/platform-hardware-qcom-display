@@ -63,8 +63,7 @@ int gpu_context_t::gralloc_alloc_buffer(unsigned int size, int usage,
     else
         data.align = getpagesize();
 
-    if ((usage & GRALLOC_USAGE_PROTECTED) &&
-        (usage & GRALLOC_USAGE_PRIVATE_MM_HEAP)) {
+    if (usage & GRALLOC_USAGE_PROTECTED) {
             if (usage & GRALLOC_USAGE_PRIVATE_SECURE_DISPLAY) {
                 /* The alignment here reflects qsee mmu V7L/V8L requirement */
                 data.align = SZ_2M;
@@ -268,9 +267,13 @@ int gpu_context_t::alloc_impl(int w, int h, int format, int usage,
        format == HAL_PIXEL_FORMAT_YCbCr_420_888) {
         if (usage & GRALLOC_USAGE_PRIVATE_ALLOC_UBWC)
             grallocFormat = HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC;
-        else if(usage & GRALLOC_USAGE_HW_VIDEO_ENCODER)
-            grallocFormat = HAL_PIXEL_FORMAT_NV12_ENCODEABLE; //NV12
-        else if((usage & GRALLOC_USAGE_HW_CAMERA_MASK)
+        else if(usage & GRALLOC_USAGE_HW_VIDEO_ENCODER) {
+            if(MDPCapabilityInfo::getInstance().isWBUBWCSupportedByMDP() &&
+               usage & GRALLOC_USAGE_HW_COMPOSER)
+              grallocFormat = HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC;
+            else
+              grallocFormat = HAL_PIXEL_FORMAT_NV12_ENCODEABLE; //NV12
+        } else if((usage & GRALLOC_USAGE_HW_CAMERA_MASK)
                 == GRALLOC_USAGE_HW_CAMERA_ZSL)
             grallocFormat = HAL_PIXEL_FORMAT_NV21_ZSL; //NV21 ZSL
         else if(usage & GRALLOC_USAGE_HW_CAMERA_READ)

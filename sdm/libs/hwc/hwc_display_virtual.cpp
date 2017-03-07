@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2015, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2016, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -67,7 +67,7 @@ int HWCDisplayVirtual::Create(CoreInterface *core_intf, hwc_procs_t const **hwc_
     return status;
   }
 
-  hwc_display_virtual->GetPanelResolution(&virtual_width, &virtual_height);
+  hwc_display_virtual->GetMixerResolution(&virtual_width, &virtual_height);
 
   if (content_list->numHwLayers < 1) {
     Destroy(hwc_display_virtual);
@@ -78,7 +78,7 @@ int HWCDisplayVirtual::Create(CoreInterface *core_intf, hwc_procs_t const **hwc_
   int fb_width = fb_layer.displayFrame.right - fb_layer.displayFrame.left;
   int fb_height = fb_layer.displayFrame.bottom - fb_layer.displayFrame.top;
 
-  status = hwc_display_virtual->SetFrameBufferResolution(fb_width, fb_height);
+  status = hwc_display_virtual->SetFrameBufferResolution(UINT32(fb_width), UINT32(fb_height));
 
   if (status) {
     Destroy(hwc_display_virtual);
@@ -96,8 +96,8 @@ void HWCDisplayVirtual::Destroy(HWCDisplay *hwc_display) {
 }
 
 HWCDisplayVirtual::HWCDisplayVirtual(CoreInterface *core_intf, hwc_procs_t const **hwc_procs)
-  : HWCDisplay(core_intf, hwc_procs, kVirtual, false, false),
-    dump_output_layer_(false), output_buffer_(NULL) {
+  : HWCDisplay(core_intf, hwc_procs, kVirtual, HWC_DISPLAY_VIRTUAL, false, NULL,
+               DISPLAY_CLASS_VIRTUAL) {
 }
 
 int HWCDisplayVirtual::Init() {
@@ -119,6 +119,7 @@ int HWCDisplayVirtual::Deinit() {
 
   if (output_buffer_) {
     delete output_buffer_;
+    output_buffer_ = NULL;
   }
 
   return status;
@@ -163,15 +164,6 @@ int HWCDisplayVirtual::Prepare(hwc_display_contents_1_t *content_list) {
 int HWCDisplayVirtual::Commit(hwc_display_contents_1_t *content_list) {
   int status = 0;
   if (display_paused_) {
-    if (content_list->outbufAcquireFenceFd >= 0) {
-      // If we do not handle the frame set retireFenceFd to outbufAcquireFenceFd,
-      // which will make sure the framework waits on it and closes it.
-      content_list->retireFenceFd = dup(content_list->outbufAcquireFenceFd);
-      close(content_list->outbufAcquireFenceFd);
-      content_list->outbufAcquireFenceFd = -1;
-    }
-    CloseAcquireFences(content_list);
-
     DisplayError error = display_intf_->Flush();
     if (error != kErrorNone) {
       DLOGE("Flush failed. Error = %d", error);
@@ -179,21 +171,29 @@ int HWCDisplayVirtual::Commit(hwc_display_contents_1_t *content_list) {
     return status;
   }
 
+  CommitOutputBufferParams(content_list);
+
   status = HWCDisplay::CommitLayerStack(content_list);
   if (status) {
     return status;
   }
 
-  DumpOutputBuffer(content_list);
+  if (dump_frame_count_ && !flush_ && dump_output_layer_) {
+    const private_handle_t *output_handle = (const private_handle_t *)(content_list->outbuf);
+    if (output_handle && output_handle->base) {
+      BufferInfo buffer_info;
+      buffer_info.buffer_config.width = static_cast<uint32_t>(output_handle->width);
+      buffer_info.buffer_config.height = static_cast<uint32_t>(output_handle->height);
+      buffer_info.buffer_config.format = GetSDMFormat(output_handle->format, output_handle->flags);
+      buffer_info.alloc_buffer_info.size = static_cast<uint32_t>(output_handle->size);
+      DumpOutputBuffer(buffer_info, reinterpret_cast<void *>(output_handle->base),
+                       layer_stack_.retire_fence_fd);
+    }
+  }
 
   status = HWCDisplay::PostCommitLayerStack(content_list);
   if (status) {
     return status;
-  }
-
-  if (content_list->outbufAcquireFenceFd >= 0) {
-    close(content_list->outbufAcquireFenceFd);
-    content_list->outbufAcquireFenceFd = -1;
   }
 
   return 0;
@@ -236,11 +236,11 @@ int HWCDisplayVirtual::SetOutputSliceFromMetadata(hwc_display_contents_1_t *cont
       int fbt_height = frame.bottom - frame.top;
       const MetaData_t *meta_data = reinterpret_cast<MetaData_t *>(output_handle->base_metadata);
       if (meta_data && meta_data->operation & UPDATE_BUFFER_GEOMETRY) {
-        variable_info.x_pixels = meta_data->bufferDim.sliceWidth;
-        variable_info.y_pixels = meta_data->bufferDim.sliceHeight;
+        variable_info.x_pixels = UINT32(meta_data->bufferDim.sliceWidth);
+        variable_info.y_pixels = UINT32(meta_data->bufferDim.sliceHeight);
       } else {
-        variable_info.x_pixels = fbt_width;
-        variable_info.y_pixels = fbt_height;
+        variable_info.x_pixels = UINT32(fbt_width);
+        variable_info.y_pixels = UINT32(fbt_height);
       }
       // TODO(user): Need to get the framerate of primary display and update it.
       variable_info.fps = 60;
@@ -261,13 +261,8 @@ int HWCDisplayVirtual::SetOutputSliceFromMetadata(hwc_display_contents_1_t *cont
 }
 
 int HWCDisplayVirtual::SetOutputBuffer(hwc_display_contents_1_t *content_list) {
-  int status = 0;
-
   const private_handle_t *output_handle =
         static_cast<const private_handle_t *>(content_list->outbuf);
-
-  // Fill output buffer parameters (width, height, format, plane information, fence)
-  output_buffer_->acquire_fence_fd = content_list->outbufAcquireFenceFd;
 
   if (output_handle) {
     int output_handle_format = output_handle->format;
@@ -286,71 +281,39 @@ int HWCDisplayVirtual::SetOutputBuffer(hwc_display_contents_1_t *content_list) {
     AdrenoMemInfo::getInstance().getAlignedWidthAndHeight(output_handle, output_buffer_width,
                                                           output_buffer_height);
 
-    output_buffer_->width = output_buffer_width;
-    output_buffer_->height = output_buffer_height;
+    output_buffer_->width = UINT32(output_buffer_width);
+    output_buffer_->height = UINT32(output_buffer_height);
     output_buffer_->flags.secure = 0;
     output_buffer_->flags.video = 0;
+
+    const MetaData_t *meta_data = reinterpret_cast<MetaData_t *>(output_handle->base_metadata);
+    if (meta_data && SetCSC(meta_data, &output_buffer_->color_metadata) != kErrorNone) {
+      return kErrorNotSupported;
+    }
 
     // TZ Protected Buffer - L1
     if (output_handle->flags & private_handle_t::PRIV_FLAGS_SECURE_BUFFER) {
       output_buffer_->flags.secure = 1;
     }
-
-    // ToDo: Need to extend for non-RGB formats
-    output_buffer_->planes[0].fd = output_handle->fd;
-    output_buffer_->planes[0].offset = output_handle->offset;
-    output_buffer_->planes[0].stride = output_handle->width;
   }
 
   layer_stack_.output_buffer = output_buffer_;
 
-  return status;
+  return 0;
 }
 
-void HWCDisplayVirtual::DumpOutputBuffer(hwc_display_contents_1_t *content_list) {
-  const private_handle_t *output_handle = (const private_handle_t *)(content_list->outbuf);
-  char dir_path[PATH_MAX];
+void HWCDisplayVirtual::CommitOutputBufferParams(hwc_display_contents_1_t *content_list) {
+  const private_handle_t *output_handle =
+        static_cast<const private_handle_t *>(content_list->outbuf);
 
-  if (!dump_frame_count_ || flush_ || !dump_output_layer_) {
-    return;
-  }
+  // Fill output buffer parameters (width, height, format, plane information, fence)
+  output_buffer_->acquire_fence_fd = content_list->outbufAcquireFenceFd;
 
-  snprintf(dir_path, sizeof(dir_path), "/data/misc/display/frame_dump_%s", GetDisplayString());
-
-  if (mkdir(dir_path, 777) != 0 && errno != EEXIST) {
-    DLOGW("Failed to create %s directory errno = %d, desc = %s", dir_path, errno, strerror(errno));
-    return;
-  }
-
-  // if directory exists already, need to explicitly change the permission.
-  if (errno == EEXIST && chmod(dir_path, 0777) != 0) {
-    DLOGW("Failed to change permissions on %s directory", dir_path);
-    return;
-  }
-
-  if (output_handle && output_handle->base) {
-    char dump_file_name[PATH_MAX];
-    size_t result = 0;
-
-    if (content_list->outbufAcquireFenceFd >= 0) {
-      int error = sync_wait(content_list->outbufAcquireFenceFd, 1000);
-      if (error < 0) {
-        DLOGW("sync_wait error errno = %d, desc = %s", errno,  strerror(errno));
-        return;
-      }
-    }
-
-    snprintf(dump_file_name, sizeof(dump_file_name), "%s/output_layer_%dx%d_%s_frame%d.raw",
-             dir_path, output_handle->width, output_handle->height,
-             GetHALPixelFormatString(output_handle->format), dump_frame_index_);
-
-    FILE* fp = fopen(dump_file_name, "w+");
-    if (fp) {
-      result = fwrite(reinterpret_cast<void *>(output_handle->base), output_handle->size, 1, fp);
-      fclose(fp);
-    }
-
-    DLOGI("Frame Dump of %s is %s", dump_file_name, result ? "Successful" : "Failed");
+  if (output_handle) {
+    // ToDo: Need to extend for non-RGB formats
+    output_buffer_->planes[0].fd = output_handle->fd;
+    output_buffer_->planes[0].offset = output_handle->offset;
+    output_buffer_->planes[0].stride = UINT32(output_handle->width);
   }
 }
 

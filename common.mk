@@ -1,17 +1,43 @@
 #Common headers
-common_includes := $(LOCAL_PATH)/../libgralloc
-common_includes += $(LOCAL_PATH)/../libcopybit
-common_includes += $(LOCAL_PATH)/../libqdutils
-common_includes += $(LOCAL_PATH)/../libqservice
+display_top := $(call my-dir)
+
+ifeq ($(call is-board-platform-in-list, msm8996), true)
+common_flags := -DUSE_COLOR_METADATA
+endif
+
+use_hwc2 := false
+ifeq ($(TARGET_USES_HWC2), true)
+    use_hwc2 := true
+endif
+
+common_includes := $(display_top)/libqdutils
+common_includes += $(display_top)/libqservice
+ifneq ($(TARGET_IS_HEADLESS), true)
+    common_includes += $(display_top)/libcopybit
+endif
+
+common_includes += $(display_top)/include
+common_includes += $(display_top)/sdm/include
 
 common_header_export_path := qcom/display
 
 #Common libraries external to display HAL
 common_libs := liblog libutils libcutils libhardware
 
+ifeq ($(TARGET_IS_HEADLESS), true)
+    LOCAL_CLANG := false
+else
+    LOCAL_CLANG := true
+endif
+
 #Common C flags
-common_flags := -DDEBUG_CALC_FPS -Wno-missing-field-initializers
-common_flags += -Wconversion -Wall -Werror
+common_flags += -DDEBUG_CALC_FPS -Wno-missing-field-initializers
+common_flags += -Wconversion -Wall -Werror -std=c++11
+ifneq ($(TARGET_USES_GRALLOC1), true)
+    common_flags += -isystem $(display_top)/libgralloc
+else
+    common_flags += -isystem $(display_top)/libgralloc1
+endif
 
 ifeq ($(TARGET_USES_POST_PROCESSING),true)
     common_flags     += -DUSES_POST_PROCESSING
@@ -36,12 +62,14 @@ kernel_includes :=
 # Executed only on QCOM BSPs
 ifeq ($(TARGET_USES_QCOM_BSP),true)
 # Enable QCOM Display features
-    common_flags += -DQCOM_BSP
+   common_flags += -DQTI_BSP
 endif
-ifneq ($(call is-platform-sdk-version-at-least,18),true)
-    common_flags += -DANDROID_JELLYBEAN_MR1=1
+
+ifeq ($(TARGET_IS_HEADLESS),true)
+    common_flags += -DTARGET_HEADLESS
 endif
-ifeq ($(call is-vendor-board-platform,QCOM),true)
+
+ifeq ($(TARGET_COMPILE_WITH_MSM_KERNEL),true)
 # This check is to pick the kernel headers from the right location.
 # If the macro above is defined, we make the assumption that we have the kernel
 # available in the build tree.

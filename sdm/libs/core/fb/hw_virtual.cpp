@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015, The Linux Foundation. All rights reserved.
+* Copyright (c) 2015 - 2016, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -34,41 +34,15 @@
 
 namespace sdm {
 
-DisplayError HWVirtual::Create(HWInterface **intf, HWInfoInterface *hw_info_intf,
-                               DisplayType display_type, BufferSyncHandler *buffer_sync_handler) {
-  DisplayError error = kErrorNone;
-  HWVirtual *hw_virtual = NULL;
-
-  hw_virtual = new HWVirtual(buffer_sync_handler, hw_info_intf, display_type);
-  error = hw_virtual->Init(NULL);
-  if (error != kErrorNone) {
-    delete hw_virtual;
-  } else {
-    *intf = hw_virtual;
-  }
-
-  return error;
-}
-
-DisplayError HWVirtual::Destroy(HWInterface *intf) {
-  HWVirtual *hw_virtual = static_cast<HWVirtual *>(intf);
-  hw_virtual->Deinit();
-  delete hw_virtual;
-
-  return kErrorNone;
-}
-
-HWVirtual::HWVirtual(BufferSyncHandler *buffer_sync_handler, HWInfoInterface *hw_info_intf,
-                     DisplayType display_type)
+HWVirtual::HWVirtual(BufferSyncHandler *buffer_sync_handler, HWInfoInterface *hw_info_intf)
   : HWDevice(buffer_sync_handler) {
   HWDevice::device_type_ = kDeviceVirtual;
   HWDevice::device_name_ = "Virtual Display Device";
   HWDevice::hw_info_intf_ = hw_info_intf;
-  HWDevice::display_type_ = display_type;
 }
 
-DisplayError HWVirtual::Init(HWEventHandler *eventhandler) {
-  return HWDevice::Init(eventhandler);
+DisplayError HWVirtual::Init() {
+  return HWDevice::Init();
 }
 
 DisplayError HWVirtual::Validate(HWLayers *hw_layers) {
@@ -76,7 +50,30 @@ DisplayError HWVirtual::Validate(HWLayers *hw_layers) {
   return HWDevice::Validate(hw_layers);
 }
 
-DisplayError HWVirtual::Flush() {
+DisplayError HWVirtual::GetMixerAttributes(HWMixerAttributes *mixer_attributes) {
+  if (!mixer_attributes) {
+    return kErrorParameters;
+  }
+
+  mixer_attributes->width = display_attributes_.x_pixels;
+  mixer_attributes->height = display_attributes_.y_pixels;
+  mixer_attributes_.split_left = display_attributes_.is_device_split ?
+      (display_attributes_.x_pixels / 2) : mixer_attributes_.width;
+
+  return kErrorNone;
+}
+
+DisplayError HWVirtual::SetDisplayAttributes(const HWDisplayAttributes &display_attributes) {
+  if (display_attributes.x_pixels == 0 || display_attributes.y_pixels == 0) {
+    return kErrorParameters;
+  }
+
+  display_attributes_ = display_attributes;
+
+  if (display_attributes_.x_pixels > hw_resource_.max_mixer_width) {
+    display_attributes_.is_device_split = true;
+  }
+
   return kErrorNone;
 }
 

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015, The Linux Foundation. All rights reserved.
+* Copyright (c) 2015 - 2016, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -69,7 +69,7 @@ DisplayError HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
     alloc_flags |= INT(GRALLOC_USAGE_PROTECTED);
     data.align = SECURE_ALIGN;
   } else {
-    data.align = getpagesize();
+    data.align = UINT32(getpagesize());
   }
 
   if (buffer_config.cache == false) {
@@ -103,7 +103,7 @@ DisplayError HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
   }
 
   alloc_buffer_info->fd = data.fd;
-  alloc_buffer_info->stride = aligned_width;
+  alloc_buffer_info->stride = UINT32(aligned_width);
   alloc_buffer_info->size = buffer_size;
 
   meta_buffer_info->base_addr = data.base;
@@ -150,6 +150,42 @@ DisplayError HWCBufferAllocator::FreeBuffer(BufferInfo *buffer_info) {
   return kErrorNone;
 }
 
+uint32_t HWCBufferAllocator::GetBufferSize(BufferInfo *buffer_info) {
+  uint32_t align = UINT32(getpagesize());
+
+  const BufferConfig &buffer_config = buffer_info->buffer_config;
+
+  int alloc_flags = INT(GRALLOC_USAGE_PRIVATE_IOMMU_HEAP);
+
+  int width = INT(buffer_config.width);
+  int height = INT(buffer_config.height);
+  int format;
+
+  if (buffer_config.secure) {
+    alloc_flags = INT(GRALLOC_USAGE_PRIVATE_MM_HEAP);
+    alloc_flags |= INT(GRALLOC_USAGE_PROTECTED);
+    align = SECURE_ALIGN;
+  }
+
+  if (buffer_config.cache == false) {
+    // Allocate uncached buffers
+    alloc_flags |= GRALLOC_USAGE_PRIVATE_UNCACHED;
+  }
+
+  if (SetBufferInfo(buffer_config.format, &format, &alloc_flags) < 0) {
+    return 0;
+  }
+
+  int aligned_width = 0;
+  int aligned_height = 0;
+  uint32_t buffer_size = getBufferSizeAndDimensions(width, height, format, alloc_flags,
+                                                    aligned_width, aligned_height);
+
+  buffer_size = ROUND_UP(buffer_size, align) * buffer_config.buffer_count;
+
+  return buffer_size;
+}
+
 int HWCBufferAllocator::SetBufferInfo(LayerBufferFormat format, int *target, int *flags) {
   switch (format) {
   case kFormatRGBA8888:                 *target = HAL_PIXEL_FORMAT_RGBA_8888;             break;
@@ -162,12 +198,22 @@ int HWCBufferAllocator::SetBufferInfo(LayerBufferFormat format, int *target, int
   case kFormatYCrCb420SemiPlanar:       *target = HAL_PIXEL_FORMAT_YCrCb_420_SP;          break;
   case kFormatYCbCr420SemiPlanar:       *target = HAL_PIXEL_FORMAT_YCbCr_420_SP;          break;
   case kFormatYCbCr422H2V1Packed:       *target = HAL_PIXEL_FORMAT_YCbCr_422_I;           break;
-  case kFormatCbYCrY422H2V1Packed:      *target = HAL_PIXEL_FORMAT_CbYCrY_422_I;          break;
   case kFormatYCbCr422H2V1SemiPlanar:   *target = HAL_PIXEL_FORMAT_YCbCr_422_SP;          break;
   case kFormatYCbCr420SemiPlanarVenus:  *target = HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS;    break;
+  case kFormatYCrCb420SemiPlanarVenus:  *target = HAL_PIXEL_FORMAT_YCrCb_420_SP_VENUS;    break;
   case kFormatYCbCr420SPVenusUbwc:    *target = HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC; break;
   case kFormatRGBA5551:                 *target = HAL_PIXEL_FORMAT_RGBA_5551;             break;
   case kFormatRGBA4444:                 *target = HAL_PIXEL_FORMAT_RGBA_4444;             break;
+  case kFormatRGBA1010102:              *target = HAL_PIXEL_FORMAT_RGBA_1010102;          break;
+  case kFormatARGB2101010:              *target = HAL_PIXEL_FORMAT_ARGB_2101010;          break;
+  case kFormatRGBX1010102:              *target = HAL_PIXEL_FORMAT_RGBX_1010102;          break;
+  case kFormatXRGB2101010:              *target = HAL_PIXEL_FORMAT_XRGB_2101010;          break;
+  case kFormatBGRA1010102:              *target = HAL_PIXEL_FORMAT_BGRA_1010102;          break;
+  case kFormatABGR2101010:              *target = HAL_PIXEL_FORMAT_ABGR_2101010;          break;
+  case kFormatBGRX1010102:              *target = HAL_PIXEL_FORMAT_BGRX_1010102;          break;
+  case kFormatXBGR2101010:              *target = HAL_PIXEL_FORMAT_XBGR_2101010;          break;
+  case kFormatYCbCr420P010:             *target = HAL_PIXEL_FORMAT_YCbCr_420_P010;        break;
+  case kFormatYCbCr420TP10Ubwc:         *target = HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC;   break;
   case kFormatRGBA8888Ubwc:
     *target = HAL_PIXEL_FORMAT_RGBA_8888;
     *flags |= GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
@@ -178,6 +224,14 @@ int HWCBufferAllocator::SetBufferInfo(LayerBufferFormat format, int *target, int
     break;
   case kFormatBGR565Ubwc:
     *target = HAL_PIXEL_FORMAT_BGR_565;
+    *flags |= GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
+    break;
+  case kFormatRGBA1010102Ubwc:
+    *target = HAL_PIXEL_FORMAT_RGBA_1010102;
+    *flags |= GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
+    break;
+  case kFormatRGBX1010102Ubwc:
+    *target = HAL_PIXEL_FORMAT_RGBX_1010102;
     *flags |= GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
     break;
   default:

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2015, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2016, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -33,6 +33,8 @@
 
 #include <stdint.h>
 #include <utils/constants.h>
+
+#include <vector>
 
 #include "layer_buffer.h"
 #include "sdm_types.h"
@@ -93,35 +95,23 @@ enum LayerComposition {
                             //!< Blit target layers shall be after GPU target layer in layer stack.
 };
 
-/*! @brief This enum represents display layer color space conversion (CSC) matrix types.
-
-  @sa Layer
-*/
-enum LayerCSC {
-  kCSCLimitedRange601,    //!< 601 limited range color space.
-  kCSCFullRange601,       //!< 601 full range color space.
-  kCSCLimitedRange709,    //!< 709 limited range color space.
-};
-
-/*! @brief This enum represents display layer inverse gamma correction (IGC) types.
-
-  @sa Layer
-*/
-enum LayerIGC {
-  kIGCNotSpecified,       //!< IGC is not specified.
-  kIGCsRGB,               //!< sRGB IGC type.
-};
-
 /*! @brief This structure defines rotation and flip values for a display layer.
 
   @sa Layer
 */
 struct LayerTransform {
-  float rotation;         //!< Left most pixel coordinate.
-  bool flip_horizontal;   //!< Mirror reversal of the layer across a horizontal axis.
-  bool flip_vertical;     //!< Mirror reversal of the layer across a vertical axis.
+  float rotation = 0.0f;  //!< Left most pixel coordinate.
+  bool flip_horizontal = false;  //!< Mirror reversal of the layer across a horizontal axis.
+  bool flip_vertical = false;  //!< Mirror reversal of the layer across a vertical axis.
 
-  LayerTransform() : rotation(0.0f), flip_horizontal(false), flip_vertical(false) { }
+  bool operator==(const LayerTransform& transform) const {
+    return (rotation == transform.rotation && flip_horizontal == transform.flip_horizontal &&
+            flip_vertical == transform.flip_vertical);
+  }
+
+  bool operator!=(const LayerTransform& transform) const {
+    return !operator==(transform);
+  }
 };
 
 /*! @brief This structure defines flags associated with a layer. The 1-bit flag can be set to ON(1)
@@ -192,6 +182,13 @@ struct LayerStackFlags {
                                       //!< stack contains cursor layer.
 
       uint32_t single_buffered_layer_present : 1;    //!< Set if stack has single buffered layer
+
+      uint32_t s3d_mode_present : 1;  //!< This flag will be set to true, if the current layer
+                                      //!< stack contains s3d layer, and the layer stack can enter
+                                      //!< s3d mode.
+
+      uint32_t post_processed_output : 1;  // If output_buffer should contain post processed output
+                                           // This applies only to primary displays currently
     };
 
     uint32_t flags = 0;               //!< For initialization purpose only.
@@ -210,7 +207,16 @@ struct LayerRect {
   float bottom = 0.0f;   //!< Bottom-most pixel coordinate.
 
   LayerRect() = default;
+
   LayerRect(float l, float t, float r, float b) : left(l), top(t), right(r), bottom(b) { }
+
+  bool operator==(const LayerRect& rect) const {
+    return left == rect.left && right == rect.right && top == rect.top && bottom == rect.bottom;
+  }
+
+  bool operator!=(const LayerRect& rect) const {
+    return !operator==(rect);
+  }
 };
 
 /*! @brief This structure defines an array of display layer rectangles.
@@ -241,23 +247,23 @@ struct Layer {
                                                    //!< should be preserved between Prepare() and
                                                    //!< Commit() calls.
 
-  LayerRect src_rect;                              //!< Rectangular area of the layer buffer to
+  LayerRect src_rect = {};                         //!< Rectangular area of the layer buffer to
                                                    //!< consider for composition.
 
-  LayerRect dst_rect;                              //!< The target position where the frame will be
+  LayerRect dst_rect = {};                         //!< The target position where the frame will be
                                                    //!< displayed. Cropping rectangle is scaled to
                                                    //!< fit into this rectangle. The origin is the
                                                    //!< top-left corner of the screen.
 
-  LayerRectArray visible_regions;                  //!< Visible rectangular areas in screen space.
+  std::vector<LayerRect> visible_regions = {};     //!< Visible rectangular areas in screen space.
                                                    //!< The visible region includes areas overlapped
                                                    //!< by a translucent layer.
 
-  LayerRectArray dirty_regions;                    //!< Rectangular areas in the current frames
+  std::vector<LayerRect> dirty_regions = {};       //!< Rectangular areas in the current frames
                                                    //!< that have changed in comparison to
                                                    //!< previous frame.
 
-  LayerRectArray blit_regions;                     //!< Rectangular areas of this layer which need
+  std::vector<LayerRect> blit_regions = {};        //!< Rectangular areas of this layer which need
                                                    //!< to be composed to blit target. Display
                                                    //!< device will update blit rectangles if a
                                                    //!< layer composition is set as hybrid. Nth blit
@@ -268,11 +274,11 @@ struct Layer {
                                                     //!< applied on the layer buffer during
                                                     //!< composition.
 
-  LayerTransform transform;                        //!< Rotation/Flip operations which need to be
+  LayerTransform transform = {};                   //!< Rotation/Flip operations which need to be
                                                    //!< applied to the layer buffer during
                                                    //!< composition.
 
-  uint8_t plane_alpha = 0;                         //!< Alpha value applied to the whole layer.
+  uint8_t plane_alpha = 0xff;                      //!< Alpha value applied to the whole layer.
                                                    //!< Value of each pixel is computed as:
                                                    //!<    if(kBlendingPremultiplied) {
                                                    //!<      pixel.RGB = pixel.RGB * planeAlpha/255
@@ -281,10 +287,6 @@ struct Layer {
 
   uint32_t frame_rate = 0;                         //!< Rate at which frames are being updated for
                                                    //!< this layer.
-
-  LayerCSC csc = kCSCLimitedRange601;              //!< Color Space of the layer.
-
-  LayerIGC igc = kIGCNotSpecified;                 //!< IGC that will be applied on this layer.
 
   uint32_t solid_fill_color = 0;                   //!< Solid color used to fill the layer when
                                                    //!< no content is associated with the layer.
@@ -299,8 +301,7 @@ struct Layer {
   @sa DisplayInterface::Commit
 */
 struct LayerStack {
-  Layer *layers = NULL;                //!< Array of layers.
-  uint32_t layer_count = 0;            //!< Total number of layers.
+  std::vector<Layer *> layers = {};    //!< Vector of layer pointers.
 
   int retire_fence_fd = -1;            //!< File descriptor referring to a sync fence object which
                                        //!< will be signaled when this composited frame has been

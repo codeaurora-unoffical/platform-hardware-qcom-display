@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014, 2016, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -30,10 +30,20 @@
 #define __LAYER_BUFFER_H__
 
 #include <stdint.h>
+#include <color_metadata.h>
 
 #include "sdm_types.h"
 
 namespace sdm {
+
+/*! @brief This enum represents display layer inverse gamma correction (IGC) types.
+
+  @sa Layer
+*/
+enum LayerIGC {
+  kIGCNotSpecified,       //!< IGC is not specified.
+  kIGCsRGB,               //!< sRGB IGC type.
+};
 
 /*! @brief This enum represents different buffer formats supported by display manager.
 
@@ -58,6 +68,17 @@ enum LayerBufferFormat {
   kFormatRGBA8888Ubwc,  //!< UBWC aligned RGBA8888 format
   kFormatRGBX8888Ubwc,  //!< UBWC aligned RGBX8888 format
   kFormatBGR565Ubwc,    //!< UBWC aligned BGR565 format
+  kFormatRGBA1010102,   //!< 10-bits Red, Green, Blue, Alpha interleaved in RGBA order.
+  kFormatARGB2101010,   //!< 10-bits Alpha, Red, Green, Blue interleaved in ARGB order.
+  kFormatRGBX1010102,   //!< 10-bits Red, Green, Blue, Padding interleaved in RGBX order. No Alpha.
+  kFormatXRGB2101010,   //!< 10-bits Padding, Red, Green, Blue interleaved in XRGB order. No Alpha.
+  kFormatBGRA1010102,   //!< 10-bits Blue, Green, Red, Alpha interleaved in BGRA order.
+  kFormatABGR2101010,   //!< 10-bits Alpha, Blue, Green, Red interleaved in ABGR order.
+  kFormatBGRX1010102,   //!< 10-bits Blue, Green, Red, Padding interleaved in BGRX order. No Alpha.
+  kFormatXBGR2101010,   //!< 10-bits Padding, Blue, Green, Red interleaved in XBGR order. No Alpha.
+  kFormatRGBA1010102Ubwc,  //!< UBWC aligned RGBA1010102 format
+  kFormatRGBX1010102Ubwc,  //!< UBWC aligned RGBX1010102 format
+  kFormatRGB101010,     // 10-bits Red, Green, Blue, interleaved in RGB order. No Alpha.
 
   /* All YUV-Planar formats, Any new format will be added towards end of this group to maintain
      backward compatibility.
@@ -107,6 +128,19 @@ enum LayerBufferFormat {
 
   kFormatYCbCr420SPVenusUbwc,         //!< UBWC aligned YCbCr420SemiPlanarVenus format
 
+  kFormatYCrCb420SemiPlanarVenus,     //!< Y-plane: y(0), y(1), y(2) ... y(n)
+                                      //!< 2x2 subsampled interleaved UV-plane:
+                                      //!<    v(0), u(0), v(2), u(2) ... v(n-1), u(n-1)
+
+  kFormatYCbCr420P010,                //!< 16 bit Y-plane with 5 MSB bits set to 0:
+                                      //!< y(0), y(1), y(2) ... y(n)
+                                      //!< 2x2 subsampled interleaved 10 bit UV-plane with
+                                      //!< 5 MSB bits set to 0:
+                                      //!<    u(0), v(0), u(2), v(2) ... u(n-1), v(n-1)
+                                      //!< aka P010.
+
+  kFormatYCbCr420TP10Ubwc,            //!< UBWC aligned YCbCr420TP10 format.
+
   /* All YUV-Packed formats, Any new format will be added towards end of this group to maintain
      backward compatibility.
   */
@@ -115,8 +149,20 @@ enum LayerBufferFormat {
                                       //!<    y(0), u(0), y(1), v(0), y(2), u(2), y(3), v(2)
                                       //!<    y(n-1), u(n-1), y(n), v(n-1)
 
-  kFormatCbYCrY422H2V1Packed,
   kFormatInvalid = 0xFFFFFFFF,
+};
+
+
+/*! @brief This enum represents different types of 3D formats supported.
+
+  @sa LayerBufferS3DFormat
+*/
+enum LayerBufferS3DFormat {
+  kS3dFormatNone,            //!< Layer buffer content is not 3D content.
+  kS3dFormatLeftRight,       //!< Left and Right view of a 3D content stitched left and right.
+  kS3dFormatRightLeft,       //!< Right and Left view of a 3D content stitched left and right.
+  kS3dFormatTopBottom,       //!< Left and RightView of a 3D content stitched top and bottom.
+  kS3dFormatFramePacking     //!< Left and right view of 3D content coded in consecutive frames.
 };
 
 /*! @brief This structure defines a color sample plane belonging to a buffer format. RGB buffer
@@ -150,13 +196,12 @@ struct LayerBufferFlags {
       uint32_t interlace : 1;       //!< This flag shall be set by the client to indicate that
                                     //!< the buffer has interlaced content.
 
-      uint32_t secure_display : 1;
-                                    //!< This flag shall be set by the client to indicate that the
+      uint32_t secure_display : 1;  //!< This flag shall be set by the client to indicate that the
                                     //!< secure display session is in progress. Secure display
                                     //!< session can not coexist with non-secure session.
-      };
+    };
 
-      uint32_t flags = 0;           //!< For initialization purpose only.
+    uint32_t flags = 0;             //!< For initialization purpose only.
                                     //!< Client shall not refer to it directly.
   };
 };
@@ -170,9 +215,13 @@ struct LayerBufferFlags {
 struct LayerBuffer {
   uint32_t width = 0;           //!< Actual width of the Layer that this buffer is for.
   uint32_t height = 0;          //!< Actual height of the Layer that this buffer is for.
+  uint32_t size = 0;            //!< Size of a single buffer (even if multiple clubbed together)
   LayerBufferFormat format = kFormatRGBA8888;     //!< Format of the buffer content.
-  LayerBufferPlane planes[4];   //!< Array of planes that this buffer contains. RGB buffer formats
-                                //!< have 1 plane whereas YUV buffer formats may have upto 4 planes.
+  ColorMetaData color_metadata = {};              //!< CSC + Range + Transfer + Matrix + HDR Info
+  LayerIGC igc = kIGCNotSpecified;                //!< IGC that will be applied on this layer.
+  LayerBufferPlane planes[4] = {};
+                                //!< Array of planes that this buffer contains. RGB buffer formats
+                                //!< have 1 plane whereas YUV buffer formats may have upto 4 planes
                                 //!< Total number of planes for the buffer will be interpreted based
                                 //!< on the buffer format specified.
 
@@ -199,6 +248,11 @@ struct LayerBuffer {
                                 //!< read/write.
 
   LayerBufferFlags flags;       //!< Flags associated with this buffer.
+
+  LayerBufferS3DFormat s3d_format = kS3dFormatNone;
+                                //!< Represents the format of the buffer content in 3D.
+  uint64_t buffer_id __attribute__((aligned(8))) = 0;
+                                //!< Specifies the buffer id.
 };
 
 }  // namespace sdm

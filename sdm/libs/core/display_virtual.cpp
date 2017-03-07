@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2015, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2016, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -28,7 +28,6 @@
 #include "display_virtual.h"
 #include "hw_interface.h"
 #include "hw_info_interface.h"
-#include "fb/hw_virtual.h"
 
 #define __CLASS__ "DisplayVirtual"
 
@@ -42,10 +41,10 @@ DisplayVirtual::DisplayVirtual(DisplayEventHandler *event_handler, HWInfoInterfa
 }
 
 DisplayError DisplayVirtual::Init() {
-  SCOPE_LOCK(locker_);
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
 
-  DisplayError error = HWVirtual::Create(&hw_intf_, hw_info_intf_, display_type_,
-                                         DisplayBase::buffer_sync_handler_);
+  DisplayError error = HWInterface::Create(kVirtual, hw_info_intf_, buffer_sync_handler_,
+                                           &hw_intf_);
   if (error != kErrorNone) {
     return error;
   }
@@ -54,85 +53,63 @@ DisplayError DisplayVirtual::Init() {
 
   error = DisplayBase::Init();
   if (error != kErrorNone) {
-    HWVirtual::Destroy(hw_intf_);
+    HWInterface::Destroy(hw_intf_);
   }
 
   return error;
 }
 
-DisplayError DisplayVirtual::Deinit() {
-  SCOPE_LOCK(locker_);
-
-  DisplayError error = DisplayBase::Deinit();
-  HWVirtual::Destroy(hw_intf_);
-
-  return error;
-}
-
-DisplayError DisplayVirtual::Prepare(LayerStack *layer_stack) {
-  SCOPE_LOCK(locker_);
-  return DisplayBase::Prepare(layer_stack);
-}
-
-DisplayError DisplayVirtual::Commit(LayerStack *layer_stack) {
-  SCOPE_LOCK(locker_);
-  return DisplayBase::Commit(layer_stack);
-}
-
-DisplayError DisplayVirtual::Flush() {
-  SCOPE_LOCK(locker_);
-  return DisplayBase::Flush();
-}
-
-DisplayError DisplayVirtual::GetDisplayState(DisplayState *state) {
-  SCOPE_LOCK(locker_);
-  return DisplayBase::GetDisplayState(state);
-}
-
 DisplayError DisplayVirtual::GetNumVariableInfoConfigs(uint32_t *count) {
-  SCOPE_LOCK(locker_);
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
   *count = 1;
   return kErrorNone;
 }
 
 DisplayError DisplayVirtual::GetConfig(uint32_t index, DisplayConfigVariableInfo *variable_info) {
-  SCOPE_LOCK(locker_);
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
   *variable_info = display_attributes_;
   return kErrorNone;
 }
 
 DisplayError DisplayVirtual::GetActiveConfig(uint32_t *index) {
-  SCOPE_LOCK(locker_);
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
   *index = 0;
   return kErrorNone;
 }
 
-DisplayError DisplayVirtual::GetVSyncState(bool *enabled) {
-  SCOPE_LOCK(locker_);
-  return DisplayBase::GetVSyncState(enabled);
-}
-
-bool DisplayVirtual::IsUnderscanSupported() {
-  SCOPE_LOCK(locker_);
-  return DisplayBase::IsUnderscanSupported();
-}
-
-DisplayError DisplayVirtual::SetDisplayState(DisplayState state) {
-  SCOPE_LOCK(locker_);
-  return DisplayBase::SetDisplayState(state);
-}
-
 DisplayError DisplayVirtual::SetActiveConfig(DisplayConfigVariableInfo *variable_info) {
-  SCOPE_LOCK(locker_);
-  DisplayError error = kErrorNone;
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
 
   if (!variable_info) {
     return kErrorParameters;
   }
 
-  display_attributes_.x_pixels = variable_info->x_pixels;
-  display_attributes_.y_pixels = variable_info->y_pixels;
-  display_attributes_.fps = variable_info->fps;
+  DisplayError error = kErrorNone;
+  HWDisplayAttributes display_attributes;
+  HWMixerAttributes mixer_attributes;
+  DisplayConfigVariableInfo fb_config = *variable_info;
+
+  display_attributes.x_pixels = variable_info->x_pixels;
+  display_attributes.y_pixels = variable_info->y_pixels;
+  display_attributes.fps = variable_info->fps;
+
+  if (display_attributes == display_attributes_) {
+    return kErrorNone;
+  }
+
+  error = hw_intf_->SetDisplayAttributes(display_attributes);
+  if (error != kErrorNone) {
+    return error;
+  }
+
+  error = hw_intf_->GetMixerAttributes(&mixer_attributes);
+  if (error != kErrorNone) {
+    return error;
+  }
+
+  // Override x_pixels and y_pixels of frame buffer with mixer width and height
+  fb_config.x_pixels = mixer_attributes.width;
+  fb_config.y_pixels = mixer_attributes.height;
 
   // if display is already connected, unregister display from composition manager and register
   // the display with new configuration.
@@ -140,68 +117,28 @@ DisplayError DisplayVirtual::SetActiveConfig(DisplayConfigVariableInfo *variable
     comp_manager_->UnregisterDisplay(display_comp_ctx_);
   }
 
-  error = comp_manager_->RegisterDisplay(display_type_, display_attributes_, hw_panel_info_,
-                                         &display_comp_ctx_);
+  error = comp_manager_->RegisterDisplay(display_type_, display_attributes, hw_panel_info_,
+                                         mixer_attributes, fb_config, &display_comp_ctx_);
   if (error != kErrorNone) {
     return error;
   }
 
-  return error;
+  display_attributes_ = display_attributes;
+  mixer_attributes_ = mixer_attributes;
+  fb_config_ = fb_config;
+
+  return kErrorNone;
 }
 
-DisplayError DisplayVirtual::SetActiveConfig(uint32_t index) {
-  SCOPE_LOCK(locker_);
-  return kErrorNotSupported;
+DisplayError DisplayVirtual::Prepare(LayerStack *layer_stack) {
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
+
+  // Clean hw layers for reuse.
+  hw_layers_ = HWLayers();
+
+  return DisplayBase::Prepare(layer_stack);
 }
 
-DisplayError DisplayVirtual::SetVSyncState(bool enable) {
-  SCOPE_LOCK(locker_);
-  return kErrorNotSupported;
-}
-
-void DisplayVirtual::SetIdleTimeoutMs(uint32_t timeout_ms) { }
-
-DisplayError DisplayVirtual::SetMaxMixerStages(uint32_t max_mixer_stages) {
-  SCOPE_LOCK(locker_);
-  return DisplayBase::SetMaxMixerStages(max_mixer_stages);
-}
-
-DisplayError DisplayVirtual::SetDisplayMode(uint32_t mode) {
-  SCOPE_LOCK(locker_);
-  return DisplayBase::SetDisplayMode(mode);
-}
-
-DisplayError DisplayVirtual::IsScalingValid(const LayerRect &crop, const LayerRect &dst,
-                                            bool rotate90) {
-  SCOPE_LOCK(locker_);
-  return DisplayBase::IsScalingValid(crop, dst, rotate90);
-}
-
-DisplayError DisplayVirtual::GetRefreshRateRange(uint32_t *min_refresh_rate,
-                                                 uint32_t *max_refresh_rate) {
-  SCOPE_LOCK(locker_);
-  return DisplayBase::GetRefreshRateRange(min_refresh_rate, max_refresh_rate);
-}
-
-DisplayError DisplayVirtual::SetRefreshRate(uint32_t refresh_rate) {
-  SCOPE_LOCK(locker_);
-  return kErrorNotSupported;
-}
-
-DisplayError DisplayVirtual::SetPanelBrightness(int level) {
-  SCOPE_LOCK(locker_);
-  return DisplayBase::SetPanelBrightness(level);
-}
-
-void DisplayVirtual::AppendDump(char *buffer, uint32_t length) {
-  SCOPE_LOCK(locker_);
-  DisplayBase::AppendDump(buffer, length);
-}
-
-DisplayError DisplayVirtual::SetCursorPosition(int x, int y) {
-  SCOPE_LOCK(locker_);
-  return DisplayBase::SetCursorPosition(x, y);
-}
 
 }  // namespace sdm
 

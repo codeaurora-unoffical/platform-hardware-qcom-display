@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2015, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2016, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -34,6 +34,8 @@
 #define __DISPLAY_INTERFACE_H__
 
 #include <stdint.h>
+#include <string>
+#include <vector>
 
 #include "layer_stack.h"
 #include "sdm_types.h"
@@ -48,7 +50,6 @@ namespace sdm {
 enum DisplayType {
   kPrimary,         //!< Main physical display which is attached to the handheld device.
   kHDMI,            //!< HDMI physical display which is generally detachable.
-  kTertiary,        //!< Tertiary physical display
   kVirtual,         //!< Contents would be rendered into the output buffer provided by the client
                     //!< e.g. wireless display.
   kDisplayMax,
@@ -75,6 +76,62 @@ enum DisplayState {
                     //!< if VSync is enabled. Contents are not rendered in this state.
 };
 
+/*! @brief This enum represents flags to override detail enhancer parameters.
+
+  @sa DisplayInterface::SetDetailEnhancerData
+*/
+enum DetailEnhancerOverrideFlags {
+  kOverrideDEEnable            = 0x1,     // Specifies to enable detail enhancer
+  kOverrideDESharpen1          = 0x2,     // Specifies user defined Sharpening/smooth for noise
+  kOverrideDESharpen2          = 0x4,     // Specifies user defined Sharpening/smooth for signal
+  kOverrideDEClip              = 0x8,     // Specifies user defined DE clip shift
+  kOverrideDELimit             = 0x10,    // Specifies user defined DE limit value
+  kOverrideDEThrQuiet          = 0x20,    // Specifies user defined DE quiet threshold
+  kOverrideDEThrDieout         = 0x40,    // Specifies user defined DE dieout threshold
+  kOverrideDEThrLow            = 0x80,    // Specifies user defined DE low threshold
+  kOverrideDEThrHigh           = 0x100,   // Specifies user defined DE high threshold
+  kOverrideDEFilterConfig      = 0x200,   // Specifies user defined scaling filter config
+  kOverrideDEMax               = 0xFFFFFFFF,
+};
+
+/*! @brief This enum represents Y/RGB scaling filter configuration.
+
+  @sa DisplayInterface::SetDetailEnhancerData
+*/
+enum ScalingFilterConfig {
+  kFilterEdgeDirected,
+  kFilterCircular,
+  kFilterSeparable,
+  kFilterBilinear,
+  kFilterMax,
+};
+
+/*! @brief This enum represents the quality level of the content.
+
+  @sa DisplayInterface::SetDetailEnhancerData
+*/
+enum ContentQuality {
+  kContentQualityUnknown,  // Default: high artifact and noise
+  kContentQualityLow,      // Low quality content, high artifact and noise,
+  kContentQualityMedium,   // Medium quality, medium artifact and noise,
+  kContentQualityHigh,     // High quality content, low artifact and noise
+  kContentQualityMax,
+};
+
+/*! @brief This enum represents the display port.
+
+  @sa DisplayInterface::GetDisplayPort
+*/
+enum DisplayPort {
+  kPortDefault,
+  kPortDSI,        // Display is connected to DSI port.
+  kPortDTV,        // Display is connected to DTV port
+  kPortWriteBack,  // Display is connected to writeback port
+  kPortLVDS,       // Display is connected to LVDS port
+  kPortEDP,        // Display is connected to EDP port
+  kPortDP,         // Display is connected to DP port.
+};
+
 /*! @brief This structure defines configuration for fixed properties of a display device.
 
   @sa DisplayInterface::GetConfig
@@ -83,6 +140,7 @@ enum DisplayState {
 struct DisplayConfigFixedInfo {
   bool underscan = false;   //!< If display support CE underscan.
   bool secure = false;      //!< If this display is capable of handling secure content.
+  bool is_cmdmode = false;  //!< If panel is command mode panel.
 };
 
 /*! @brief This structure defines configuration for variable properties of a display device.
@@ -97,6 +155,7 @@ struct DisplayConfigVariableInfo {
   float y_dpi = 0.0f;             //!< Dots per inch in Y-direction.
   uint32_t fps = 0;               //!< Frame rate per second.
   uint32_t vsync_period_ns = 0;   //!< VSync period in nanoseconds.
+  bool is_yuv = false;            //!< If the display output is in YUV format.
 };
 
 /*! @brief Event data associated with VSync event.
@@ -105,6 +164,30 @@ struct DisplayConfigVariableInfo {
 */
 struct DisplayEventVSync {
   int64_t timestamp = 0;    //!< System monotonic clock timestamp in nanoseconds.
+};
+
+/*! @brief The structure defines the user input for detail enhancer module.
+
+  @sa DisplayInterface::SetDetailEnhancerData
+*/
+struct DisplayDetailEnhancerData {
+  uint32_t override_flags = 0;        // flags to specify which data to be set.
+  uint16_t enable = 0;                // Detail enchancer enable
+  int16_t sharpen_level1 = 0;         // Sharpening/smooth strenght for noise
+  int16_t sharpen_level2 = 0;         // Sharpening/smooth strenght for signal
+  uint16_t clip = 0;                  // DE clip shift
+  uint16_t limit = 0;                 // DE limit value
+  uint16_t thr_quiet = 0;             // DE quiet threshold
+  uint16_t thr_dieout = 0;            // DE dieout threshold
+  uint16_t thr_low = 0;               // DE low threshold
+  uint16_t thr_high = 0;              // DE high threshold
+  int32_t sharp_factor = 50;          // sharp_factor specifies sharpness/smoothness level,
+                                      // range -100..100 positive for sharpness and negative for
+                                      // smoothness
+  ContentQuality quality_level = kContentQualityUnknown;
+                                      // Specifies context quality level
+  ScalingFilterConfig filter_config = kFilterEdgeDirected;
+                                      // Y/RGB filter configuration
 };
 
 /*! @brief Display device event handler implemented by the client.
@@ -144,6 +227,16 @@ class DisplayEventHandler {
     @sa DisplayInterface::Commit
   */
   virtual DisplayError Refresh() = 0;
+
+  /*! @brief Event handler for CEC messages.
+
+    @details This event is dispatched to send CEC messages to the CEC HAL.
+
+    @param[in] message message to be sent
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError CECMessage(char *message) = 0;
 
  protected:
   virtual ~DisplayEventHandler() { }
@@ -331,6 +424,11 @@ class DisplayInterface {
   */
   virtual DisplayError ControlPartialUpdate(bool enable, uint32_t *pending) = 0;
 
+  /*! @brief Method to disable partial update for at least 1 frame.
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError DisablePartialUpdateOneFrame() = 0;
+
   /*! @brief Method to set the mode of the primary display.
 
     @param[in] mode the new display mode.
@@ -338,13 +436,6 @@ class DisplayInterface {
     @return \link DisplayError \endlink
   */
   virtual DisplayError SetDisplayMode(uint32_t mode) = 0;
-
-  /*! @brief Method to determine whether scaling for a custom resolution is valid.
-
-    @return \link DisplayError \endlink
-  */
-  virtual DisplayError IsScalingValid(const LayerRect &crop, const LayerRect &dst,
-                                      bool rotate90) = 0;
 
   /*! @brief Method to get the min and max refresh rate of a display.
 
@@ -397,6 +488,41 @@ class DisplayInterface {
                                             PPDisplayAPIPayload *out_payload,
                                             PPPendingParams *pending_action) = 0;
 
+  /*! @brief Method to request the number of color modes supported.
+
+    @param[out] mode_count Number of modes
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError GetColorModeCount(uint32_t *mode_count) = 0;
+
+  /*! @brief Method to request the information of supported color modes.
+
+    @param[inout] mode_count Number of updated modes
+    @param[out] vector of mode strings
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError GetColorModes(uint32_t *mode_count,
+                                     std::vector<std::string> *color_modes) = 0;
+
+  /*! @brief Method to set the color mode
+
+    @param[in] mode_name Mode name which needs to be set
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError SetColorMode(const std::string &color_mode) = 0;
+
+  /*! @brief Method to set the color transform
+
+    @param[in] length Mode name which needs to be set
+    @param[in] color_transform  4x4 Matrix for color transform
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError SetColorTransform(const uint32_t length, const double *color_transform) = 0;
+
   /*! @brief Method to request applying default display mode.
 
     @return \link DisplayError \endlink
@@ -419,6 +545,56 @@ class DisplayInterface {
     @return \link DisplayError \endlink
   */
   virtual DisplayError GetPanelBrightness(int *level) = 0;
+
+  /*! @brief Method to set layer mixer resolution.
+
+    @param[in] width layer mixer width
+    @param[in] height layer mixer height
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError SetMixerResolution(uint32_t width, uint32_t height) = 0;
+
+  /*! @brief Method to get layer mixer resolution.
+
+    @param[out] width layer mixer width
+    @param[out] height layer mixer height
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError GetMixerResolution(uint32_t *width, uint32_t *height) = 0;
+
+  /*! @brief Method to set  frame buffer configuration.
+
+    @param[in] variable_info \link DisplayConfigVariableInfo \endlink
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError SetFrameBufferConfig(const DisplayConfigVariableInfo &variable_info) = 0;
+
+  /*! @brief Method to get frame buffer configuration.
+
+    @param[out] variable_info \link DisplayConfigVariableInfo \endlink
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError GetFrameBufferConfig(DisplayConfigVariableInfo *variable_info) = 0;
+
+  /*! @brief Method to set detail enhancement data.
+
+    @param[in] de_data \link DisplayDetailEnhancerData \endlink
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError SetDetailEnhancerData(const DisplayDetailEnhancerData &de_data) = 0;
+
+  /*! @brief Method to get display port information.
+
+    @param[out] port \link DisplayPort \endlink
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError GetDisplayPort(DisplayPort *port) = 0;
 
  protected:
   virtual ~DisplayInterface() { }

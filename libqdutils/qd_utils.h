@@ -48,6 +48,8 @@ namespace qdutils {
 
 enum HWQueryType {
     HAS_MACRO_TILE = 0,
+    HAS_UBWC = 1,
+    HAS_WB_UBWC = 2
 };
 
 enum {

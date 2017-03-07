@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2015, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2016, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -36,6 +36,7 @@
 #include <core/debug_interface.h>
 #include <cutils/log.h>
 #include <utils/Trace.h>
+#include <bitset>
 
 namespace sdm {
 
@@ -62,11 +63,12 @@ class HWCDebugHandler : public DebugHandler {
   virtual void EndTrace();
   virtual DisplayError GetProperty(const char *property_name, int *value);
   virtual DisplayError GetProperty(const char *property_name, char *value);
+  virtual DisplayError SetProperty(const char *property_name, const char *value);
 
  private:
   static HWCDebugHandler debug_handler_;
-  static uint32_t debug_flags_;
-  static uint32_t verbose_level_;
+  static std::bitset<32> debug_flags_;
+  static int32_t verbose_level_;
 };
 
 }  // namespace sdm

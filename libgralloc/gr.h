@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2008 The Android Open Source Project
- * Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011 - 2016, The Linux Foundation. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,7 +76,7 @@ int getRgbDataAddress(private_handle_t* pHnd, void** rgb_data);
 // To query if UBWC is enabled, based on format and usage flags
 bool isUBwcEnabled(int format, int usage);
 
-// Function to check if the format is an uncompressed RGB format
+// Function to check if the format is an RGB format
 bool isUncompressedRgbFormat(int format);
 
 /*****************************************************************************/
@@ -197,4 +197,37 @@ class AdrenoMemInfo : public android::Singleton <AdrenoMemInfo>
 
         unsigned int (*LINK_adreno_get_gpu_pixel_alignment) ();
 };
+
+
+class MDPCapabilityInfo : public android::Singleton <MDPCapabilityInfo>
+{
+    int isMacroTileSupported = 0;
+    int isUBwcSupported = 0;
+    int isWBUBWCSupported = 0;
+
+    public:
+        MDPCapabilityInfo();
+        /*
+        * Function to return whether MDP support MacroTile feature
+        *
+        * @return  1 : supported
+        *          0 : not supported
+        */
+        int isMacroTilingSupportedByMDP() { return isMacroTileSupported; }
+        /*
+        * Function to return whether MDP supports UBWC feature
+        *
+        * @return  1 : supported
+        *          0 : not supported
+        */
+        int isUBwcSupportedByMDP() { return isUBwcSupported; }
+        /*
+        * Function to return whether MDP WB block outputs UBWC format
+        *
+        * @return  1 : supported
+        *          0 : not supported
+        */
+        int isWBUBWCSupportedByMDP() { return isWBUBWCSupported; }
+};
+
 #endif /* GR_H_ */

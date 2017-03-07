@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2015, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2016, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -26,7 +26,10 @@
 #include <utils/constants.h>
 #include <utils/debug.h>
 #include <utils/rect.h>
+#include <utils/formats.h>
+#include <utils/sys.h>
 #include <dlfcn.h>
+#include <algorithm>
 
 #include "resource_default.h"
 
@@ -36,42 +39,44 @@ namespace sdm {
 
 DisplayError ResourceDefault::Init(const HWResourceInfo &hw_res_info) {
   DisplayError error = kErrorNone;
-  uint32_t num_pipe = 0;
 
-  num_pipe = hw_res_info.num_vig_pipe + hw_res_info.num_rgb_pipe + hw_res_info.num_dma_pipe;
+  num_pipe_ = hw_res_info.num_vig_pipe + hw_res_info.num_rgb_pipe + hw_res_info.num_dma_pipe;
 
-  if (num_pipe > kPipeIdMax) {
-    DLOGE("Number of pipe is over the limit! %d", num_pipe);
+  if (!num_pipe_) {
+    DLOGE("Number of H/W pipes is Zero!");
     return kErrorParameters;
   }
 
-  num_pipe_ = num_pipe;
+  src_pipes_.resize(num_pipe_);
   hw_res_info_ = hw_res_info;
-  // Init pipe info
-  vig_pipes_ = &src_pipes_[0];
-  rgb_pipes_ = &src_pipes_[hw_res_info_.num_vig_pipe];
-  dma_pipes_ = &src_pipes_[hw_res_info_.num_vig_pipe + hw_res_info_.num_rgb_pipe];
 
-  for (uint32_t i = 0; i < hw_res_info_.num_vig_pipe; i++) {
-    vig_pipes_[i].type = kPipeTypeVIG;
-    vig_pipes_[i].index = i;
-    vig_pipes_[i].mdss_pipe_id = GetMdssPipeId(vig_pipes_[i].type, i);
-  }
+  // Priority order of pipes: VIG, RGB, DMA
+  uint32_t vig_index = 0;
+  uint32_t rgb_index = hw_res_info_.num_vig_pipe;
+  uint32_t dma_index = rgb_index + hw_res_info_.num_rgb_pipe;
 
-  for (uint32_t i = 0; i < hw_res_info_.num_rgb_pipe; i++) {
-    rgb_pipes_[i].type = kPipeTypeRGB;
-    rgb_pipes_[i].index = i + hw_res_info_.num_vig_pipe;
-    rgb_pipes_[i].mdss_pipe_id = GetMdssPipeId(rgb_pipes_[i].type, i);
-  }
-
-  for (uint32_t i = 0; i < hw_res_info_.num_dma_pipe; i++) {
-    dma_pipes_[i].type = kPipeTypeDMA;
-    dma_pipes_[i].index = i + hw_res_info_.num_vig_pipe + hw_res_info_.num_rgb_pipe;
-    dma_pipes_[i].mdss_pipe_id = GetMdssPipeId(dma_pipes_[i].type, i);
+  for (uint32_t i = 0; i < num_pipe_; i++) {
+    const HWPipeCaps &pipe_caps = hw_res_info_.hw_pipes.at(i);
+    if (pipe_caps.type == kPipeTypeVIG) {
+      src_pipes_[vig_index].type = kPipeTypeVIG;
+      src_pipes_[vig_index].index = i;
+      src_pipes_[vig_index].mdss_pipe_id = pipe_caps.id;
+      vig_index++;
+    } else if (pipe_caps.type == kPipeTypeRGB) {
+      src_pipes_[rgb_index].type = kPipeTypeRGB;
+      src_pipes_[rgb_index].index = i;
+      src_pipes_[rgb_index].mdss_pipe_id = pipe_caps.id;
+      rgb_index++;
+    } else if (pipe_caps.type == kPipeTypeDMA) {
+      src_pipes_[dma_index].type = kPipeTypeDMA;
+      src_pipes_[dma_index].index = i;
+      src_pipes_[dma_index].mdss_pipe_id = pipe_caps.id;
+      dma_index++;
+    }
   }
 
   for (uint32_t i = 0; i < num_pipe_; i++) {
-    src_pipes_[i].priority = i;
+    src_pipes_[i].priority = INT(i);
   }
 
   DLOGI("hw_rev=%x, DMA=%d RGB=%d VIG=%d", hw_res_info_.hw_revision, hw_res_info_.num_dma_pipe,
@@ -86,8 +91,9 @@ DisplayError ResourceDefault::Init(const HWResourceInfo &hw_res_info) {
 
   // TODO(user): clean it up, query from driver for initial pipe status.
 #ifndef SDM_VIRTUAL_DRIVER
-  rgb_pipes_[0].owner = kPipeOwnerKernelMode;
-  rgb_pipes_[1].owner = kPipeOwnerKernelMode;
+  rgb_index = hw_res_info_.num_vig_pipe;
+  src_pipes_[rgb_index].owner = kPipeOwnerKernelMode;
+  src_pipes_[rgb_index + 1].owner = kPipeOwnerKernelMode;
 #endif
 
   return error;
@@ -98,8 +104,9 @@ DisplayError ResourceDefault::Deinit() {
 }
 
 DisplayError ResourceDefault::RegisterDisplay(DisplayType type,
-                                              const HWDisplayAttributes &attributes,
+                                              const HWDisplayAttributes &display_attributes,
                                               const HWPanelInfo &hw_panel_info,
+                                              const HWMixerAttributes &mixer_attributes,
                                               Handle *display_ctx) {
   DisplayError error = kErrorNone;
 
@@ -115,11 +122,7 @@ DisplayError ResourceDefault::RegisterDisplay(DisplayType type,
       hw_block_id = kHWHDMI;
     }
     break;
-  case kTertiary:
-    if (!hw_block_ctx_[kHWTertiary].is_in_use) {
-      hw_block_id = kHWTertiary;
-    }
-    break;
+
   default:
     DLOGW("RegisterDisplay, invalid type %d", type);
     return kErrorParameters;
@@ -136,12 +139,9 @@ DisplayError ResourceDefault::RegisterDisplay(DisplayType type,
 
   hw_block_ctx_[hw_block_id].is_in_use = true;
 
-  display_resource_ctx->display_attributes = attributes;
+  display_resource_ctx->display_attributes = display_attributes;
   display_resource_ctx->hw_block_id = hw_block_id;
-
-  if (!display_resource_ctx->display_attributes.is_device_split) {
-    display_resource_ctx->display_attributes.split_left = attributes.x_pixels;
-  }
+  display_resource_ctx->mixer_attributes = mixer_attributes;
 
   *display_ctx = display_resource_ctx;
   return error;
@@ -159,14 +159,19 @@ DisplayError ResourceDefault::UnregisterDisplay(Handle display_ctx) {
   return kErrorNone;
 }
 
-void ResourceDefault::ReconfigureDisplay(Handle display_ctx, const HWDisplayAttributes &attributes,
-                                    const HWPanelInfo &hw_panel_info) {
+DisplayError ResourceDefault::ReconfigureDisplay(Handle display_ctx,
+                                                 const HWDisplayAttributes &display_attributes,
+                                                 const HWPanelInfo &hw_panel_info,
+                                                 const HWMixerAttributes &mixer_attributes) {
   SCOPE_LOCK(locker_);
 
   DisplayResourceContext *display_resource_ctx =
                           reinterpret_cast<DisplayResourceContext *>(display_ctx);
 
-  display_resource_ctx->display_attributes = attributes;
+  display_resource_ctx->display_attributes = display_attributes;
+  display_resource_ctx->mixer_attributes = mixer_attributes;
+
+  return kErrorNone;
 }
 
 DisplayError ResourceDefault::Start(Handle display_ctx) {
@@ -196,9 +201,9 @@ DisplayError ResourceDefault::Acquire(Handle display_ctx, HWLayers *hw_layers) {
     return kErrorResources;
   }
 
-  Layer &layer = layer_info.stack->layers[layer_info.index[0]];
+  Layer *layer = layer_info.stack->layers.at(layer_info.index[0]);
 
-  if (layer.composition != kCompositionGPUTarget) {
+  if (layer->composition != kCompositionGPUTarget) {
     DLOGV_IF(kTagResources, "Not an FB layer");
     return kErrorParameters;
   }
@@ -215,8 +220,8 @@ DisplayError ResourceDefault::Acquire(Handle display_ctx, HWLayers *hw_layers) {
     }
   }
 
-  uint32_t left_index = kPipeIdMax;
-  uint32_t right_index = kPipeIdMax;
+  uint32_t left_index = num_pipe_;
+  uint32_t right_index = num_pipe_;
   bool need_scale = false;
 
   struct HWLayerConfig &layer_config = hw_layers->config[0];
@@ -262,7 +267,7 @@ DisplayError ResourceDefault::Acquire(Handle display_ctx, HWLayers *hw_layers) {
 
   if (src_pipes_[right_index].priority < src_pipes_[left_index].priority) {
     // Swap pipe based on priority
-    Swap(left_index, right_index);
+    std::swap(left_index, right_index);
   }
 
   // assign dual pipes
@@ -309,6 +314,9 @@ DisplayError ResourceDefault::PostCommit(Handle display_ctx, HWLayers *hw_layers
     }
   }
 
+  if (hw_layers->info.sync_handle >= 0)
+    Sys::close_(hw_layers->info.sync_handle);
+
   display_resource_ctx->frame_count++;
 
   return kErrorNone;
@@ -335,45 +343,9 @@ DisplayError ResourceDefault::SetMaxMixerStages(Handle display_ctx, uint32_t max
   return kErrorNone;
 }
 
-uint32_t ResourceDefault::GetMdssPipeId(PipeType type, uint32_t index) {
-  uint32_t mdss_id = kPipeIdMax;
-  switch (type) {
-  case kPipeTypeVIG:
-    if (index < 3) {
-      mdss_id = kPipeIdVIG0 + index;
-    } else if (index == 3) {
-      mdss_id = kPipeIdVIG3;
-    } else {
-      DLOGE("vig pipe index is over the limit! %d", index);
-    }
-    break;
-  case kPipeTypeRGB:
-    if (index < 3) {
-      mdss_id = kPipeIdRGB0 + index;
-    } else if (index == 3) {
-      mdss_id = kPipeIdRGB3;
-    } else {
-      DLOGE("rgb pipe index is over the limit! %d", index);
-    }
-    break;
-  case kPipeTypeDMA:
-    if (index < 2) {
-      mdss_id = kPipeIdDMA0 + index;
-    } else {
-      DLOGE("dma pipe index is over the limit! %d", index);
-    }
-    break;
-  default:
-    DLOGE("wrong pipe type! %d", type);
-    break;
-  }
-
-  return (1 << mdss_id);
-}
-
 uint32_t ResourceDefault::SearchPipe(HWBlockType hw_block_id, SourcePipe *src_pipes,
                                 uint32_t num_pipe) {
-  uint32_t index = kPipeIdMax;
+  uint32_t index = num_pipe_;
   SourcePipe *src_pipe;
 
   // search the pipe being used
@@ -395,16 +367,16 @@ uint32_t ResourceDefault::NextPipe(PipeType type, HWBlockType hw_block_id) {
 
   switch (type) {
   case kPipeTypeVIG:
-    src_pipes = vig_pipes_;
+    src_pipes = &src_pipes_[0];
     num_pipe = hw_res_info_.num_vig_pipe;
     break;
   case kPipeTypeRGB:
-    src_pipes = rgb_pipes_;
+    src_pipes = &src_pipes_[hw_res_info_.num_vig_pipe];
     num_pipe = hw_res_info_.num_rgb_pipe;
     break;
   case kPipeTypeDMA:
   default:
-    src_pipes = dma_pipes_;
+    src_pipes = &src_pipes_[hw_res_info_.num_vig_pipe + hw_res_info_.num_rgb_pipe];
     num_pipe = hw_res_info_.num_dma_pipe;
     break;
   }
@@ -413,7 +385,7 @@ uint32_t ResourceDefault::NextPipe(PipeType type, HWBlockType hw_block_id) {
 }
 
 uint32_t ResourceDefault::GetPipe(HWBlockType hw_block_id, bool need_scale) {
-  uint32_t index = kPipeIdMax;
+  uint32_t index = num_pipe_;
 
   // The default behavior is to assume RGB and VG pipes have scalars
   if (!need_scale) {
@@ -477,20 +449,20 @@ DisplayError ResourceDefault::SrcSplitConfig(DisplayResourceContext *display_res
 DisplayError ResourceDefault::DisplaySplitConfig(DisplayResourceContext *display_resource_ctx,
                                             const LayerRect &src_rect, const LayerRect &dst_rect,
                                             HWLayerConfig *layer_config) {
-  HWDisplayAttributes &display_attributes = display_resource_ctx->display_attributes;
+  HWMixerAttributes &mixer_attributes = display_resource_ctx->mixer_attributes;
 
   // for display split case
   HWPipeInfo *left_pipe = &layer_config->left_pipe;
   HWPipeInfo *right_pipe = &layer_config->right_pipe;
   LayerRect scissor_left, scissor_right, dst_left, crop_left, crop_right, dst_right;
 
-  scissor_left.right = FLOAT(display_attributes.split_left);
-  scissor_left.bottom = FLOAT(display_attributes.y_pixels);
+  scissor_left.right = FLOAT(mixer_attributes.split_left);
+  scissor_left.bottom = FLOAT(mixer_attributes.height);
 
-  scissor_right.left = FLOAT(display_attributes.split_left);
+  scissor_right.left = FLOAT(mixer_attributes.split_left);
   scissor_right.top = 0.0f;
-  scissor_right.right = FLOAT(display_attributes.x_pixels);
-  scissor_right.bottom = FLOAT(display_attributes.y_pixels);
+  scissor_right.right = FLOAT(mixer_attributes.width);
+  scissor_right.bottom = FLOAT(mixer_attributes.height);
 
   crop_left = src_rect;
   dst_left = dst_rect;
@@ -529,7 +501,7 @@ DisplayError ResourceDefault::Config(DisplayResourceContext *display_resource_ct
                                 HWLayers *hw_layers) {
   HWLayersInfo &layer_info = hw_layers->info;
   DisplayError error = kErrorNone;
-  Layer& layer = layer_info.stack->layers[layer_info.index[0]];
+  Layer *layer = layer_info.stack->layers.at(layer_info.index[0]);
 
   error = ValidateLayerParams(layer);
   if (error != kErrorNone) {
@@ -540,15 +512,15 @@ DisplayError ResourceDefault::Config(DisplayResourceContext *display_resource_ct
   HWPipeInfo &left_pipe = layer_config->left_pipe;
   HWPipeInfo &right_pipe = layer_config->right_pipe;
 
-  LayerRect src_rect = layer.src_rect;
-  LayerRect dst_rect = layer.dst_rect;
+  LayerRect src_rect = layer->src_rect;
+  LayerRect dst_rect = layer->dst_rect;
 
   error = ValidateDimensions(src_rect, dst_rect);
   if (error != kErrorNone) {
     return error;
   }
 
-  bool ubwc_tiled = IsUBWCFormat(layer.input_buffer->format);
+  bool ubwc_tiled = IsUBWCFormat(layer->input_buffer->format);
   error = ValidateScaling(src_rect, dst_rect, false /*rotated90 */, ubwc_tiled,
                           false /* use_rotator_downscale */);
   if (error != kErrorNone) {
@@ -574,8 +546,8 @@ DisplayError ResourceDefault::Config(DisplayResourceContext *display_resource_ct
   left_pipe.z_order = 0;
 
   DLOGV_IF(kTagResources, "==== FB layer Config ====");
-  Log(kTagResources, "input layer src_rect", layer.src_rect);
-  Log(kTagResources, "input layer dst_rect", layer.dst_rect);
+  Log(kTagResources, "input layer src_rect", layer->src_rect);
+  Log(kTagResources, "input layer dst_rect", layer->dst_rect);
   Log(kTagResources, "cropped src_rect", src_rect);
   Log(kTagResources, "cropped dst_rect", dst_rect);
   Log(kTagResources, "left pipe src", layer_config->left_pipe.src_roi);
@@ -652,10 +624,10 @@ bool ResourceDefault::CalculateCropRects(const LayerRect &scissor, LayerRect *cr
     return false;
 }
 
-DisplayError ResourceDefault::ValidateLayerParams(const Layer &layer) {
-  const LayerRect &src = layer.src_rect;
-  const LayerRect &dst = layer.dst_rect;
-  LayerBuffer *input_buffer = layer.input_buffer;
+DisplayError ResourceDefault::ValidateLayerParams(const Layer *layer) {
+  const LayerRect &src = layer->src_rect;
+  const LayerRect &dst = layer->dst_rect;
+  const LayerBuffer *input_buffer = layer->input_buffer;
 
   if (input_buffer->format == kFormatInvalid) {
     DLOGV_IF(kTagResources, "Invalid input buffer format %d", input_buffer->format);
@@ -669,8 +641,11 @@ DisplayError ResourceDefault::ValidateLayerParams(const Layer &layer) {
   }
 
   // Make sure source in integral only if it is a non secure layer.
-  if (!input_buffer->flags.secure && (src.left - roundf(src.left) || src.top - roundf(src.top) ||
-      src.right - roundf(src.right) || src.bottom - roundf(src.bottom))) {
+  if (!input_buffer->flags.secure &&
+      ((src.left - roundf(src.left) != 0.0f) ||
+       (src.top - roundf(src.top) != 0.0f) ||
+       (src.right - roundf(src.right) != 0.0f) ||
+       (src.bottom - roundf(src.bottom) != 0.0f))) {
     DLOGV_IF(kTagResources, "Input ROI is not integral");
     return kErrorNotSupported;
   }
@@ -863,15 +838,15 @@ void ResourceDefault::SplitRect(const LayerRect &src_rect, const LayerRect &dst_
   dst_right->right = dst_rect.right;
 }
 
-DisplayError ResourceDefault::AlignPipeConfig(const Layer &layer, HWPipeInfo *left_pipe,
-                                         HWPipeInfo *right_pipe) {
+DisplayError ResourceDefault::AlignPipeConfig(const Layer *layer, HWPipeInfo *left_pipe,
+                                              HWPipeInfo *right_pipe) {
   DisplayError error = kErrorNone;
   if (!left_pipe->valid) {
     DLOGE_IF(kTagResources, "left_pipe should not be invalid");
     return kErrorNotSupported;
   }
 
-  bool ubwc_tiled = IsUBWCFormat(layer.input_buffer->format);
+  bool ubwc_tiled = IsUBWCFormat(layer->input_buffer->format);
   error = ValidatePipeParams(left_pipe, ubwc_tiled);
   if (error != kErrorNone) {
     goto PipeConfigExit;
@@ -910,7 +885,7 @@ DisplayError ResourceDefault::CalculateDecimation(float downscale, uint8_t *deci
   return kErrorNone;
 }
 
-DisplayError ResourceDefault::ValidateCursorConfig(Handle display_ctx, const Layer& layer,
+DisplayError ResourceDefault::ValidateCursorConfig(Handle display_ctx, const Layer *layer,
                                                    bool is_top) {
   return kErrorNotSupported;
 }
@@ -924,17 +899,13 @@ DisplayError ResourceDefault::SetMaxBandwidthMode(HWBwModes mode) {
   return kErrorNotSupported;
 }
 
-bool ResourceDefault::IsUBWCFormat(LayerBufferFormat format) {
-  switch (format) {
-  case kFormatRGBA8888Ubwc:
-  case kFormatRGBX8888Ubwc:
-  case kFormatBGR565Ubwc:
-  case kFormatYCbCr420SPVenusUbwc:
-    return true;
-  default:
-    break;
-  }
-  return false;
+DisplayError ResourceDefault::GetScaleLutConfig(HWScaleLutInfo *lut_info) {
+  return kErrorNone;
+}
+
+DisplayError ResourceDefault::SetDetailEnhancerData(Handle display_ctx,
+                                                    const DisplayDetailEnhancerData &de_data) {
+  return kErrorNotSupported;
 }
 
 }  // namespace sdm

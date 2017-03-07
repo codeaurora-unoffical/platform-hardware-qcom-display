@@ -1,18 +1,14 @@
 LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
+include $(LOCAL_PATH)/../../../common.mk
 
 LOCAL_MODULE                  := libsdmcore
 LOCAL_MODULE_TAGS             := optional
-LOCAL_C_INCLUDES              := hardware/qcom/display/sdm/include/ \
-                                 $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include \
-                                 external/libcxx/include/
-LOCAL_CFLAGS                  := -Wno-missing-field-initializers -Wno-unused-parameter \
-                                 -Wall -Werror -std=c++11 -fcolor-diagnostics\
-                                 -DLOG_TAG=\"SDM\"
-LOCAL_CLANG                   := true
+LOCAL_C_INCLUDES              := $(common_includes) $(kernel_includes) $(common_header_export_path)
+LOCAL_CFLAGS                  := -Wno-unused-parameter -DLOG_TAG=\"SDM\" $(common_flags)
 LOCAL_HW_INTF_PATH            := fb
-LOCAL_SHARED_LIBRARIES        := libdl libsdmutils libc++
-LOCAL_ADDITIONAL_DEPENDENCIES := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
+LOCAL_SHARED_LIBRARIES        := libdl libsdmutils
+LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps) $(kernel_deps)
 LOCAL_SRC_FILES               := core_interface.cpp \
                                  core_impl.cpp \
                                  display_base.cpp \
@@ -29,6 +25,8 @@ LOCAL_SRC_FILES               := core_interface.cpp \
                                  $(LOCAL_HW_INTF_PATH)/hw_primary.cpp \
                                  $(LOCAL_HW_INTF_PATH)/hw_hdmi.cpp \
                                  $(LOCAL_HW_INTF_PATH)/hw_virtual.cpp \
-                                 $(LOCAL_HW_INTF_PATH)/hw_color_manager.cpp
+                                 $(LOCAL_HW_INTF_PATH)/hw_color_manager.cpp \
+                                 $(LOCAL_HW_INTF_PATH)/hw_scale.cpp \
+                                 $(LOCAL_HW_INTF_PATH)/hw_events.cpp
 
 include $(BUILD_SHARED_LIBRARY)

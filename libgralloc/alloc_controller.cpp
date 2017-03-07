@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2015, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011 - 2016, The Linux Foundation. All rights reserved.
 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -39,7 +39,7 @@
 #include <qdMetaData.h>
 #include <utils/Singleton.h>
 #include <utils/Mutex.h>
-
+#include <algorithm>
 
 #ifdef VENUS_COLOR_FORMAT
 #include <media/msm_media_info.h>
@@ -76,8 +76,9 @@ using namespace qdutils;
 using namespace android;
 
 ANDROID_SINGLETON_STATIC_INSTANCE(AdrenoMemInfo);
+ANDROID_SINGLETON_STATIC_INSTANCE(MDPCapabilityInfo);
 
-static void getUBwcWidthAndHeight(int, int, int, int&, int&);
+static void getYuvUBwcWidthHeight(int, int, int, int&, int&);
 static unsigned int getUBwcSize(int, int, int, const int, const int);
 
 //Common functions
@@ -87,17 +88,23 @@ static unsigned int getUBwcSize(int, int, int, const int, const int);
  * read or written in software. Any combination with a _RARELY_ flag will be
  * treated as uncached. */
 static bool useUncached(const int& usage) {
-    if((usage & GRALLOC_USAGE_PRIVATE_UNCACHED) or
-            ((usage & GRALLOC_USAGE_SW_WRITE_MASK) ==
-            GRALLOC_USAGE_SW_WRITE_RARELY) or
-            ((usage & GRALLOC_USAGE_SW_READ_MASK) ==
-            GRALLOC_USAGE_SW_READ_RARELY))
+    if ((usage & GRALLOC_USAGE_PROTECTED) or
+        (usage & GRALLOC_USAGE_PRIVATE_UNCACHED) or
+        ((usage & GRALLOC_USAGE_SW_WRITE_MASK) == GRALLOC_USAGE_SW_WRITE_RARELY) or
+        ((usage & GRALLOC_USAGE_SW_READ_MASK) ==  GRALLOC_USAGE_SW_READ_RARELY))
         return true;
 
     return false;
 }
 
-//-------------- AdrenoMemInfo-----------------------//
+//------------- MDPCapabilityInfo-----------------------//
+MDPCapabilityInfo :: MDPCapabilityInfo() {
+  qdutils::querySDEInfo(HAS_MACRO_TILE, &isMacroTileSupported);
+  qdutils::querySDEInfo(HAS_UBWC, &isUBwcSupported);
+  qdutils::querySDEInfo(HAS_WB_UBWC, &isWBUBWCSupported);
+}
+
+//------------- AdrenoMemInfo-----------------------//
 AdrenoMemInfo::AdrenoMemInfo()
 {
     LINK_adreno_compute_aligned_width_and_height = NULL;
@@ -189,8 +196,15 @@ bool isUncompressedRgbFormat(int format)
         case HAL_PIXEL_FORMAT_RGBA_4444:
         case HAL_PIXEL_FORMAT_R_8:
         case HAL_PIXEL_FORMAT_RG_88:
-        case HAL_PIXEL_FORMAT_BGRX_8888:    // Intentional fallthrough
-        case HAL_PIXEL_FORMAT_BGR_888:
+        case HAL_PIXEL_FORMAT_BGRX_8888:
+        case HAL_PIXEL_FORMAT_RGBA_1010102:
+        case HAL_PIXEL_FORMAT_ARGB_2101010:
+        case HAL_PIXEL_FORMAT_RGBX_1010102:
+        case HAL_PIXEL_FORMAT_XRGB_2101010:
+        case HAL_PIXEL_FORMAT_BGRA_1010102:
+        case HAL_PIXEL_FORMAT_ABGR_2101010:
+        case HAL_PIXEL_FORMAT_BGRX_1010102:
+        case HAL_PIXEL_FORMAT_XBGR_2101010:    // Intentional fallthrough
             is_rgb_format = true;
             break;
         default:
@@ -209,105 +223,101 @@ void AdrenoMemInfo::getAlignedWidthAndHeight(int width, int height, int format,
     if (isUncompressedRgbFormat(format) == true) {
         int tileEnabled = ubwc_enabled || isMacroTileEnabled(format, usage);
         getGpuAlignedWidthHeight(width, height, format, tileEnabled, aligned_w, aligned_h);
-        return;
-    }
+    } else if (ubwc_enabled) {
+        getYuvUBwcWidthHeight(width, height, format, aligned_w, aligned_h);
+    } else {
+        aligned_w = width;
+        aligned_h = height;
+        int alignment = 32;
+        switch (format)
+        {
+            case HAL_PIXEL_FORMAT_YCrCb_420_SP:
+            case HAL_PIXEL_FORMAT_YCbCr_420_SP:
+                if (LINK_adreno_get_gpu_pixel_alignment) {
+                  alignment = LINK_adreno_get_gpu_pixel_alignment();
+                }
+                aligned_w = ALIGN(width, alignment);
+                break;
+            case HAL_PIXEL_FORMAT_YCrCb_420_SP_ADRENO:
+                aligned_w = ALIGN(width, alignment);
+                break;
+            case HAL_PIXEL_FORMAT_RAW16:
+                aligned_w = ALIGN(width, 16);
+                break;
+            case HAL_PIXEL_FORMAT_RAW10:
+                aligned_w = ALIGN(width * 10 / 8, 8);
+                break;
+            case HAL_PIXEL_FORMAT_YCbCr_420_SP_TILED:
+                aligned_w = ALIGN(width, 128);
+                break;
+            case HAL_PIXEL_FORMAT_YV12:
+            case HAL_PIXEL_FORMAT_YCbCr_422_SP:
+            case HAL_PIXEL_FORMAT_YCrCb_422_SP:
+            case HAL_PIXEL_FORMAT_YCbCr_422_I:
+            case HAL_PIXEL_FORMAT_YCrCb_422_I:
+                aligned_w = ALIGN(width, 16);
+                break;
+            case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
+            case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
+                aligned_w = VENUS_Y_STRIDE(COLOR_FMT_NV12, width);
+                aligned_h = VENUS_Y_SCANLINES(COLOR_FMT_NV12, height);
+                break;
+            case HAL_PIXEL_FORMAT_YCrCb_420_SP_VENUS:
+                aligned_w = VENUS_Y_STRIDE(COLOR_FMT_NV21, width);
+                aligned_h = VENUS_Y_SCANLINES(COLOR_FMT_NV21, height);
+                break;
+            case HAL_PIXEL_FORMAT_BLOB:
+            case HAL_PIXEL_FORMAT_RAW_OPAQUE:
+                break;
+            case HAL_PIXEL_FORMAT_NV21_ZSL:
+                aligned_w = ALIGN(width, 64);
+                aligned_h = ALIGN(height, 64);
+                break;
+            case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_4x4_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_5x4_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_5x4_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_5x5_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_6x5_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_6x5_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_6x6_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_8x5_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_8x5_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_8x6_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_8x6_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_8x8_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_10x5_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_10x5_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_10x6_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_10x6_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_10x8_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_10x8_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_10x10_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_12x10_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_12x12_KHR:
+            case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR:
+                if(LINK_adreno_compute_compressedfmt_aligned_width_and_height) {
+                    int bytesPerPixel = 0;
+                    int raster_mode         = 0;   //Adreno unknown raster mode.
+                    int padding_threshold   = 512; //Threshold for padding
+                    //surfaces.
 
-    if (ubwc_enabled) {
-        getUBwcWidthAndHeight(width, height, format, aligned_w, aligned_h);
-        return;
-    }
-
-    aligned_w = width;
-    aligned_h = height;
-    int alignment = 32;
-    switch (format)
-    {
-        case HAL_PIXEL_FORMAT_YCrCb_420_SP:
-        case HAL_PIXEL_FORMAT_YCbCr_420_SP:
-            if (LINK_adreno_get_gpu_pixel_alignment) {
-              alignment = LINK_adreno_get_gpu_pixel_alignment();
-            }
-            aligned_w = ALIGN(width, alignment);
-            break;
-        case HAL_PIXEL_FORMAT_YCrCb_420_SP_ADRENO:
-            aligned_w = ALIGN(width, alignment);
-            break;
-        case HAL_PIXEL_FORMAT_RAW16:
-            aligned_w = ALIGN(width, 16);
-            break;
-        case HAL_PIXEL_FORMAT_RAW10:
-            aligned_w = ALIGN(width * 10 /8, 16);
-            break;
-        case HAL_PIXEL_FORMAT_YCbCr_420_SP_TILED:
-            aligned_w = ALIGN(width, 128);
-            break;
-        case HAL_PIXEL_FORMAT_YV12:
-        case HAL_PIXEL_FORMAT_YCbCr_422_SP:
-        case HAL_PIXEL_FORMAT_YCrCb_422_SP:
-        case HAL_PIXEL_FORMAT_YCbCr_422_I:
-        case HAL_PIXEL_FORMAT_YCrCb_422_I:
-        case HAL_PIXEL_FORMAT_CbYCrY_422_I:
-            aligned_w = ALIGN(width, 16);
-            break;
-        case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
-        case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
-            aligned_w = VENUS_Y_STRIDE(COLOR_FMT_NV12, width);
-            aligned_h = VENUS_Y_SCANLINES(COLOR_FMT_NV12, height);
-            break;
-        case HAL_PIXEL_FORMAT_YCrCb_420_SP_VENUS:
-            aligned_w = VENUS_Y_STRIDE(COLOR_FMT_NV21, width);
-            aligned_h = VENUS_Y_SCANLINES(COLOR_FMT_NV21, height);
-            break;
-        case HAL_PIXEL_FORMAT_BLOB:
-            break;
-        case HAL_PIXEL_FORMAT_NV21_ZSL:
-            aligned_w = ALIGN(width, 64);
-            aligned_h = ALIGN(height, 64);
-            break;
-        case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_4x4_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_5x4_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_5x4_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_5x5_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_6x5_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_6x5_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_6x6_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_8x5_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_8x5_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_8x6_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_8x6_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_8x8_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_10x5_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_10x5_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_10x6_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_10x6_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_10x8_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_10x8_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_10x10_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_12x10_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_RGBA_ASTC_12x12_KHR:
-        case HAL_PIXEL_FORMAT_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR:
-            if(LINK_adreno_compute_compressedfmt_aligned_width_and_height) {
-                int bytesPerPixel = 0;
-                int raster_mode         = 0;   //Adreno unknown raster mode.
-                int padding_threshold   = 512; //Threshold for padding
-                //surfaces.
-
-                LINK_adreno_compute_compressedfmt_aligned_width_and_height(
-                    width, height, format, 0,raster_mode, padding_threshold,
-                    &aligned_w, &aligned_h, &bytesPerPixel);
-            } else {
-                ALOGW("%s: Warning!! Symbols" \
-                      " compute_compressedfmt_aligned_width_and_height" \
-                      " not found", __FUNCTION__);
-            }
-            break;
-        default: break;
+                    LINK_adreno_compute_compressedfmt_aligned_width_and_height(
+                        width, height, format, 0,raster_mode, padding_threshold,
+                        &aligned_w, &aligned_h, &bytesPerPixel);
+                } else {
+                    ALOGW("%s: Warning!! Symbols" \
+                          " compute_compressedfmt_aligned_width_and_height" \
+                          " not found", __FUNCTION__);
+                }
+                break;
+            default: break;
+        }
     }
 }
 
@@ -393,6 +403,14 @@ ADRENOPIXELFORMAT AdrenoMemInfo::getGpuPixelFormat(int hal_format)
         case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
         case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC:
             return ADRENO_PIXELFORMAT_NV12_EXT;
+        case HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC:
+            return ADRENO_PIXELFORMAT_TP10;
+        case HAL_PIXEL_FORMAT_RGBA_1010102:
+            return ADRENO_PIXELFORMAT_R10G10B10A2_UNORM;
+        case HAL_PIXEL_FORMAT_RGBX_1010102:
+            return ADRENO_PIXELFORMAT_R10G10B10X2_UNORM;
+        case HAL_PIXEL_FORMAT_ABGR_2101010:
+            return ADRENO_PIXELFORMAT_A2B10G10R10_UNORM;
         default:
             ALOGE("%s: No map for format: 0x%x", __FUNCTION__, hal_format);
             break;
@@ -415,6 +433,10 @@ IAllocController* IAllocController::getInstance(void)
 IonController::IonController()
 {
     allocateIonMem();
+
+    char property[PROPERTY_VALUE_MAX];
+    property_get("video.disable.ubwc", property, "0");
+    mDisableUBWCForEncode = atoi(property);
 }
 
 void IonController::allocateIonMem()
@@ -432,23 +454,16 @@ int IonController::allocate(alloc_data& data, int usage)
     data.allocType = 0;
 
     if(usage & GRALLOC_USAGE_PROTECTED) {
-        if (usage & GRALLOC_USAGE_PRIVATE_MM_HEAP) {
-            if (usage & GRALLOC_USAGE_PRIVATE_SECURE_DISPLAY) {
-                ionHeapId = ION_HEAP(SD_HEAP_ID);
-                /*
-                 * There is currently no flag in ION for Secure Display
-                 * VM. Please add it to the define once available.
-                */
-                ionFlags |= ION_SD_FLAGS;
-            } else {
-                ionHeapId = ION_HEAP(CP_HEAP_ID);
-                ionFlags |= ION_CP_FLAGS;
-            }
+        if (usage & GRALLOC_USAGE_PRIVATE_SECURE_DISPLAY) {
+            ionHeapId = ION_HEAP(SD_HEAP_ID);
+            /*
+             * There is currently no flag in ION for Secure Display
+             * VM. Please add it to the define once available.
+             */
+            ionFlags |= ION_SD_FLAGS;
         } else {
-            // for targets/OEMs which do not need HW level protection
-            // do not set ion secure flag & MM heap. Fallback to system heap.
-            ionHeapId |= ION_HEAP(ION_SYSTEM_HEAP_ID);
-            data.allocType |= private_handle_t::PRIV_FLAGS_PROTECTED_BUFFER;
+            ionHeapId = ION_HEAP(CP_HEAP_ID);
+            ionFlags |= ION_CP_FLAGS;
         }
     } else if(usage & GRALLOC_USAGE_PRIVATE_MM_HEAP) {
         //MM Heap is exclusively a secure heap.
@@ -502,13 +517,9 @@ IMemAlloc* IonController::getAllocator(int flags)
 bool isMacroTileEnabled(int format, int usage)
 {
     bool tileEnabled = false;
-    int isMacroTileSupportedByMDP = 0;
-
-    qdutils::querySDEInfo(HAS_MACRO_TILE, &isMacroTileSupportedByMDP);
-
     // Check whether GPU & MDSS supports MacroTiling feature
     if(AdrenoMemInfo::getInstance().isMacroTilingSupportedByGPU() &&
-       isMacroTileSupportedByMDP)
+       MDPCapabilityInfo::getInstance().isMacroTilingSupportedByMDP())
     {
         // check the format
         switch(format)
@@ -548,6 +559,14 @@ unsigned int getSize(int format, int width, int height, int usage,
         case HAL_PIXEL_FORMAT_RGBA_8888:
         case HAL_PIXEL_FORMAT_RGBX_8888:
         case HAL_PIXEL_FORMAT_BGRA_8888:
+        case HAL_PIXEL_FORMAT_RGBA_1010102:
+        case HAL_PIXEL_FORMAT_ARGB_2101010:
+        case HAL_PIXEL_FORMAT_RGBX_1010102:
+        case HAL_PIXEL_FORMAT_XRGB_2101010:
+        case HAL_PIXEL_FORMAT_BGRA_1010102:
+        case HAL_PIXEL_FORMAT_ABGR_2101010:
+        case HAL_PIXEL_FORMAT_BGRX_1010102:
+        case HAL_PIXEL_FORMAT_XBGR_2101010:
             size = alignedw * alignedh * 4;
             break;
         case HAL_PIXEL_FORMAT_RGB_888:
@@ -593,7 +612,6 @@ unsigned int getSize(int format, int width, int height, int usage,
         case HAL_PIXEL_FORMAT_YCrCb_422_SP:
         case HAL_PIXEL_FORMAT_YCbCr_422_I:
         case HAL_PIXEL_FORMAT_YCrCb_422_I:
-        case HAL_PIXEL_FORMAT_CbYCrY_422_I:
             if(width & 1) {
                 ALOGE("width is odd for the YUV422_SP format");
                 return 0;
@@ -608,6 +626,7 @@ unsigned int getSize(int format, int width, int height, int usage,
             size = VENUS_BUFFER_SIZE(COLOR_FMT_NV21, width, height);
             break;
         case HAL_PIXEL_FORMAT_BLOB:
+        case HAL_PIXEL_FORMAT_RAW_OPAQUE:
             if(height != 1) {
                 ALOGE("%s: Buffers with format HAL_PIXEL_FORMAT_BLOB \
                       must have height==1 ", __FUNCTION__);
@@ -705,6 +724,50 @@ void getBufferAttributes(int width, int height, int format, int usage,
     size = getSize(format, width, height, usage, alignedw, alignedh);
 }
 
+void getYuvUbwcSPPlaneInfo(uint64_t base, int width, int height,
+                           int color_format, struct android_ycbcr* ycbcr)
+{
+    // UBWC buffer has these 4 planes in the following sequence:
+    // Y_Meta_Plane, Y_Plane, UV_Meta_Plane, UV_Plane
+    unsigned int y_meta_stride, y_meta_height, y_meta_size;
+    unsigned int y_stride, y_height, y_size;
+    unsigned int c_meta_stride, c_meta_height, c_meta_size;
+    unsigned int alignment = 4096;
+
+    y_meta_stride = VENUS_Y_META_STRIDE(color_format, width);
+    y_meta_height = VENUS_Y_META_SCANLINES(color_format, height);
+    y_meta_size = ALIGN((y_meta_stride * y_meta_height), alignment);
+
+    y_stride = VENUS_Y_STRIDE(color_format, width);
+    y_height = VENUS_Y_SCANLINES(color_format, height);
+    y_size = ALIGN((y_stride * y_height), alignment);
+
+    c_meta_stride = VENUS_UV_META_STRIDE(color_format, width);
+    c_meta_height = VENUS_UV_META_SCANLINES(color_format, height);
+    c_meta_size = ALIGN((c_meta_stride * c_meta_height), alignment);
+
+    ycbcr->y  = (void*)(base + y_meta_size);
+    ycbcr->cb = (void*)(base + y_meta_size + y_size + c_meta_size);
+    ycbcr->cr = (void*)(base + y_meta_size + y_size +
+                        c_meta_size + 1);
+    ycbcr->ystride = y_stride;
+    ycbcr->cstride = VENUS_UV_STRIDE(color_format, width);
+}
+
+void getYuvSPPlaneInfo(uint64_t base, int width, int height, int bpp,
+                       struct android_ycbcr* ycbcr)
+{
+    unsigned int ystride, cstride;
+
+    ystride = cstride = width * bpp;
+    ycbcr->y  = (void*)base;
+    ycbcr->cb = (void*)(base + ystride * height);
+    ycbcr->cr = (void*)(base + ystride * height + 1);
+    ycbcr->ystride = ystride;
+    ycbcr->cstride = cstride;
+    ycbcr->chroma_step = 2 * bpp;
+}
+
 int getYUVPlaneInfo(private_handle_t* hnd, struct android_ycbcr* ycbcr)
 {
     int err = 0;
@@ -713,7 +776,6 @@ int getYUVPlaneInfo(private_handle_t* hnd, struct android_ycbcr* ycbcr)
     int format = hnd->format;
 
     unsigned int ystride, cstride;
-    unsigned int alignment = 4096;
 
     memset(ycbcr->reserved, 0, sizeof(ycbcr->reserved));
     MetaData_t *metadata = (MetaData_t *)hnd->base_metadata;
@@ -743,41 +805,23 @@ int getYUVPlaneInfo(private_handle_t* hnd, struct android_ycbcr* ycbcr)
         case HAL_PIXEL_FORMAT_YCbCr_422_SP:
         case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
         case HAL_PIXEL_FORMAT_NV12_ENCODEABLE: //Same as YCbCr_420_SP_VENUS
-            ystride = cstride = width;
-            ycbcr->y  = (void*)hnd->base;
-            ycbcr->cb = (void*)(hnd->base + ystride * height);
-            ycbcr->cr = (void*)(hnd->base + ystride * height + 1);
-            ycbcr->ystride = ystride;
-            ycbcr->cstride = cstride;
-            ycbcr->chroma_step = 2;
+            getYuvSPPlaneInfo(hnd->base, width, height, 1, ycbcr);
+        break;
+
+        case HAL_PIXEL_FORMAT_YCbCr_420_P010:
+            getYuvSPPlaneInfo(hnd->base, width, height, 2, ycbcr);
         break;
 
         case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC:
-            // NV12_UBWC buffer has these 4 planes in the following sequence:
-            // Y_Meta_Plane, Y_Plane, UV_Meta_Plane, UV_Plane
-            unsigned int y_meta_stride, y_meta_height, y_meta_size;
-            unsigned int y_stride, y_height, y_size;
-            unsigned int c_meta_stride, c_meta_height, c_meta_size;
-
-            y_meta_stride = VENUS_Y_META_STRIDE(COLOR_FMT_NV12_UBWC, width);
-            y_meta_height = VENUS_Y_META_SCANLINES(COLOR_FMT_NV12_UBWC, height);
-            y_meta_size = ALIGN((y_meta_stride * y_meta_height), alignment);
-
-            y_stride = VENUS_Y_STRIDE(COLOR_FMT_NV12_UBWC, width);
-            y_height = VENUS_Y_SCANLINES(COLOR_FMT_NV12_UBWC, height);
-            y_size = ALIGN((y_stride * y_height), alignment);
-
-            c_meta_stride = VENUS_UV_META_STRIDE(COLOR_FMT_NV12_UBWC, width);
-            c_meta_height = VENUS_UV_META_SCANLINES(COLOR_FMT_NV12_UBWC, height);
-            c_meta_size = ALIGN((c_meta_stride * c_meta_height), alignment);
-
-            ycbcr->y  = (void*)(hnd->base + y_meta_size);
-            ycbcr->cb = (void*)(hnd->base + y_meta_size + y_size + c_meta_size);
-            ycbcr->cr = (void*)(hnd->base + y_meta_size + y_size +
-                                c_meta_size + 1);
-            ycbcr->ystride = y_stride;
-            ycbcr->cstride = VENUS_UV_STRIDE(COLOR_FMT_NV12_UBWC, width);
+            getYuvUbwcSPPlaneInfo(hnd->base, width, height,
+                                  COLOR_FMT_NV12_UBWC, ycbcr);
             ycbcr->chroma_step = 2;
+        break;
+
+        case HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC:
+            getYuvUbwcSPPlaneInfo(hnd->base, width, height,
+                                  COLOR_FMT_NV12_BPP10_UBWC, ycbcr);
+            ycbcr->chroma_step = 3;
         break;
 
         case HAL_PIXEL_FORMAT_YCrCb_420_SP:
@@ -787,13 +831,8 @@ int getYUVPlaneInfo(private_handle_t* hnd, struct android_ycbcr* ycbcr)
         case HAL_PIXEL_FORMAT_NV21_ZSL:
         case HAL_PIXEL_FORMAT_RAW16:
         case HAL_PIXEL_FORMAT_RAW10:
-            ystride = cstride = width;
-            ycbcr->y  = (void*)hnd->base;
-            ycbcr->cr = (void*)(hnd->base + ystride * height);
-            ycbcr->cb = (void*)(hnd->base + ystride * height + 1);
-            ycbcr->ystride = ystride;
-            ycbcr->cstride = cstride;
-            ycbcr->chroma_step = 2;
+            getYuvSPPlaneInfo(hnd->base, width, height, 1, ycbcr);
+            std::swap(ycbcr->cb, ycbcr->cr);
         break;
 
         //Planar
@@ -807,16 +846,6 @@ int getYUVPlaneInfo(private_handle_t* hnd, struct android_ycbcr* ycbcr)
             ycbcr->ystride = ystride;
             ycbcr->cstride = cstride;
             ycbcr->chroma_step = 1;
-        break;
-        case HAL_PIXEL_FORMAT_CbYCrY_422_I:
-            ystride = width * 2;
-            cstride = 0;
-            ycbcr->y  = (void*)hnd->base;
-            ycbcr->cr = NULL;
-            ycbcr->cb = NULL;
-            ycbcr->ystride = ystride;
-            ycbcr->cstride = 0;
-            ycbcr->chroma_step = 0;
         break;
         //Unsupported formats
         case HAL_PIXEL_FORMAT_YCbCr_422_I:
@@ -891,6 +920,7 @@ static bool isUBwcFormat(int format)
     switch(format)
     {
         case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC:
+        case HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC:
             return true;
         default:
             return false;
@@ -899,18 +929,23 @@ static bool isUBwcFormat(int format)
 
 static bool isUBwcSupported(int format)
 {
-    // Existing HAL formats with UBWC support
-    switch(format)
-    {
-        case HAL_PIXEL_FORMAT_BGR_565:
-        case HAL_PIXEL_FORMAT_RGBA_8888:
-        case HAL_PIXEL_FORMAT_RGBX_8888:
-        case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
-        case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
-            return true;
-        default:
-            return false;
+    if (MDPCapabilityInfo::getInstance().isUBwcSupportedByMDP()) {
+        // Existing HAL formats with UBWC support
+        switch(format)
+        {
+            case HAL_PIXEL_FORMAT_BGR_565:
+            case HAL_PIXEL_FORMAT_RGBA_8888:
+            case HAL_PIXEL_FORMAT_RGBX_8888:
+            case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
+            case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
+            case HAL_PIXEL_FORMAT_RGBA_1010102:
+            case HAL_PIXEL_FORMAT_RGBX_1010102:
+                return true;
+            default:
+                break;
+        }
     }
+    return false;
 }
 
 bool isUBwcEnabled(int format, int usage)
@@ -918,6 +953,11 @@ bool isUBwcEnabled(int format, int usage)
     // Allow UBWC, if client is using an explicitly defined UBWC pixel format.
     if (isUBwcFormat(format))
         return true;
+
+    if ((usage & GRALLOC_USAGE_HW_VIDEO_ENCODER) &&
+        gralloc::IAllocController::getInstance()->isDisableUBWCForEncoder()) {
+            return false;
+    }
 
     // Allow UBWC, if an OpenGL client sets UBWC usage flag and GPU plus MDP
     // support the format. OR if a non-OpenGL client like Rotator, sets UBWC
@@ -937,7 +977,7 @@ bool isUBwcEnabled(int format, int usage)
     return false;
 }
 
-static void getUBwcWidthAndHeight(int width, int height, int format,
+static void getYuvUBwcWidthHeight(int width, int height, int format,
         int& aligned_w, int& aligned_h)
 {
     switch (format)
@@ -948,6 +988,10 @@ static void getUBwcWidthAndHeight(int width, int height, int format,
             aligned_w = VENUS_Y_STRIDE(COLOR_FMT_NV12_UBWC, width);
             aligned_h = VENUS_Y_SCANLINES(COLOR_FMT_NV12_UBWC, height);
             break;
+        case HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC:
+            aligned_w = VENUS_Y_STRIDE(COLOR_FMT_NV12_BPP10_UBWC, width);
+            aligned_h = VENUS_Y_SCANLINES(COLOR_FMT_NV12_BPP10_UBWC, height);
+            break;
         default:
             ALOGE("%s: Unsupported pixel format: 0x%x", __FUNCTION__, format);
             aligned_w = 0;
@@ -956,7 +1000,7 @@ static void getUBwcWidthAndHeight(int width, int height, int format,
     }
 }
 
-static void getUBwcBlockSize(int bpp, int& block_width, int& block_height)
+static void getRgbUBwcBlockSize(int bpp, int& block_width, int& block_height)
 {
     block_width = 0;
     block_height = 0;
@@ -982,13 +1026,13 @@ static void getUBwcBlockSize(int bpp, int& block_width, int& block_height)
     }
 }
 
-static unsigned int getUBwcMetaBufferSize(int width, int height, int bpp)
+static unsigned int getRgbUBwcMetaBufferSize(int width, int height, int bpp)
 {
     unsigned int size = 0;
     int meta_width, meta_height;
     int block_width, block_height;
 
-    getUBwcBlockSize(bpp, block_width, block_height);
+    getRgbUBwcBlockSize(bpp, block_width, block_height);
 
     if (!block_width || !block_height) {
         ALOGE("%s: Unsupported bpp: %d", __FUNCTION__, bpp);
@@ -1013,17 +1057,22 @@ static unsigned int getUBwcSize(int width, int height, int format,
     switch (format) {
         case HAL_PIXEL_FORMAT_BGR_565:
             size = alignedw * alignedh * 2;
-            size += getUBwcMetaBufferSize(width, height, 2);
+            size += getRgbUBwcMetaBufferSize(width, height, 2);
             break;
         case HAL_PIXEL_FORMAT_RGBA_8888:
         case HAL_PIXEL_FORMAT_RGBX_8888:
+        case HAL_PIXEL_FORMAT_RGBA_1010102:
+        case HAL_PIXEL_FORMAT_RGBX_1010102:
             size = alignedw * alignedh * 4;
-            size += getUBwcMetaBufferSize(width, height, 4);
+            size += getRgbUBwcMetaBufferSize(width, height, 4);
             break;
         case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
         case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
         case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC:
             size = VENUS_BUFFER_SIZE(COLOR_FMT_NV12_UBWC, width, height);
+            break;
+        case HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC:
+            size = VENUS_BUFFER_SIZE(COLOR_FMT_NV12_BPP10_UBWC, width, height);
             break;
         default:
             ALOGE("%s: Unsupported pixel format: 0x%x", __FUNCTION__, format);
@@ -1050,11 +1099,11 @@ int getRgbDataAddress(private_handle_t* hnd, void** rgb_data)
     unsigned int meta_size = 0;
     switch (hnd->format) {
         case HAL_PIXEL_FORMAT_BGR_565:
-            meta_size = getUBwcMetaBufferSize(hnd->width, hnd->height, 2);
+            meta_size = getRgbUBwcMetaBufferSize(hnd->width, hnd->height, 2);
             break;
         case HAL_PIXEL_FORMAT_RGBA_8888:
         case HAL_PIXEL_FORMAT_RGBX_8888:
-            meta_size = getUBwcMetaBufferSize(hnd->width, hnd->height, 4);
+            meta_size = getRgbUBwcMetaBufferSize(hnd->width, hnd->height, 4);
             break;
         default:
             ALOGE("%s:Unsupported RGB format: 0x%x", __FUNCTION__, hnd->format);

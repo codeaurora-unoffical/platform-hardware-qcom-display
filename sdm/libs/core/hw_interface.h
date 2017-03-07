@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2015, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2016, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -31,6 +31,8 @@
 #include <utils/constants.h>
 #include <core/buffer_sync_handler.h>
 
+#include "hw_info_interface.h"
+
 namespace sdm {
 
 enum HWScanSupport {
@@ -56,18 +58,25 @@ class HWEventHandler {
   virtual DisplayError Blank(bool blank) = 0;
   virtual void IdleTimeout() = 0;
   virtual void ThermalEvent(int64_t thermal_level) = 0;
+  virtual void CECMessage(char *message) = 0;
+
  protected:
   virtual ~HWEventHandler() { }
 };
 
 class HWInterface {
  public:
+  static DisplayError Create(DisplayType type, HWInfoInterface *hw_info_intf,
+                             BufferSyncHandler *buffer_sync_handler, HWInterface **intf);
+  static DisplayError Destroy(HWInterface *intf);
+
   virtual DisplayError GetActiveConfig(uint32_t *active_config) = 0;
   virtual DisplayError GetNumDisplayAttributes(uint32_t *count) = 0;
   virtual DisplayError GetDisplayAttributes(uint32_t index,
                                             HWDisplayAttributes *display_attributes) = 0;
   virtual DisplayError GetHWPanelInfo(HWPanelInfo *panel_info) = 0;
   virtual DisplayError SetDisplayAttributes(uint32_t index) = 0;
+  virtual DisplayError SetDisplayAttributes(const HWDisplayAttributes &display_attributes) = 0;
   virtual DisplayError GetConfigIndex(uint32_t mode, uint32_t *index) = 0;
   virtual DisplayError PowerOn() = 0;
   virtual DisplayError PowerOff() = 0;
@@ -91,6 +100,10 @@ class HWInterface {
   virtual DisplayError OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level) = 0;
   virtual DisplayError GetPanelBrightness(int *level) = 0;
   virtual DisplayError SetAutoRefresh(bool enable) = 0;
+  virtual DisplayError SetS3DMode(HWS3DMode s3d_mode) = 0;
+  virtual DisplayError SetScaleLutConfig(HWScaleLutInfo *lut_info) = 0;
+  virtual DisplayError SetMixerAttributes(const HWMixerAttributes &mixer_attributes) = 0;
+  virtual DisplayError GetMixerAttributes(HWMixerAttributes *mixer_attributes) = 0;
 
  protected:
   virtual ~HWInterface() { }

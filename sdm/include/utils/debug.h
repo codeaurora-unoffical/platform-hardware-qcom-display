@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2015, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2016, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -45,6 +45,7 @@
 #define DLOGV_IF(tag, format, ...) DLOG(tag, Verbose, format, ##__VA_ARGS__)
 
 #define DLOGE(format, ...) DLOGE_IF(kTagNone, format, ##__VA_ARGS__)
+#define DLOGD(format, ...) DLOGD_IF(kTagNone, format, ##__VA_ARGS__)
 #define DLOGW(format, ...) DLOGW_IF(kTagNone, format, ##__VA_ARGS__)
 #define DLOGI(format, ...) DLOGI_IF(kTagNone, format, ##__VA_ARGS__)
 #define DLOGV(format, ...) DLOGV_IF(kTagNone, format, ##__VA_ARGS__)
@@ -63,16 +64,21 @@ class Debug {
   static inline DebugHandler* Get() { return debug_.debug_handler_; }
   static int GetSimulationFlag();
   static int GetHDMIResolution();
-  static int GetIdleTimeoutMs();
+  static uint32_t GetIdleTimeoutMs();
+  static int GetBootAnimLayerCount();
   static bool IsRotatorDownScaleDisabled();
   static bool IsDecimationDisabled();
   static int GetMaxPipesPerMixer(DisplayType display_type);
+  static int GetMaxVideoUpscale();
   static bool IsVideoModeEnabled();
   static bool IsRotatorUbwcDisabled();
   static bool IsRotatorSplitDisabled();
   static bool IsScalarDisabled();
   static bool IsUbwcTiledFrameBuffer();
+  static bool IsAVRDisabled();
+  static int GetExtMaxlayers();
   static bool GetProperty(const char *property_name, char *value);
+  static bool SetProperty(const char *property_name, const char *value);
 
  private:
   Debug();
@@ -93,6 +99,9 @@ class Debug {
       return kErrorNotSupported;
     }
     virtual DisplayError GetProperty(const char */*property_name*/, char */*value*/) {
+      return kErrorNotSupported;
+    }
+    virtual DisplayError SetProperty(const char */*property_name*/, const char */*value*/) {
       return kErrorNotSupported;
     }
   };

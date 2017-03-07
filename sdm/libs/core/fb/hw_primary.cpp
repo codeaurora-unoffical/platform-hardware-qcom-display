@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015, The Linux Foundation. All rights reserved.
+* Copyright (c) 2015 - 2016, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -39,6 +39,8 @@
 #include <utils/debug.h>
 #include <utils/sys.h>
 #include <core/display_interface.h>
+#include <linux/msm_mdp_ext.h>
+#include <utils/rect.h>
 
 #include <string>
 
@@ -47,145 +49,85 @@
 
 #define __CLASS__ "HWPrimary"
 
+#ifndef MDP_COMMIT_CWB_EN
+#define MDP_COMMIT_CWB_EN 0x800
+#endif
+
+#ifndef MDP_COMMIT_CWB_DSPP
+#define MDP_COMMIT_CWB_DSPP 0x1000
+#endif
+
+#ifndef MDP_COMMIT_AVR_EN
+#define MDP_COMMIT_AVR_EN 0x08
+#endif
+
+#ifndef MDP_COMMIT_AVR_ONE_SHOT_MODE
+#define MDP_COMMIT_AVR_ONE_SHOT_MODE 0x10
+#endif
+
 namespace sdm {
 
 using std::string;
+using std::to_string;
+using std::fstream;
 
-DisplayError HWPrimary::Create(HWInterface **intf, HWInfoInterface *hw_info_intf,
-                               DisplayType display_type, BufferSyncHandler *buffer_sync_handler,
-                               HWEventHandler *eventhandler) {
-  DisplayError error = kErrorNone;
-  HWPrimary *hw_primary = NULL;
-
-  hw_primary = new HWPrimary(buffer_sync_handler, hw_info_intf, display_type);
-  error = hw_primary->Init(eventhandler);
-  if (error != kErrorNone) {
-    delete hw_primary;
-  } else {
-    *intf = hw_primary;
-  }
-
-  return error;
-}
-
-DisplayError HWPrimary::Destroy(HWInterface *intf) {
-  HWPrimary *hw_primary = static_cast<HWPrimary *>(intf);
-  hw_primary->Deinit();
-  delete hw_primary;
-
-  return kErrorNone;
-}
-
-HWPrimary::HWPrimary(BufferSyncHandler *buffer_sync_handler, HWInfoInterface *hw_info_intf,
-                     DisplayType display_type)
+HWPrimary::HWPrimary(BufferSyncHandler *buffer_sync_handler, HWInfoInterface *hw_info_intf)
   : HWDevice(buffer_sync_handler) {
   HWDevice::device_type_ = kDevicePrimary;
   HWDevice::device_name_ = "Primary Display Device";
   HWDevice::hw_info_intf_ = hw_info_intf;
-  HWDevice::display_type_ = display_type;
 }
 
-DisplayError HWPrimary::Init(HWEventHandler *eventhandler) {
+DisplayError HWPrimary::Init() {
   DisplayError error = kErrorNone;
-  char node_path[kMaxStringLength] = { 0 };
-  char data[kMaxStringLength] = { 0 };
-  const char *event_name[kNumDisplayEvents] = {"vsync_event", "show_blank_event", "idle_notify",
-                                               "msm_fb_thermal_level"};
 
-  error = HWDevice::Init(eventhandler);
+  error = HWDevice::Init();
   if (error != kErrorNone) {
-    goto CleanupOnError;
+    return error;
   }
+
+  mdp_dest_scalar_data_.resize(hw_resource_.hw_dest_scalar_info.count);
 
   error = PopulateDisplayAttributes();
   if (error != kErrorNone) {
-    goto CleanupOnError;
+    return error;
   }
 
-  // Open nodes for polling
-  for (int event = 0; event < kNumDisplayEvents; event++) {
-    poll_fds_[event].fd = -1;
-  }
+  UpdateMixerAttributes();
 
-  if (!fake_vsync_) {
-    for (int event = 0; event < kNumDisplayEvents; event++) {
-      pollfd &poll_fd = poll_fds_[event];
-
-      snprintf(node_path, sizeof(node_path), "%s%d/%s", fb_path_, fb_node_index_,
-               event_name[event]);
-
-      poll_fd.fd = Sys::open_(node_path, O_RDONLY);
-      if (poll_fd.fd < 0) {
-        DLOGE("open failed for event=%d, error=%s", event, strerror(errno));
-        error = kErrorHardware;
-        goto CleanupOnError;
-      }
-
-      // Read once on all fds to clear data on all fds.
-      Sys::pread_(poll_fd.fd, data , kMaxStringLength, 0);
-      poll_fd.events = POLLPRI | POLLERR;
-    }
-  }
-
-  // Start the Event thread
-  if (pthread_create(&event_thread_, NULL, &DisplayEventThread, this) < 0) {
-    DLOGE("Failed to start %s, error = %s", event_thread_name_);
-    error = kErrorResources;
-    goto CleanupOnError;
-  }
-
-  // Disable HPD at start if HDMI is external, it will be enabled later when the display powers on
+  // Need to enable HPD, but toggle at start when HDMI is external
   // This helps for framework reboot or adb shell stop/start
   EnableHotPlugDetection(0);
+  EnableHotPlugDetection(1);
   InitializeConfigs();
-
-  return kErrorNone;
-
-CleanupOnError:
-  // Close all poll fds
-  for (int event = 0; event < kNumDisplayEvents; event++) {
-    int &fd = poll_fds_[event].fd;
-    if (fd >= 0) {
-      Sys::close_(fd);
-    }
-  }
 
   return error;
 }
 
 bool HWPrimary::GetCurrentModeFromSysfs(size_t *curr_x_pixels, size_t *curr_y_pixels) {
   bool ret = false;
-  size_t len = kPageSize;
-  string mode_path = string(fb_path_) + string("0/mode");
+  string mode_path = fb_path_ + string("0/mode");
 
-  FILE *fd = Sys::fopen_(mode_path.c_str(), "r");
-  if (fd) {
-    char *buffer = static_cast<char *>(calloc(len, sizeof(char)));
+  Sys::fstream fs(mode_path, fstream::in);
+  if (!fs.is_open()) {
+    return false;
+  }
 
-    if (buffer == NULL) {
-      DLOGW("Failed to allocate memory");
-      Sys::fclose_(fd);
-      return false;
+  string line;
+  if (Sys::getline_(fs, line)) {
+    // String is of form "U:1600x2560p-0". Documentation/fb/modedb.txt in
+    // kernel has more info on the format.
+    size_t xpos = line.find(':');
+    size_t ypos = line.find('x');
+
+    if (xpos == string::npos || ypos == string::npos) {
+      DLOGI("Resolution switch not supported");
+    } else {
+      *curr_x_pixels = static_cast<size_t>(atoi(line.c_str() + xpos + 1));
+      *curr_y_pixels = static_cast<size_t>(atoi(line.c_str() + ypos + 1));
+      DLOGI("Current Config: %u x %u", *curr_x_pixels, *curr_y_pixels);
+      ret = true;
     }
-
-    if (Sys::getline_(&buffer, &len, fd) > 0) {
-      // String is of form "U:1600x2560p-0". Documentation/fb/modedb.txt in
-      // kernel has more info on the format.
-      size_t xpos = string(buffer).find(':');
-      size_t ypos = string(buffer).find('x');
-
-      if (xpos == string::npos || ypos == string::npos) {
-        DLOGI("Resolution switch not supported");
-      } else {
-        *curr_x_pixels = atoi(buffer + xpos + 1);
-        *curr_y_pixels = atoi(buffer + ypos + 1);
-        DLOGI("Current Config: %u x %u", *curr_x_pixels, *curr_y_pixels);
-        ret = true;
-      }
-    }
-
-    free(buffer);
-    Sys::fclose_(fd);
   }
 
   return ret;
@@ -194,68 +136,46 @@ bool HWPrimary::GetCurrentModeFromSysfs(size_t *curr_x_pixels, size_t *curr_y_pi
 void HWPrimary::InitializeConfigs() {
   size_t curr_x_pixels = 0;
   size_t curr_y_pixels = 0;
-  size_t len = kPageSize;
-  string modes_path = string(fb_path_) + string("0/modes");
 
   if (!GetCurrentModeFromSysfs(&curr_x_pixels, &curr_y_pixels)) {
     return;
   }
 
-  FILE *fd = Sys::fopen_(modes_path.c_str(), "r");
-  if (fd) {
-    char *buffer = static_cast<char *>(calloc(len, sizeof(char)));
+  string modes_path = string(fb_path_) + string("0/modes");
 
-    if (buffer == NULL) {
-      DLOGW("Failed to allocate memory");
-      Sys::fclose_(fd);
-      return;
-    }
-
-    while (Sys::getline_(&buffer, &len, fd) > 0) {
-      DisplayConfigVariableInfo config;
-      size_t xpos = string(buffer).find(':');
-      size_t ypos = string(buffer).find('x');
-
-      if (xpos == string::npos || ypos == string::npos) {
-        continue;
-      }
-
-      config.x_pixels = atoi(buffer + xpos + 1);
-      config.y_pixels = atoi(buffer + ypos + 1);
-      DLOGI("Found mode %d x %d", config.x_pixels, config.y_pixels);
-      display_configs_.push_back(config);
-      display_config_strings_.push_back(string(buffer));
-
-      if (curr_x_pixels == config.x_pixels && curr_y_pixels == config.y_pixels) {
-        active_config_index_ = display_configs_.size() - 1;
-        DLOGI("Active config index %u", active_config_index_);
-      }
-    }
-
-    free(buffer);
-    Sys::fclose_(fd);
-  } else {
+  Sys::fstream fs(modes_path, fstream::in);
+  if (!fs.is_open()) {
     DLOGI("Unable to process modes");
+    return;
   }
-}
 
-DisplayError HWPrimary::Deinit() {
-  exit_threads_ = true;
-  Sys::pthread_cancel_(event_thread_);
-  pthread_join(event_thread_, NULL);
+  string line;
+  while (Sys::getline_(fs, line)) {
+    DisplayConfigVariableInfo config;
+    // std::getline (unlike ::getline) removes \n while driver expects it in mode, so add back
+    line += '\n';
+    size_t xpos = line.find(':');
+    size_t ypos = line.find('x');
 
-  for (int event = 0; event < kNumDisplayEvents; event++) {
-    int &fd = poll_fds_[event].fd;
-    if (fd >= 0) {
-      Sys::close_(fd);
+    if (xpos == string::npos || ypos == string::npos) {
+      continue;
+    }
+
+    config.x_pixels = UINT32(atoi(line.c_str() + xpos + 1));
+    config.y_pixels = UINT32(atoi(line.c_str() + ypos + 1));
+    DLOGI("Found mode %d x %d", config.x_pixels, config.y_pixels);
+    display_configs_.push_back(config);
+    display_config_strings_.push_back(string(line.c_str()));
+
+    if (curr_x_pixels == config.x_pixels && curr_y_pixels == config.y_pixels) {
+      active_config_index_ = UINT32(display_configs_.size() - 1);
+      DLOGI("Active config index %u", active_config_index_);
     }
   }
-
-  return HWDevice::Deinit();
 }
 
 DisplayError HWPrimary::GetNumDisplayAttributes(uint32_t *count) {
-  *count = IsResolutionSwitchEnabled() ? display_configs_.size() : 1;
+  *count = IsResolutionSwitchEnabled() ? UINT32(display_configs_.size()) : 1;
   return kErrorNone;
 }
 
@@ -288,7 +208,7 @@ DisplayError HWPrimary::PopulateDisplayAttributes() {
   DTRACE_SCOPED();
 
   // Variable screen info
-  STRUCT_VAR(fb_var_screeninfo, var_screeninfo);
+  fb_var_screeninfo var_screeninfo = {};
 
   if (Sys::ioctl_(device_fd_, FBIOGET_VSCREENINFO, &var_screeninfo) < 0) {
     IOCTL_LOGE(FBIOGET_VSCREENINFO, device_type_);
@@ -296,7 +216,7 @@ DisplayError HWPrimary::PopulateDisplayAttributes() {
   }
 
   // Frame rate
-  STRUCT_VAR(msmfb_metadata, meta_data);
+  msmfb_metadata meta_data = {};
   meta_data.op = metadata_op_frame_rate;
   if (Sys::ioctl_(device_fd_, MSMFB_METADATA_GET, &meta_data) < 0) {
     IOCTL_LOGE(MSMFB_METADATA_GET, device_type_);
@@ -305,8 +225,8 @@ DisplayError HWPrimary::PopulateDisplayAttributes() {
 
   // If driver doesn't return width/height information, default to 160 dpi
   if (INT(var_screeninfo.width) <= 0 || INT(var_screeninfo.height) <= 0) {
-    var_screeninfo.width  = INT(((FLOAT(var_screeninfo.xres) * 25.4f)/160.0f) + 0.5f);
-    var_screeninfo.height = INT(((FLOAT(var_screeninfo.yres) * 25.4f)/160.0f) + 0.5f);
+    var_screeninfo.width  = UINT32(((FLOAT(var_screeninfo.xres) * 25.4f)/160.0f) + 0.5f);
+    var_screeninfo.height = UINT32(((FLOAT(var_screeninfo.yres) * 25.4f)/160.0f) + 0.5f);
   }
 
   display_attributes_.x_pixels = var_screeninfo.xres;
@@ -325,8 +245,6 @@ DisplayError HWPrimary::PopulateDisplayAttributes() {
   display_attributes_.vsync_period_ns = UINT32(1000000000L / display_attributes_.fps);
   display_attributes_.is_device_split = (hw_panel_info_.split_info.left_split ||
       (var_screeninfo.xres > hw_resource_.max_mixer_width)) ? true : false;
-  display_attributes_.split_left = hw_panel_info_.split_info.left_split ?
-      hw_panel_info_.split_info.left_split : display_attributes_.x_pixels / 2;
   display_attributes_.h_total += display_attributes_.is_device_split ? h_blanking : 0;
 
   return kErrorNone;
@@ -357,6 +275,7 @@ DisplayError HWPrimary::SetDisplayAttributes(uint32_t index) {
     DLOGI("Successfully set config %u", index);
     PopulateHWPanelInfo();
     PopulateDisplayAttributes();
+    UpdateMixerAttributes();
     active_config_index_ = index;
   } else {
     DLOGE("Writing config index %u failed with error: %s", index, strerror(errno));
@@ -412,6 +331,8 @@ DisplayError HWPrimary::PowerOff() {
     return kErrorHardware;
   }
 
+  auto_refresh_ = false;
+
   return kErrorNone;
 }
 
@@ -434,117 +355,89 @@ DisplayError HWPrimary::DozeSuspend() {
 }
 
 DisplayError HWPrimary::Validate(HWLayers *hw_layers) {
+  HWLayersInfo &hw_layer_info = hw_layers->info;
+  LayerStack *stack = hw_layer_info.stack;
+
   HWDevice::ResetDisplayParams();
 
   mdp_layer_commit_v1 &mdp_commit = mdp_disp_commit_.commit_v1;
 
-  LayerRect left_roi = hw_layers->info.left_partial_update;
-  LayerRect right_roi = hw_layers->info.right_partial_update;
-  mdp_commit.left_roi.x = INT(left_roi.left);
-  mdp_commit.left_roi.y = INT(left_roi.top);
-  mdp_commit.left_roi.w = INT(left_roi.right - left_roi.left);
-  mdp_commit.left_roi.h = INT(left_roi.bottom - left_roi.top);
+  LayerRect left_roi = hw_layer_info.left_partial_update;
+  LayerRect right_roi = hw_layer_info.right_partial_update;
+  mdp_commit.left_roi.x = UINT32(left_roi.left);
+  mdp_commit.left_roi.y = UINT32(left_roi.top);
+  mdp_commit.left_roi.w = UINT32(left_roi.right - left_roi.left);
+  mdp_commit.left_roi.h = UINT32(left_roi.bottom - left_roi.top);
 
   // SDM treats ROI as one full coordinate system.
   // In case source split is disabled, However, Driver assumes Mixer to operate in
   // different co-ordinate system.
-  if (!hw_resource_.is_src_split) {
-    mdp_commit.right_roi.x = INT(right_roi.left) - hw_panel_info_.split_info.left_split;
-    mdp_commit.right_roi.y = INT(right_roi.top);
-    mdp_commit.right_roi.w = INT(right_roi.right - right_roi.left);
-    mdp_commit.right_roi.h = INT(right_roi.bottom - right_roi.top);
+  if (!hw_resource_.is_src_split && IsValid(right_roi)) {
+    mdp_commit.right_roi.x = UINT32(right_roi.left) - mixer_attributes_.split_left;
+    mdp_commit.right_roi.y = UINT32(right_roi.top);
+    mdp_commit.right_roi.w = UINT32(right_roi.right - right_roi.left);
+    mdp_commit.right_roi.h = UINT32(right_roi.bottom - right_roi.top);
+  }
+
+  if (stack->output_buffer && hw_resource_.has_concurrent_writeback) {
+    LayerBuffer *output_buffer = stack->output_buffer;
+    mdp_out_layer_.writeback_ndx = hw_resource_.writeback_index;
+    mdp_out_layer_.buffer.width = output_buffer->width;
+    mdp_out_layer_.buffer.height = output_buffer->height;
+    mdp_out_layer_.buffer.comp_ratio.denom = 1000;
+    mdp_out_layer_.buffer.comp_ratio.numer = UINT32(hw_layers->output_compression * 1000);
+    mdp_out_layer_.buffer.fence = -1;
+#ifdef OUT_LAYER_COLOR_SPACE
+    SetCSC(output_buffer->color_metadata, &mdp_out_layer_.color_space);
+#endif
+    SetFormat(output_buffer->format, &mdp_out_layer_.buffer.format);
+    mdp_commit.flags |= MDP_COMMIT_CWB_EN;
+    mdp_commit.flags |= (stack->flags.post_processed_output) ? MDP_COMMIT_CWB_DSPP : 0;
+    DLOGI_IF(kTagDriverConfig, "****************** Conc WB Output buffer Info ******************");
+    DLOGI_IF(kTagDriverConfig, "out_w %d, out_h %d, out_f %d, wb_id %d DSPP output %d",
+             mdp_out_layer_.buffer.width, mdp_out_layer_.buffer.height,
+             mdp_out_layer_.buffer.format, mdp_out_layer_.writeback_ndx,
+             stack->flags.post_processed_output);
+    DLOGI_IF(kTagDriverConfig, "****************************************************************");
+  }
+
+  if (hw_resource_.has_avr) {
+    SetAVRFlags(hw_layers->hw_avr_info, &mdp_commit.flags);
   }
 
   return HWDevice::Validate(hw_layers);
 }
 
-void* HWPrimary::DisplayEventThread(void *context) {
-  if (context) {
-    return reinterpret_cast<HWPrimary *>(context)->DisplayEventThreadHandler();
-  }
+DisplayError HWPrimary::Commit(HWLayers *hw_layers) {
+  LayerBuffer *output_buffer = hw_layers->info.stack->output_buffer;
 
-  return NULL;
-}
+  if (hw_resource_.has_concurrent_writeback && output_buffer) {
+    if (output_buffer->planes[0].fd >= 0) {
+      mdp_out_layer_.buffer.planes[0].fd = output_buffer->planes[0].fd;
+      mdp_out_layer_.buffer.planes[0].offset = output_buffer->planes[0].offset;
+      SetStride(device_type_, output_buffer->format, output_buffer->planes[0].stride,
+                &mdp_out_layer_.buffer.planes[0].stride);
+      mdp_out_layer_.buffer.plane_count = 1;
+      mdp_out_layer_.buffer.fence = -1;
 
-void* HWPrimary::DisplayEventThreadHandler() {
-  char data[kMaxStringLength] = {0};
-
-  prctl(PR_SET_NAME, event_thread_name_, 0, 0, 0);
-  setpriority(PRIO_PROCESS, 0, kThreadPriorityUrgent);
-
-  if (fake_vsync_) {
-    while (!exit_threads_) {
-      // Fake vsync is used only when set explicitly through a property(todo) or when
-      // the vsync timestamp node cannot be opened at bootup. There is no
-      // fallback to fake vsync from the true vsync loop, ever, as the
-      // condition can easily escape detection.
-      // Also, fake vsync is delivered only for the primary display.
-      usleep(16666);
-      STRUCT_VAR(timeval, time_now);
-      gettimeofday(&time_now, NULL);
-      uint64_t ts = uint64_t(time_now.tv_sec)*1000000000LL +uint64_t(time_now.tv_usec)*1000LL;
-
-      // Send Vsync event for primary display(0)
-      event_handler_->VSync(ts);
-    }
-
-    pthread_exit(0);
-  }
-
-  typedef void (HWPrimary::*EventHandler)(char*);
-  EventHandler event_handler[kNumDisplayEvents] = { &HWPrimary::HandleVSync,
-                                                    &HWPrimary::HandleBlank,
-                                                    &HWPrimary::HandleIdleTimeout,
-                                                    &HWPrimary::HandleThermal };
-
-  while (!exit_threads_) {
-    int error = Sys::poll_(poll_fds_, kNumDisplayEvents, -1);
-    if (error <= 0) {
-      DLOGW("poll failed. error = %s", strerror(errno));
-      continue;
-    }
-
-    for (int event = 0; event < kNumDisplayEvents; event++) {
-      pollfd &poll_fd = poll_fds_[event];
-
-      if (poll_fd.revents & POLLPRI) {
-        if (Sys::pread_(poll_fd.fd, data, kMaxStringLength, 0) > 0) {
-          (this->*event_handler[event])(data);
-        }
-      }
+      DLOGI_IF(kTagDriverConfig, "****************** Conc WB Output buffer Info ****************");
+      DLOGI_IF(kTagDriverConfig, "out_fd %d, out_offset %d, out_stride %d",
+               mdp_out_layer_.buffer.planes[0].fd, mdp_out_layer_.buffer.planes[0].offset,
+               mdp_out_layer_.buffer.planes[0].stride);
+      DLOGI_IF(kTagDriverConfig, "**************************************************************");
+    } else {
+      DLOGE("Invalid output buffer fd");
+      return kErrorParameters;
     }
   }
 
-  pthread_exit(0);
+  DisplayError ret = HWDevice::Commit(hw_layers);
 
-  return NULL;
-}
-
-void HWPrimary::HandleVSync(char *data) {
-  int64_t timestamp = 0;
-  if (!strncmp(data, "VSYNC=", strlen("VSYNC="))) {
-    timestamp = strtoull(data + strlen("VSYNC="), NULL, 0);
-  }
-  event_handler_->VSync(timestamp);
-}
-
-void HWPrimary::HandleBlank(char *data) {
-  // TODO(user): Need to send blank Event
-}
-
-void HWPrimary::HandleIdleTimeout(char *data) {
-  event_handler_->IdleTimeout();
-}
-
-void HWPrimary::HandleThermal(char *data) {
-  int64_t thermal_level = 0;
-  if (!strncmp(data, "thermal_level=", strlen("thermal_level="))) {
-    thermal_level = strtoull(data + strlen("thermal_level="), NULL, 0);
+  if (ret == kErrorNone && hw_resource_.has_concurrent_writeback && output_buffer) {
+    output_buffer->release_fence_fd = mdp_out_layer_.buffer.fence;
   }
 
-  DLOGI("Received thermal notification with thermal level = %d", thermal_level);
-
-  event_handler_->ThermalEvent(thermal_level);
+  return ret;
 }
 
 void HWPrimary::SetIdleTimeoutMs(uint32_t timeout_ms) {
@@ -575,18 +468,11 @@ void HWPrimary::SetIdleTimeoutMs(uint32_t timeout_ms) {
 
 DisplayError HWPrimary::SetVSyncState(bool enable) {
   DTRACE_SCOPED();
-
-  int vsync_on = enable ? 1 : 0;
-  if (Sys::ioctl_(device_fd_, MSMFB_OVERLAY_VSYNC_CTRL, &vsync_on) < 0) {
-    IOCTL_LOGE(MSMFB_OVERLAY_VSYNC_CTRL, device_type_);
-    return kErrorHardware;
-  }
-
-  return kErrorNone;
+  return HWDevice::SetVSyncState(enable);
 }
 
 DisplayError HWPrimary::SetDisplayMode(const HWDisplayMode hw_display_mode) {
-  uint32_t mode = -1;
+  uint32_t mode = kModeDefault;
 
   switch (hw_display_mode) {
   case kModeVideo:
@@ -601,7 +487,7 @@ DisplayError HWPrimary::SetDisplayMode(const HWDisplayMode hw_display_mode) {
     return kErrorParameters;
   }
 
-  if (Sys::ioctl_(device_fd_, MSMFB_LPM_ENABLE, &mode) < 0) {
+  if (Sys::ioctl_(device_fd_, INT(MSMFB_LPM_ENABLE), &mode) < 0) {
     IOCTL_LOGE(MSMFB_LPM_ENABLE, device_type_);
     return kErrorHardware;
   }
@@ -613,7 +499,7 @@ DisplayError HWPrimary::SetDisplayMode(const HWDisplayMode hw_display_mode) {
 }
 
 DisplayError HWPrimary::SetPanelBrightness(int level) {
-  char buffer[MAX_SYSFS_COMMAND_LENGTH] = {0};
+  char buffer[kMaxSysfsCommandLength] = {0};
 
   DLOGV_IF(kTagDriverConfig, "Set brightness level to %d", level);
   int fd = Sys::open_(kBrightnessNode, O_RDWR);
@@ -623,14 +509,14 @@ DisplayError HWPrimary::SetPanelBrightness(int level) {
     return kErrorFileDescriptor;
   }
 
-  int32_t bytes = snprintf(buffer, MAX_SYSFS_COMMAND_LENGTH, "%d\n", level);
+  int32_t bytes = snprintf(buffer, kMaxSysfsCommandLength, "%d\n", level);
   if (bytes < 0) {
     DLOGV_IF(kTagDriverConfig, "Failed to copy new brightness level = %d", level);
     Sys::close_(fd);
     return kErrorUndefined;
   }
 
-  ssize_t ret = Sys::pwrite_(fd, buffer, bytes, 0);
+  ssize_t ret = Sys::pwrite_(fd, buffer, static_cast<size_t>(bytes), 0);
   if (ret <= 0) {
     DLOGV_IF(kTagDriverConfig, "Failed to write to node = %s, error = %s ", kBrightnessNode,
              strerror(errno));
@@ -671,22 +557,33 @@ DisplayError HWPrimary::SetAutoRefresh(bool enable) {
   char buffer[kWriteLength] = {'\0'};
   ssize_t bytes = snprintf(buffer, kWriteLength, "%d", enable);
 
+  if (enable == auto_refresh_) {
+    return kErrorNone;
+  }
+
   if (HWDevice::SysFsWrite(kAutoRefreshNode, buffer, bytes) <= 0) {  // Returns bytes written
     return kErrorUndefined;
   }
+
+  auto_refresh_ = enable;
 
   return kErrorNone;
 }
 
 DisplayError HWPrimary::GetPPFeaturesVersion(PPFeatureVersion *vers) {
-  STRUCT_VAR(mdp_pp_feature_version, version);
+  mdp_pp_feature_version version = {};
 
+#ifdef PA_DITHER
+  uint32_t feature_id_mapping[kMaxNumPPFeatures] = { PCC, IGC, GC, GC, PA,
+                                                     DITHER, GAMUT, PA_DITHER };
+#else
   uint32_t feature_id_mapping[kMaxNumPPFeatures] = { PCC, IGC, GC, GC, PA, DITHER, GAMUT };
+#endif
 
   for (int i(0); i < kMaxNumPPFeatures; i++) {
     version.pp_feature = feature_id_mapping[i];
 
-    if (Sys::ioctl_(device_fd_,  MSMFB_MDP_PP_GET_FEATURE_VERSION, &version) < 0) {
+    if (Sys::ioctl_(device_fd_,  INT(MSMFB_MDP_PP_GET_FEATURE_VERSION), &version) < 0) {
       IOCTL_LOGE(MSMFB_MDP_PP_GET_FEATURE_VERSION, device_type_);
       return kErrorHardware;
     }
@@ -698,7 +595,7 @@ DisplayError HWPrimary::GetPPFeaturesVersion(PPFeatureVersion *vers) {
 
 // It was entered with PPFeaturesConfig::locker_ being hold.
 DisplayError HWPrimary::SetPPFeatures(PPFeaturesConfig *feature_list) {
-  STRUCT_VAR(msmfb_mdp_pp, kernel_params);
+  msmfb_mdp_pp kernel_params = {};
   int ret = 0;
   PPFeatureInfo *feature = NULL;
 
@@ -712,7 +609,7 @@ DisplayError HWPrimary::SetPPFeatures(PPFeaturesConfig *feature_list) {
 
       if ((feature->feature_id_ < kMaxNumPPFeatures)) {
         HWColorManager::SetFeature[feature->feature_id_](*feature, &kernel_params);
-        if (Sys::ioctl_(device_fd_, MSMFB_MDP_PP, &kernel_params) < 0) {
+        if (Sys::ioctl_(device_fd_, INT(MSMFB_MDP_PP), &kernel_params) < 0) {
           IOCTL_LOGE(MSMFB_MDP_PP, device_type_);
 
           feature_list->Reset();
@@ -727,6 +624,31 @@ DisplayError HWPrimary::SetPPFeatures(PPFeaturesConfig *feature_list) {
   feature_list->Reset();
 
   return kErrorNone;
+}
+
+DisplayError HWPrimary::SetMixerAttributes(const HWMixerAttributes &mixer_attributes) {
+  if (IsResolutionSwitchEnabled()) {
+    return kErrorNotSupported;
+  }
+
+  return HWDevice::SetMixerAttributes(mixer_attributes);
+}
+
+void HWPrimary::UpdateMixerAttributes() {
+  mixer_attributes_.width = display_attributes_.x_pixels;
+  mixer_attributes_.height = display_attributes_.y_pixels;
+  mixer_attributes_.split_left = display_attributes_.is_device_split ?
+      hw_panel_info_.split_info.left_split : mixer_attributes_.width;
+}
+
+void HWPrimary::SetAVRFlags(const HWAVRInfo &hw_avr_info, uint32_t *avr_flags) {
+  if (hw_avr_info.enable) {
+    *avr_flags |= MDP_COMMIT_AVR_EN;
+  }
+
+  if (hw_avr_info.mode == kOneShotMode) {
+    *avr_flags |= MDP_COMMIT_AVR_ONE_SHOT_MODE;
+  }
 }
 
 }  // namespace sdm

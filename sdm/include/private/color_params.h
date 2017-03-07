@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, The Linux Foundataion. All rights reserved.
+/* Copyright (c) 2015-2016, The Linux Foundataion. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -48,6 +48,8 @@ enum PendingAction {
   kEnterQDCMMode = BITMAP(3),
   kExitQDCMMode = BITMAP(4),
   kSetPanelBrightness = BITMAP(5),
+  kEnableFrameCapture = BITMAP(6),
+  kDisableFrameCapture = BITMAP(7),
   kNoAction = BITMAP(31),
 };
 
@@ -62,6 +64,7 @@ enum PPGlobalColorFeatureID {
   kGlobalColorFeaturePaV2,
   kGlobalColorFeatureDither,
   kGlobalColorFeatureGamut,
+  kGlobalColorFeaturePADither,
   kMaxNumPPFeatures,
 };
 
@@ -100,6 +103,8 @@ struct PPFeatureVersion {
   static const uint32_t kSDEPaV17 = 11;
   static const uint32_t kSDEPccV17 = 13;
   static const uint32_t kSDELegacyPP = 15;
+  static const uint32_t kSDEPADitherV17 = 16;
+  static const uint32_t kSDEIgcV30 = 17;
 
   uint32_t version[kMaxNumPPFeatures];
   PPFeatureVersion() { memset(version, 0, sizeof(version)); }
@@ -108,6 +113,7 @@ struct PPFeatureVersion {
 struct PPHWAttributes : HWResourceInfo, HWPanelInfo, DisplayConfigVariableInfo {
   char panel_name[256] = "generic_panel";
   PPFeatureVersion version;
+  int panel_max_brightness = 0;
 
   void Set(const HWResourceInfo &hw_res, const HWPanelInfo &panel_info,
            const DisplayConfigVariableInfo &attr, const PPFeatureVersion &feature_ver);
@@ -138,6 +144,21 @@ struct PPDisplayAPIPayload {
     return ret;
   }
 
+  DisplayError CreatePayloadBytes(uint32_t size_in_bytes, uint8_t **output) {
+    DisplayError ret = kErrorNone;
+
+    payload = new uint8_t[size_in_bytes]();
+    if (!payload) {
+      ret = kErrorMemory;
+      *output = NULL;
+    } else {
+      this->size = size_in_bytes;
+      *output = payload;
+      own_payload = true;
+    }
+    return ret;
+  }
+
   inline void DestroyPayload() {
     if (payload && own_payload) {
       delete[] payload;
@@ -148,6 +169,34 @@ struct PPDisplayAPIPayload {
       size = 0;
     }
   }
+};
+
+struct PPRectInfo {
+  uint32_t width;
+  uint32_t height;
+  int32_t x;
+  int32_t y;
+};
+
+typedef enum {
+  PP_PIXEL_FORMAT_NONE = 0,
+  PP_PIXEL_FORMAT_RGB_888,
+  PP_PIXEL_FORMAT_RGB_2101010,
+  PP_PIXEL_FORMAT_MAX,
+  PP_PIXEL_FORMAT_FORCE32BIT = 0x7FFFFFFF,
+} PPPixelFormats;
+
+struct PPFrameCaptureInputParams {
+  PPRectInfo rect;
+  PPPixelFormats out_pix_format;
+  uint32_t flags;
+};
+
+struct PPFrameCaptureData {
+  PPFrameCaptureInputParams input_params;
+  uint8_t *buffer;
+  uint32_t buffer_stride;
+  uint32_t buffer_size;
 };
 
 struct SDEGamutCfg {
@@ -183,6 +232,40 @@ struct SDEPccCfg {
 
   static SDEPccCfg *Init(uint32_t arg __attribute__((__unused__)));
   SDEPccCfg *GetConfig() { return this; }
+};
+
+struct SDEDitherCfg {
+  uint32_t g_y_depth;
+  uint32_t r_cr_depth;
+  uint32_t b_cb_depth;
+  uint32_t length;
+  uint32_t dither_matrix[16];
+  uint32_t temporal_en;
+
+  static SDEDitherCfg *Init(uint32_t arg __attribute__((__unused__)));
+  SDEDitherCfg *GetConfig() { return this; }
+};
+
+struct SDEPADitherData {
+  uint64_t data_flags;
+  uint32_t matrix_size;
+  uint64_t matrix_data_addr;
+  uint32_t strength;
+  uint32_t offset_en;
+};
+
+class SDEPADitherWrapper : private SDEPADitherData {
+ public:
+  static SDEPADitherWrapper *Init(uint32_t arg __attribute__((__unused__)));
+  ~SDEPADitherWrapper() {
+    if (buffer_)
+      delete[] buffer_;
+  }
+  inline SDEPADitherData *GetConfig(void) { return this; }
+
+ private:
+  SDEPADitherWrapper() {}
+  uint32_t *buffer_ = NULL;
 };
 
 struct SDEPaMemColorData {
@@ -225,12 +308,28 @@ struct SDEIgcLUTData {
   uint32_t *c2_data = NULL;
 };
 
+struct SDEIgcV30LUTData {
+  static const int kMaxIgcLUTEntries = 256;
+  uint32_t table_fmt = 0;
+  uint32_t len = 0;
+  uint64_t c0_c1_data = 0;
+  uint64_t c2_data = 0;
+  uint32_t strength = 0;
+};
+
 struct SDEPgcLUTData {
   static const int kPgcLUTEntries = 1024;
   uint32_t len = 0;
   uint32_t *c0_data = NULL;
   uint32_t *c1_data = NULL;
   uint32_t *c2_data = NULL;
+};
+
+struct SDEDisplayMode {
+  static const int kMaxModeNameSize = 256;
+  int32_t id = -1;
+  uint32_t type = 0;
+  char name[kMaxModeNameSize] = {0};
 };
 
 // Wrapper on HW block config data structure to encapsulate the details of allocating
@@ -285,6 +384,22 @@ class SDEIgcLUTWrapper : private SDEIgcLUTData {
 
  private:
   SDEIgcLUTWrapper() {}
+  uint32_t *buffer_ = NULL;
+};
+
+class SDEIgcV30LUTWrapper : private SDEIgcV30LUTData {
+ public:
+  static SDEIgcV30LUTWrapper *Init(uint32_t arg __attribute__((__unused__)));
+  ~SDEIgcV30LUTWrapper() {
+    if (buffer_)
+      delete[] buffer_;
+  }
+  inline SDEIgcV30LUTData *GetConfig(void) { return this; }
+
+ private:
+  SDEIgcV30LUTWrapper(const SDEIgcV30LUTWrapper& src) { /* do not create copies */ }
+  SDEIgcV30LUTWrapper& operator=(const SDEIgcV30LUTWrapper&) { return *this; }
+  SDEIgcV30LUTWrapper() {}
   uint32_t *buffer_ = NULL;
 };
 
@@ -376,7 +491,7 @@ class PPFeaturesConfig {
   }
 
   inline Locker &GetLocker(void) { return locker_; }
-
+  inline PPFrameCaptureData *GetFrameCaptureData(void) { return &frame_capture_data; }
   // Once all features are consumed, destroy/release all TFeatureInfo<T> on the list,
   // then clear dirty_ flag and return the lock to the TFeatureInfo<T> producer.
   void Reset();
@@ -392,6 +507,7 @@ class PPFeaturesConfig {
   Locker locker_;
   PPFeatureInfo *feature_[kMaxNumPPFeatures];  // reference to TFeatureInfo<T>.
   uint32_t next_idx_ = 0;
+  PPFrameCaptureData frame_capture_data;
 };
 
 }  // namespace sdm

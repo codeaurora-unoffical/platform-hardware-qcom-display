@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2015, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2016, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -52,9 +52,16 @@ int Debug::GetHDMIResolution() {
   return value;
 }
 
-int Debug::GetIdleTimeoutMs() {
+uint32_t Debug::GetIdleTimeoutMs() {
   int value = IDLE_TIMEOUT_DEFAULT_MS;
   debug_.debug_handler_->GetProperty("sdm.idle_time", &value);
+
+  return UINT32(value);
+}
+
+int Debug::GetBootAnimLayerCount() {
+  int value = 0;
+  debug_.debug_handler_->GetProperty("sdm.boot_anim_layer_count", &value);
 
   return value;
 }
@@ -88,6 +95,13 @@ int Debug::GetMaxPipesPerMixer(DisplayType display_type) {
   default:
     break;
   }
+
+  return value;
+}
+
+int Debug::GetMaxVideoUpscale() {
+  int value = 0;
+  debug_.debug_handler_->GetProperty("sdm.video_max_upscale", &value);
 
   return value;
 }
@@ -133,8 +147,30 @@ bool Debug::IsUbwcTiledFrameBuffer() {
   return (ubwc_framebuffer == 1);
 }
 
+int Debug::GetExtMaxlayers() {
+    int max_external_layers = 0;
+    debug_.debug_handler_->GetProperty("sdm.max_external_layers", &max_external_layers);
+
+    return std::max(max_external_layers, 2);
+}
+
+bool Debug::IsAVRDisabled() {
+  int value = 0;
+  debug_.debug_handler_->GetProperty("sdm.debug.disable_avr", &value);
+
+  return (value == 1);
+}
+
 bool Debug::GetProperty(const char* property_name, char* value) {
   if (debug_.debug_handler_->GetProperty(property_name, value) != kErrorNone) {
+    return false;
+  }
+
+  return true;
+}
+
+bool Debug::SetProperty(const char* property_name, const char* value) {
+  if (debug_.debug_handler_->SetProperty(property_name, value) != kErrorNone) {
     return false;
   }
 

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2015, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2016, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -28,6 +28,7 @@
 #include <core/display_interface.h>
 #include <private/resource_interface.h>
 #include <utils/locker.h>
+#include <vector>
 
 #include "hw_interface.h"
 
@@ -37,11 +38,16 @@ class ResourceDefault : public ResourceInterface {
  public:
   DisplayError Init(const HWResourceInfo &hw_resource_info);
   DisplayError Deinit();
-  virtual DisplayError RegisterDisplay(DisplayType type, const HWDisplayAttributes &attributes,
-                                       const HWPanelInfo &hw_panel_info, Handle *display_ctx);
+  virtual DisplayError RegisterDisplay(DisplayType type,
+                                       const HWDisplayAttributes &display_attributes,
+                                       const HWPanelInfo &hw_panel_info,
+                                       const HWMixerAttributes &mixer_attributes,
+                                       Handle *display_ctx);
   virtual DisplayError UnregisterDisplay(Handle display_ctx);
-  virtual void ReconfigureDisplay(Handle display_ctx, const HWDisplayAttributes &attributes,
-                                  const HWPanelInfo &hw_panel_info);
+  virtual DisplayError ReconfigureDisplay(Handle display_ctx,
+                                          const HWDisplayAttributes &display_attributes,
+                                          const HWPanelInfo &hw_panel_info,
+                                          const HWMixerAttributes &mixer_attributes);
   virtual DisplayError Start(Handle display_ctx);
   virtual DisplayError Stop(Handle display_ctx);
   virtual DisplayError Acquire(Handle display_ctx, HWLayers *hw_layers);
@@ -51,33 +57,13 @@ class ResourceDefault : public ResourceInterface {
   virtual DisplayError SetMaxMixerStages(Handle display_ctx, uint32_t max_mixer_stages);
   virtual DisplayError ValidateScaling(const LayerRect &crop, const LayerRect &dst,
                                        bool rotate90, bool ubwc_tiled, bool use_rotator_downscale);
-  DisplayError ValidateCursorConfig(Handle display_ctx, const Layer& layer, bool is_top);
+  DisplayError ValidateCursorConfig(Handle display_ctx, const Layer *layer, bool is_top);
   DisplayError ValidateCursorPosition(Handle display_ctx, HWLayers *hw_layers, int x, int y);
   DisplayError SetMaxBandwidthMode(HWBwModes mode);
+  virtual DisplayError SetDetailEnhancerData(Handle display_ctx,
+                                             const DisplayDetailEnhancerData &de_data);
 
  private:
-  enum PipeId {
-    kPipeIdVIG0,
-    kPipeIdVIG1,
-    kPipeIdVIG2,
-    kPipeIdRGB0,
-    kPipeIdRGB1,
-    kPipeIdRGB2,
-    kPipeIdDMA0,
-    kPipeIdDMA1,
-    kPipeIdVIG3,
-    kPipeIdRGB3,
-    kPipeIdMax,
-  };
-
-  enum PipeType {
-    kPipeTypeUnused,
-    kPipeTypeVIG,
-    kPipeTypeRGB,
-    kPipeTypeDMA,
-    kPipeTypeMax,
-  };
-
   enum PipeOwner {
     kPipeOwnerUserMode,       // Pipe state when it is available for reservation
     kPipeOwnerKernelMode,  // Pipe state when pipe is owned by kernel
@@ -96,7 +82,7 @@ class ResourceDefault : public ResourceInterface {
     HWBlockType hw_block_id;
     int priority;
 
-    SourcePipe() : type(kPipeTypeUnused), owner(kPipeOwnerUserMode), mdss_pipe_id(kPipeIdMax),
+    SourcePipe() : type(kPipeTypeUnused), owner(kPipeOwnerUserMode), mdss_pipe_id(0),
                   index(0), hw_block_id(kHWBlockMax), priority(0) { }
 
     inline void ResetState() { hw_block_id = kHWBlockMax;}
@@ -106,6 +92,7 @@ class ResourceDefault : public ResourceInterface {
     HWDisplayAttributes display_attributes;
     HWBlockType hw_block_id;
     uint64_t frame_count;
+    HWMixerAttributes mixer_attributes;
 
     DisplayResourceContext() : hw_block_id(kHWBlockMax), frame_count(0) { }
   };
@@ -115,7 +102,6 @@ class ResourceDefault : public ResourceInterface {
     HWBlockContext() : is_in_use(false) { }
   };
 
-  uint32_t GetMdssPipeId(PipeType pipe_type, uint32_t index);
   uint32_t NextPipe(PipeType pipe_type, HWBlockType hw_block_id);
   uint32_t SearchPipe(HWBlockType hw_block_id, SourcePipe *src_pipes, uint32_t num_pipe);
   uint32_t GetPipe(HWBlockType hw_block_id, bool need_scale);
@@ -128,7 +114,7 @@ class ResourceDefault : public ResourceInterface {
                              const LayerRect &src_rect, const LayerRect &dst_rect,
                              HWLayerConfig *layer_config);
   bool CalculateCropRects(const LayerRect &scissor, LayerRect *crop, LayerRect *dst);
-  DisplayError ValidateLayerParams(const Layer &layer);
+  DisplayError ValidateLayerParams(const Layer *layer);
   DisplayError ValidateDimensions(const LayerRect &crop, const LayerRect &dst);
   DisplayError ValidatePipeParams(HWPipeInfo *pipe_info, bool ubwc_tiled);
   DisplayError ValidateDownScaling(float scale_x, float scale_y, bool ubwc_tiled);
@@ -138,19 +124,17 @@ class ResourceDefault : public ResourceInterface {
   DisplayError SetDecimationFactor(HWPipeInfo *pipe);
   void SplitRect(const LayerRect &src_rect, const LayerRect &dst_rect, LayerRect *src_left,
                 LayerRect *dst_left, LayerRect *src_right, LayerRect *dst_right);
-  DisplayError AlignPipeConfig(const Layer &layer, HWPipeInfo *left_pipe, HWPipeInfo *right_pipe);
+  DisplayError AlignPipeConfig(const Layer *layer, HWPipeInfo *left_pipe,
+                               HWPipeInfo *right_pipe);
   void ResourceStateLog(void);
   DisplayError CalculateDecimation(float downscale, uint8_t *decimation);
-  bool IsUBWCFormat(LayerBufferFormat format);
+  DisplayError GetScaleLutConfig(HWScaleLutInfo *lut_info);
 
   Locker locker_;
   HWResourceInfo hw_res_info_;
   HWBlockContext hw_block_ctx_[kHWBlockMax];
-  SourcePipe src_pipes_[kPipeIdMax];
+  std::vector<SourcePipe> src_pipes_;
   uint32_t num_pipe_ = 0;
-  SourcePipe *vig_pipes_ = NULL;
-  SourcePipe *rgb_pipes_ = NULL;
-  SourcePipe *dma_pipes_ = NULL;
 };
 
 }  // namespace sdm
