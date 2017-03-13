@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2016, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -28,12 +28,11 @@
 #include <sys/prctl.h>
 #include <binder/Parcel.h>
 #include <QService.h>
-#include <gr.h>
-#include <gralloc_priv.h>
 #include <display_config.h>
 #include <utils/debug.h>
 #include <sync/sync.h>
 #include <profiler.h>
+#include <algorithm>
 #include <string>
 #include <bitset>
 
@@ -136,6 +135,13 @@ int HWCSession::Init() {
     return -errno;
   }
 
+  struct rlimit fd_limit = {};
+  getrlimit(RLIMIT_NOFILE, &fd_limit);
+  fd_limit.rlim_cur = fd_limit.rlim_cur * 2;
+  auto err = setrlimit(RLIMIT_NOFILE, &fd_limit);
+  if (err) {
+    DLOGW("Unable to increase fd limit -  err:%d, %s", errno, strerror(errno));
+  }
   return 0;
 }
 
@@ -278,9 +284,10 @@ void HWCSession::Dump(hwc2_device_t *device, uint32_t *out_size, char *out_buffe
     return;
   }
   auto *hwc_session = static_cast<HWCSession *>(device);
+  const size_t max_dump_size = 8192;
 
   if (out_buffer == nullptr) {
-    *out_size = 8192;  // TODO(user): Adjust required dump size
+    *out_size = max_dump_size;
   } else {
     char sdm_dump[4096];
     DumpInterface::GetDump(sdm_dump, 4096);  // TODO(user): Fix this workaround
@@ -291,8 +298,8 @@ void HWCSession::Dump(hwc2_device_t *device, uint32_t *out_size, char *out_buffe
       }
     }
     s += sdm_dump;
-    s.copy(out_buffer, s.size(), 0);
-    *out_size = sizeof(out_buffer);
+    auto copied = s.copy(out_buffer, std::min(s.size(), max_dump_size), 0);
+    *out_size = UINT32(copied);
   }
 }
 

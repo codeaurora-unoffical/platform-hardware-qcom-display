@@ -71,7 +71,7 @@ DisplayError DisplayPrimary::Init() {
 
   avr_prop_disabled_ = Debug::IsAVRDisabled();
 
-  error = HWEventsInterface::Create(INT(display_type_), this, &event_list_, &hw_events_intf_);
+  error = HWEventsInterface::Create(INT(display_type_), this, event_list_, &hw_events_intf_);
   if (error != kErrorNone) {
     DLOGE("Failed to create hardware events interface. Error = %d", error);
     DisplayBase::Deinit();
@@ -91,16 +91,19 @@ DisplayError DisplayPrimary::Prepare(LayerStack *layer_stack) {
   bool needs_hv_flip = hw_panel_info_.panel_orientation.flip_horizontal &&
                           hw_panel_info_.panel_orientation.flip_vertical;
   LayerRect src_domain = {};
+  LayerTransform panel_transform = {};
   DisplayConfigVariableInfo variable_info = {};
 
   if (needs_hv_flip) {
     DisplayBase::GetFrameBufferConfig(&variable_info);
     src_domain.right = variable_info.x_pixels;
     src_domain.bottom = variable_info.y_pixels;
+    panel_transform.flip_horizontal = hw_panel_info_.panel_orientation.flip_horizontal;
+    panel_transform.flip_vertical = hw_panel_info_.panel_orientation.flip_vertical;
 
     for (Layer *layer : layer_stack->layers) {
       // Modify destination based on panel flip
-      TransformHV(src_domain, layer->dst_rect, &layer->dst_rect);
+      TransformHV(src_domain, layer->dst_rect, panel_transform, &layer->dst_rect);
 
       if (layer->flags.solid_fill) {
         continue;
@@ -290,6 +293,11 @@ void DisplayPrimary::IdleTimeout() {
 void DisplayPrimary::ThermalEvent(int64_t thermal_level) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   comp_manager_->ProcessThermalEvent(display_comp_ctx_, thermal_level);
+}
+
+void DisplayPrimary::IdlePowerCollapse() {
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
+  comp_manager_->ProcessIdlePowerCollapse(display_comp_ctx_);
 }
 
 DisplayError DisplayPrimary::GetPanelBrightness(int *level) {
