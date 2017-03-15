@@ -34,7 +34,7 @@ namespace sdm {
 class HWCDisplayNull : public HWCDisplay {
  public:
   static int Create(CoreInterface *core_intf, hwc_procs_t const **hwc_procs,
-                    HWCDisplay **hwc_display);
+                    DisplayType display_type, HWCDisplay **hwc_display);
   static void Destroy(HWCDisplay *hwc_display);
   virtual int Init();
   virtual int Deinit();
@@ -95,7 +95,7 @@ class HWCDisplayNull : public HWCDisplay {
 
 
  private:
-  HWCDisplayNull(CoreInterface *core_intf, hwc_procs_t const **hwc_procs);
+  HWCDisplayNull(CoreInterface *core_intf, hwc_procs_t const **hwc_procs, DisplayType display_type);
   uint32_t x_res_ = 1920;
   uint32_t y_res_ = 1080;
 };

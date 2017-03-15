@@ -122,7 +122,11 @@ DisplayError ResourceDefault::RegisterDisplay(DisplayType type,
       hw_block_id = kHWHDMI;
     }
     break;
-
+  case kTertiary:
+    if (!hw_block_ctx_[kHWTertiary].is_in_use) {
+      hw_block_id = kHWTertiary;
+    }
+    break;
   default:
     DLOGW("RegisterDisplay, invalid type %d", type);
     return kErrorParameters;

@@ -34,11 +34,13 @@
 
 namespace sdm {
 
-HWVirtual::HWVirtual(BufferSyncHandler *buffer_sync_handler, HWInfoInterface *hw_info_intf)
+HWVirtual::HWVirtual(BufferSyncHandler *buffer_sync_handler, HWInfoInterface *hw_info_intf,
+                     DisplayType display_type)
   : HWDevice(buffer_sync_handler) {
   HWDevice::device_type_ = kDeviceVirtual;
   HWDevice::device_name_ = "Virtual Display Device";
   HWDevice::hw_info_intf_ = hw_info_intf;
+  HWDevice::display_type_ = display_type;
 }
 
 DisplayError HWVirtual::Init() {

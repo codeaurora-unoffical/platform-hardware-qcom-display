@@ -96,8 +96,7 @@ void HWCDisplayVirtual::Destroy(HWCDisplay *hwc_display) {
 }
 
 HWCDisplayVirtual::HWCDisplayVirtual(CoreInterface *core_intf, hwc_procs_t const **hwc_procs)
-  : HWCDisplay(core_intf, hwc_procs, kVirtual, HWC_DISPLAY_VIRTUAL, false, NULL,
-               DISPLAY_CLASS_VIRTUAL) {
+  : HWCDisplay(core_intf, hwc_procs, kVirtual, false, NULL, DISPLAY_CLASS_VIRTUAL, false) {
 }
 
 int HWCDisplayVirtual::Init() {

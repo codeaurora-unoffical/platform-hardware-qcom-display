@@ -115,6 +115,8 @@ HWCSession::HWCSession(const hw_module_t *module) {
 int HWCSession::Init() {
   int status = -EINVAL;
   const char *qservice_name = "display.qservice";
+  DisplayType type;
+  bool pluggable = false;
 
   // Start QService and connect to it.
   qService::QService::init();
@@ -147,29 +149,72 @@ int HWCSession::Init() {
       is_hdmi_primary_ = true;
       if (hw_disp_info.is_connected) {
         status = HWCDisplayExternal::Create(core_intf_, &hwc_procs_, qservice_,
-                                            &hwc_display_[HWC_DISPLAY_PRIMARY]);
+                                            hw_disp_info.type, &hwc_display_[HWC_DISPLAY_PRIMARY]);
         is_hdmi_yuv_ = IsDisplayYUV(HWC_DISPLAY_PRIMARY);
       } else {
         // NullDisplay simply closes all its fences, and advertizes a standard
         // resolution to SurfaceFlinger
-        status = HWCDisplayNull::Create(core_intf_, &hwc_procs_,
+        status = HWCDisplayNull::Create(core_intf_, &hwc_procs_, hw_disp_info.type,
                                         &hwc_display_[HWC_DISPLAY_PRIMARY]);
       }
     } else {
       // Create and power on primary display
       status = HWCDisplayPrimary::Create(core_intf_, &buffer_allocator_, &hwc_procs_, qservice_,
-                                         &hwc_display_[HWC_DISPLAY_PRIMARY]);
+                                         hw_disp_info.type, &hwc_display_[HWC_DISPLAY_PRIMARY]);
     }
   } else {
     // Create and power on primary display
     status = HWCDisplayPrimary::Create(core_intf_, &buffer_allocator_, &hwc_procs_, qservice_,
-                                       &hwc_display_[HWC_DISPLAY_PRIMARY]);
+                                       hw_disp_info.type, &hwc_display_[HWC_DISPLAY_PRIMARY]);
   }
 
-  if (status) {
-    CoreInterface::DestroyCore();
-    return status;
+  for (uint32_t i = HWC_DISPLAY_EXTERNAL; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i ++) {
+    hwc_display_[i] = NULL;
+    type = (DisplayType) i;
+    DLOGI("Create Primary for display %d", i);
+    error = core_intf_->GetDisplayHotplugInfo(type, &pluggable);
+    if (error != kErrorNone) {
+      DLOGI("display %d not exist or not connected", i);
+      error = kErrorNone;
+      hwc_display_[i] = NULL;
+      continue;
+    }
+    if (pluggable) {
+      // Do not create any pluggable display during init 
+      continue;
+    }
+    status = HWCDisplayPrimary::Create(core_intf_, &buffer_allocator_, &hwc_procs_, qservice_,
+                                       type, &hwc_display_[i]);
+    if (status) {
+      DLOGE("Creation failed for display %d failed, status=%d", i, status);
+      error = kErrorHardware;
+      break;
+    }
+    if (type != kPrimary) {
+      // For display that's not pluggable but not primary display,
+      // SF is assuming it's unblanked already, driver needs to call
+      // set power mode internally
+      status = hwc_display_[i]->SetPowerMode(HWC_POWER_MODE_NORMAL);
+      if (status) {
+        DLOGE("Display %d failed to power on, status=%d", i, status);
+        error = kErrorHardware;
+        break;
+      }
+    }
   }
+
+  if (error != kErrorNone) {
+    // clean up if there is error during display creation
+    for (uint32_t i = 0; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i ++) {
+      if (hwc_display_[i] != NULL) {
+        HWCDisplayPrimary::Destroy(hwc_display_[i]);
+        hwc_display_[i] = NULL;
+      }
+    }
+    CoreInterface::DestroyCore();
+    return -EINVAL;
+  }
+
 
   color_mgr_ = HWCColorManager::CreateColorManager();
   if (!color_mgr_) {
@@ -178,8 +223,12 @@ int HWCSession::Init() {
 
   if (pthread_create(&uevent_thread_, NULL, &HWCUeventThread, this) < 0) {
     DLOGE("Failed to start = %s, error = %s", uevent_thread_name_, strerror(errno));
-    HWCDisplayPrimary::Destroy(hwc_display_[HWC_DISPLAY_PRIMARY]);
-    hwc_display_[HWC_DISPLAY_PRIMARY] = 0;
+    for (uint32_t i = 0; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i ++) {
+      if (hwc_display_[i] != NULL) {
+         HWCDisplayPrimary::Destroy(hwc_display_[i]);
+         hwc_display_[i] = 0;
+      }
+    }
     CoreInterface::DestroyCore();
     return -errno;
   }
@@ -189,8 +238,13 @@ int HWCSession::Init() {
 }
 
 int HWCSession::Deinit() {
-  HWCDisplayPrimary::Destroy(hwc_display_[HWC_DISPLAY_PRIMARY]);
-  hwc_display_[HWC_DISPLAY_PRIMARY] = 0;
+  for (uint32_t i = 0; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i ++) {
+    if (hwc_display_[i] != 0) {
+      HWCDisplayPrimary::Destroy(hwc_display_[i]);
+      hwc_display_[i] = 0;
+    }
+  }
+
   if (color_mgr_) {
     color_mgr_->DestroyColorManager();
   }
@@ -638,7 +692,7 @@ int HWCSession::ConnectDisplay(int disp, hwc_display_contents_1_t *content_list)
 
   if (disp == HWC_DISPLAY_EXTERNAL) {
     status = HWCDisplayExternal::Create(core_intf_, &hwc_procs_, primary_width, primary_height,
-                                        qservice_, false, &hwc_display_[disp]);
+                                        qservice_, false, kHDMI, &hwc_display_[disp]);
     connected_displays_[HWC_DISPLAY_EXTERNAL] = 1;
   } else if (disp == HWC_DISPLAY_VIRTUAL) {
     status = HWCDisplayVirtual::Create(core_intf_, &hwc_procs_, primary_width, primary_height,
@@ -1460,7 +1514,7 @@ int HWCSession::HotPlugHandler(bool connected) {
         // framebuffer resolution once it reads it at bootup. So we always have to have the NULL
         // display/external display both at the bootup resolution.
         int status = HWCDisplayExternal::Create(core_intf_, &hwc_procs_, primary_width,
-                                                primary_height, qservice_, true,
+                                                primary_height, qservice_, true, kHDMI,
                                                 &hwc_display_[HWC_DISPLAY_PRIMARY]);
         if (status) {
           DLOGE("Could not create external display");
@@ -1520,7 +1574,7 @@ int HWCSession::HotPlugHandler(bool connected) {
 
         HWCDisplayNull *null_display;
 
-        int status = HWCDisplayNull::Create(core_intf_, &hwc_procs_,
+        int status = HWCDisplayNull::Create(core_intf_, &hwc_procs_, kHDMI,
                                             reinterpret_cast<HWCDisplay **>(&null_display));
 
         if (status) {

@@ -196,6 +196,13 @@ class CoreInterface {
    */
     virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info) = 0;
 
+  /*! @brief Method to check if a display is pluggable or not.
+
+    @param[in] type indicate the display type
+    @param[out] bool indicate the it support hotplug or not
+    @return \link DisplayError \endlink
+   */
+   virtual DisplayError GetDisplayHotplugInfo(DisplayType type, bool *hotpluggable) = 0;
 
  protected:
   virtual ~CoreInterface() { }

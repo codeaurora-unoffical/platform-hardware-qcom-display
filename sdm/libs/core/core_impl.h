@@ -60,6 +60,7 @@ class CoreImpl : public CoreInterface {
   virtual DisplayError DestroyDisplay(DisplayInterface *intf);
   virtual DisplayError SetMaxBandwidthMode(HWBwModes mode);
   virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info);
+  virtual DisplayError GetDisplayHotplugInfo(DisplayType type, bool *hotpluggable);
 
  protected:
   Locker locker_;
@@ -73,6 +74,7 @@ class CoreImpl : public CoreInterface {
   ExtensionInterface *extension_intf_ = NULL;
   CreateExtensionInterface create_extension_intf_ = NULL;
   DestroyExtensionInterface destroy_extension_intf_ = NULL;
+  HWDisplayInfo hw_disp_;
 };
 
 }  // namespace sdm

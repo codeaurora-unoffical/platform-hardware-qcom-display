@@ -71,11 +71,13 @@ using std::string;
 using std::to_string;
 using std::fstream;
 
-HWPrimary::HWPrimary(BufferSyncHandler *buffer_sync_handler, HWInfoInterface *hw_info_intf)
+HWPrimary::HWPrimary(BufferSyncHandler *buffer_sync_handler, HWInfoInterface *hw_info_intf,
+                     DisplayType display_type)
   : HWDevice(buffer_sync_handler) {
   HWDevice::device_type_ = kDevicePrimary;
   HWDevice::device_name_ = "Primary Display Device";
   HWDevice::hw_info_intf_ = hw_info_intf;
+  HWDevice::display_type_ = display_type;
 }
 
 DisplayError HWPrimary::Init() {

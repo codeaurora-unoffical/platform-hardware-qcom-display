@@ -43,6 +43,9 @@ class HWInfo: public HWInfoInterface {
  public:
   virtual DisplayError GetHWResourceInfo(HWResourceInfo *hw_resource);
   virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info);
+  virtual int ParseLine(const char *input, char *tokens[], const uint32_t max_token,
+                        uint32_t *count);
+  virtual DisplayError GetHWDisplayInfo(HWDisplayInfo *hw_disp);
 
  private:
   virtual DisplayError GetHWRotatorInfo(HWResourceInfo *hw_resource);

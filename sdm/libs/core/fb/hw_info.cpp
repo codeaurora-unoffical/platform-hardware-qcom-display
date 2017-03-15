@@ -353,6 +353,150 @@ DisplayError HWInfo::GetHWResourceInfo(HWResourceInfo *hw_resource) {
   return kErrorNone;
 }
 
+int HWInfo::ParseLine(const char *input, char *tokens[], const uint32_t max_token,
+                        uint32_t *count) {
+  char *tmp_token = NULL;
+  char *temp_ptr;
+			  uint32_t index = 0;
+  const char *delim = ", =\n";
+  if (!input) {
+    return -1;
+  }
+  tmp_token = strtok_r(const_cast<char *>(input), delim, &temp_ptr);
+  while (tmp_token && index < max_token) {
+    tokens[index++] = tmp_token;
+    tmp_token = strtok_r(NULL, delim, &temp_ptr);
+  }
+  *count = index;
+
+  return 0;
+}
+
+DisplayError HWInfo::GetHWDisplayInfo(HWDisplayInfo *hw_disp) {	
+  static HWDisplayInfo hw_disp_cache_;
+  if (hw_disp_cache_.max_disp > 0) {
+    hw_disp->max_disp = hw_disp_cache_.max_disp;
+    for (int i = 0; i < kVirtual; i ++) {
+      hw_disp->hw_display_type_info[i].node_num = hw_disp_cache_.hw_display_type_info[i].node_num;
+      hw_disp->hw_display_type_info[i].is_hotplug = hw_disp_cache_.hw_display_type_info[i].is_hotplug;
+      hw_disp->hw_display_type_info[i].hw_block_type = hw_disp_cache_.hw_display_type_info[i].hw_block_type;
+    }
+
+    return kErrorNone;
+  }
+
+  const char *disp_fb_path = "/sys/class/graphics/fb";
+  uint32_t token_count = 0;
+  const uint32_t max_count = 10;
+  char *tokens[max_count] = { NULL };
+  int node_usage = 0;
+
+  hw_disp->max_disp = 0;
+  for (int i = 0; i < kVirtual; i ++) {
+    int display_id = -1;
+    bool pluggable = false;
+
+    string file_name = disp_fb_path + to_string(i) + "/msm_fb_panel_info";
+    Sys::fstream fs (file_name, fstream::in);
+    if (fs.is_open()) {
+      string line;
+        while(Sys::getline_(fs, line)) {
+        if (!ParseLine(line.c_str(), tokens, max_count, &token_count)) {
+          if (!strncmp(tokens[0], "display_id", strlen("display_id"))) {
+            if ((token_count > 1) && (!strncmp(tokens[1], "primary", strlen("primary")))) {
+              display_id = kPrimary;
+            } else if ((token_count > 1) &&
+                       (!strncmp(tokens[1], "secondary", strlen("secondary")))) {
+              display_id = kHDMI;
+            } else if ((token_count > 1) &&
+                       (!strncmp(tokens[1], "tertiary", strlen("tertiary")))) {
+              display_id = kTertiary;
+            } else {
+              // not valid ID, exit the check
+              DLOGI("Invalid Display ID %s", tokens[1]);
+              break;
+            }
+          } else if (!strncmp(tokens[0], "is_pluggable", strlen("is_pluggable"))) {
+            if ((token_count > 1) && (!strncmp(tokens[1], "1", 1)))
+              pluggable = true;
+          }
+        }
+      }
+    }
+
+    if (display_id < 0) {
+      // If display_id is not populated from driver, then assign display based 
+      // on fb index and type 
+        string file_name = "/sys/devices/virtual/graphics/fb" + to_string(i) + "/msm_fb_type";
+        Sys::fstream fs (file_name, fstream::in);
+        if (fs.is_open()) {
+          string line;
+          if (Sys::getline_(fs, line)) {
+          if ((!strncmp(line.c_str(), "mipi dsi video panel", strlen("mipi dsi video panel"))) ||
+             (!strncmp(line.c_str(), "mipi dsi cmd panel", strlen("mipi dsi cmd panel"))) ||
+             (!strncmp(line.c_str(), "dtv panel", strlen("dtv panel")))) {
+            hw_disp->max_disp++;
+            hw_disp->hw_display_type_info[i].node_num = i;
+            if (node_usage == 0) {
+              display_id = kPrimary;
+              node_usage++;
+            } else if (node_usage == 1) {
+              display_id = kHDMI;
+              node_usage++;
+            } else if (node_usage == 2) {
+              display_id = kTertiary;
+              node_usage++;
+            } else {
+              DLOGI("Max display reached");
+            }
+
+            if (!strncmp(line.c_str(), "dtv panel", strlen("dtv panel")))
+              pluggable = true;
+            else
+              pluggable = false;
+          } else {
+            // ToDo: add other panel type support 
+            DLOGE("Display type not supported\n" );
+          }
+        }
+      }
+    }
+
+    if (display_id >= 0) {
+      DLOGI("Node %d hw_block %d hotplug %d", i, display_id, pluggable);
+      hw_disp->max_disp++;
+      hw_disp_cache_.max_disp++;
+      hw_disp->hw_display_type_info[display_id].node_num = i;
+      hw_disp_cache_.hw_display_type_info[display_id].node_num = i;
+      hw_disp->hw_display_type_info[display_id].hw_block_type = (HWBlockType)display_id;
+      hw_disp_cache_.hw_display_type_info[display_id].hw_block_type = (HWBlockType)display_id;
+      if ((display_id == kPrimary) && (pluggable == true)) {
+        hw_disp->hw_display_type_info[display_id].is_hotplug = false;
+        hw_disp_cache_.hw_display_type_info[display_id].is_hotplug = false;
+        DLOGW("Primary display cannot be pluggable, overrided as hardwired display");
+      } else {
+        hw_disp->hw_display_type_info[display_id].is_hotplug = pluggable;
+        hw_disp_cache_.hw_display_type_info[display_id].is_hotplug = pluggable;
+      }
+    }
+  }
+
+  // if no display info, set the default value to allow primary display init 
+  if (hw_disp->max_disp == 0) {
+    DLOGI("No valid panel info is found. Use default value that only init primary display");
+    hw_disp->max_disp = 1;
+    hw_disp_cache_.max_disp = 1;
+    hw_disp->hw_display_type_info[0].node_num = kPrimary;
+    hw_disp_cache_.hw_display_type_info[0].node_num = kPrimary;
+    hw_disp->hw_display_type_info[0].is_hotplug = false;
+    hw_disp_cache_.hw_display_type_info[0].is_hotplug = false;
+    hw_disp->hw_display_type_info[0].hw_block_type = (HWBlockType)kHWPrimary;
+    hw_disp_cache_.hw_display_type_info[0].hw_block_type = (HWBlockType)kHWPrimary;
+  }
+
+  return kErrorNone;
+}
+
 DisplayError HWInfo::GetHWRotatorInfo(HWResourceInfo *hw_resource) {
   if (GetMDSSRotatorInfo(hw_resource) != kErrorNone)
     return GetV4L2RotatorInfo(hw_resource);

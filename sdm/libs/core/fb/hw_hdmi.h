@@ -37,7 +37,8 @@ using std::vector;
 
 class HWHDMI : public HWDevice {
  public:
-  HWHDMI(BufferSyncHandler *buffer_sync_handler, HWInfoInterface *hw_info_intf);
+  HWHDMI(BufferSyncHandler *buffer_sync_handler, HWInfoInterface *hw_info_intf, 
+      DisplayType display_type);
 
  protected:
   enum HWFramerateUpdate {
@@ -89,6 +90,7 @@ class HWHDMI : public HWDevice {
   virtual DisplayError SetRefreshRate(uint32_t refresh_rate);
 
  private:
+  DisplayError PopulateDisplayAttributes();
   DisplayError ReadEDIDInfo();
   void ReadScanInfo();
   HWScanSupport MapHWScanSupport(uint32_t value);

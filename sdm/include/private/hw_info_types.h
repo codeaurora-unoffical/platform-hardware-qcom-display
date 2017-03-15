@@ -53,6 +53,7 @@ enum HWDeviceType {
 enum HWBlockType {
   kHWPrimary,
   kHWHDMI,
+  kHWTertiary,
   kHWWriteback0,
   kHWWriteback1,
   kHWWriteback2,
@@ -137,6 +138,17 @@ struct HWDestScalarInfo {
   uint32_t max_input_width = 0;
   uint32_t max_output_width = 0;
   uint32_t max_scale_up = 1;
+};
+
+struct HWDisplayTypeInfo {
+  int node_num = -1;
+			  HWBlockType hw_block_type = kHWBlockMax;
+  bool is_hotplug = false;
+};
+
+struct HWDisplayInfo {
+  uint32_t max_disp = 0;
+  HWDisplayTypeInfo hw_display_type_info[kDisplayMax];
 };
 
 struct HWResourceInfo {

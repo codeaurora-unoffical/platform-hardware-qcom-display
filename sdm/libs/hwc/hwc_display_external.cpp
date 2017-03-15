@@ -40,21 +40,21 @@
 namespace sdm {
 
 int HWCDisplayExternal::Create(CoreInterface *core_intf, hwc_procs_t const **hwc_procs,
-                               qService::QService *qservice, HWCDisplay **hwc_display) {
-  return Create(core_intf, hwc_procs, 0, 0, qservice, false, hwc_display);
+                               qService::QService *qservice, DisplayType display_type, HWCDisplay **hwc_display) {
+  return Create(core_intf, hwc_procs, 0, 0, qservice, false, display_type, hwc_display);
 }
 
 int HWCDisplayExternal::Create(CoreInterface *core_intf, hwc_procs_t const **hwc_procs,
                                uint32_t primary_width, uint32_t primary_height,
                                qService::QService *qservice, bool use_primary_res,
-                               HWCDisplay **hwc_display) {
+                               DisplayType display_type, HWCDisplay **hwc_display) {
   uint32_t external_width = 0;
   uint32_t external_height = 0;
   int drc_enabled = 0;
   int drc_reset_fps_enabled = 0;
   DisplayError error = kErrorNone;
 
-  HWCDisplay *hwc_display_external = new HWCDisplayExternal(core_intf, hwc_procs, qservice);
+  HWCDisplay *hwc_display_external = new HWCDisplayExternal(core_intf, hwc_procs, qservice, display_type);
   int status = hwc_display_external->Init();
   if (status) {
     delete hwc_display_external;
@@ -105,9 +105,9 @@ void HWCDisplayExternal::Destroy(HWCDisplay *hwc_display) {
 }
 
 HWCDisplayExternal::HWCDisplayExternal(CoreInterface *core_intf, hwc_procs_t const **hwc_procs,
-                                       qService::QService *qservice)
-  : HWCDisplay(core_intf, hwc_procs, kHDMI, HWC_DISPLAY_EXTERNAL, false, qservice,
-               DISPLAY_CLASS_EXTERNAL) {
+                                       qService::QService *qservice, DisplayType display_type)
+  : HWCDisplay(core_intf, hwc_procs, display_type, false, qservice,
+               DISPLAY_CLASS_EXTERNAL, true) {
 }
 
 int HWCDisplayExternal::Prepare(hwc_display_contents_1_t *content_list) {

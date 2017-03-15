@@ -32,11 +32,11 @@
 namespace sdm {
 
 int HWCDisplayNull::Create(CoreInterface *core_intf, hwc_procs_t const **hwc_procs,
-                           HWCDisplay **hwc_display) {
+                           DisplayType display_type, HWCDisplay **hwc_display) {
   int status;
 
   DLOGI("Null display is being created");
-  HWCDisplayNull *hwc_display_null = new HWCDisplayNull(core_intf, hwc_procs);
+  HWCDisplayNull *hwc_display_null = new HWCDisplayNull(core_intf, hwc_procs, display_type);
 
   status = hwc_display_null->Init();
   if (status) {
@@ -57,9 +57,9 @@ void HWCDisplayNull::Destroy(HWCDisplay *hwc_display) {
 
 // We pass the display type as HWC_DISPLAY_PRIMARY to HWCDisplay, but since we override
 // and don't chain to HWCDisplay::Init(), that type does not actually get used.
-HWCDisplayNull::HWCDisplayNull(CoreInterface *core_intf, hwc_procs_t const **hwc_procs)
-  : HWCDisplay(core_intf, hwc_procs, kPrimary, HWC_DISPLAY_PRIMARY, false, NULL,
-               DISPLAY_CLASS_NULL) {
+HWCDisplayNull::HWCDisplayNull(CoreInterface *core_intf, hwc_procs_t const **hwc_procs,
+                               DisplayType display_type)
+  : HWCDisplay(core_intf, hwc_procs, display_type, false, NULL, DISPLAY_CLASS_NULL, false) {
 }
 
 int HWCDisplayNull::Init() {

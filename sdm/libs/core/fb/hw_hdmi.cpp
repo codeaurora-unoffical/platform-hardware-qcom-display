@@ -79,25 +79,80 @@ static bool MapHDMIDisplayTiming(const msm_hdmi_mode_timing_info *mode,
   return true;
 }
 
-HWHDMI::HWHDMI(BufferSyncHandler *buffer_sync_handler,  HWInfoInterface *hw_info_intf)
+DisplayError HWHDMI::PopulateDisplayAttributes() {
+  DTRACE_SCOPED();
+
+  // Variable screen info
+  fb_var_screeninfo var_screeninfo = {};
+
+  if (Sys::ioctl_(device_fd_, FBIOGET_VSCREENINFO, &var_screeninfo) < 0) {
+    IOCTL_LOGE(FBIOGET_VSCREENINFO, device_type_);
+    return kErrorHardware;
+  }
+
+  // Frame rate
+  msmfb_metadata meta_data = {};
+  meta_data.op = metadata_op_frame_rate;
+  if (Sys::ioctl_(device_fd_, MSMFB_METADATA_GET, &meta_data) < 0) {
+    IOCTL_LOGE(MSMFB_METADATA_GET, device_type_);
+    return kErrorHardware;
+  }
+
+  // If driver doesn't return width/height information, default to 320 dpi
+  if (INT(var_screeninfo.width) <= 0 || INT(var_screeninfo.height) <= 0) {
+    var_screeninfo.width  = UINT32(((FLOAT(var_screeninfo.xres) * 25.4f)/320.0f) + 0.5f);
+    var_screeninfo.height = UINT32(((FLOAT(var_screeninfo.yres) * 25.4f)/320.0f) + 0.5f);
+    DLOGW("Driver doesn't report panel physical width and height - defaulting to 320dpi");
+  }
+
+  display_attributes_.x_pixels = var_screeninfo.xres;
+  display_attributes_.y_pixels = var_screeninfo.yres;
+  display_attributes_.v_front_porch = var_screeninfo.lower_margin;
+  display_attributes_.v_back_porch = var_screeninfo.upper_margin;
+  display_attributes_.v_pulse_width = var_screeninfo.vsync_len;
+  uint32_t h_blanking = var_screeninfo.right_margin + var_screeninfo.left_margin +
+      var_screeninfo.hsync_len;
+  display_attributes_.h_total = var_screeninfo.xres + h_blanking;
+  display_attributes_.x_dpi =
+      (FLOAT(var_screeninfo.xres) * 25.4f) / FLOAT(var_screeninfo.width);
+  display_attributes_.y_dpi =
+      (FLOAT(var_screeninfo.yres) * 25.4f) / FLOAT(var_screeninfo.height);
+  display_attributes_.fps = meta_data.data.panel_frame_rate;
+  display_attributes_.vsync_period_ns = UINT32(1000000000L / display_attributes_.fps);
+  display_attributes_.is_device_split = (hw_panel_info_.split_info.left_split ||
+      (var_screeninfo.xres > hw_resource_.max_mixer_width)) ? true : false;
+  display_attributes_.h_total += display_attributes_.is_device_split ? h_blanking : 0;
+  return kErrorNone;
+}
+
+HWHDMI::HWHDMI(BufferSyncHandler *buffer_sync_handler,  HWInfoInterface *hw_info_intf,
+               DisplayType display_type)
   : HWDevice(buffer_sync_handler), hw_scan_info_(), active_config_index_(0) {
   HWDevice::device_type_ = kDeviceHDMI;
   HWDevice::device_name_ = "HDMI Display Device";
   HWDevice::hw_info_intf_ = hw_info_intf;
+  HWDevice::display_type_ = display_type;
 }
 
 DisplayError HWHDMI::Init() {
   DisplayError error = kErrorNone;
-
-  SetSourceProductInformation("vendor_name", "ro.product.manufacturer");
-  SetSourceProductInformation("product_description", "ro.product.name");
 
   error = HWDevice::Init();
   if (error != kErrorNone) {
     return error;
   }
 
+  SetSourceProductInformation("vendor_name", "ro.product.manufacturer");
+  SetSourceProductInformation("product_description", "ro.product.name");
+
   mdp_dest_scalar_data_.resize(hw_resource_.hw_dest_scalar_info.count);
+
+  error = PopulateDisplayAttributes();
+  if (error != kErrorNone) {
+    return error;
+  }
+
+  UpdateMixerAttributes();
 
   error = ReadEDIDInfo();
   if (error != kErrorNone) {
@@ -537,7 +592,7 @@ bool HWHDMI::IsResolutionFilePresent() {
 void HWHDMI::SetSourceProductInformation(const char *node, const char *name) {
   char property_value[kMaxStringLength];
   char sys_fs_path[kMaxStringLength];
-  int hdmi_node_index = GetFBNodeIndex(kDeviceHDMI);
+  int hdmi_node_index = GetFBNodeIndex(display_type_);
   if (hdmi_node_index < 0) {
     return;
   }
