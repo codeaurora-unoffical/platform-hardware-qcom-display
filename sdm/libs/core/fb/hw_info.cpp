@@ -684,5 +684,35 @@ DisplayError HWInfo::GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_dis
   return kErrorNone;
 }
 
+DisplayError HWInfo::GetDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info, uint32_t node) {
+  Sys::fstream fs("/sys/devices/virtual/graphics/fb" +
+      to_string(node) + "/msm_fb_type", fstream::in);
+
+  if (!fs.is_open()) {
+    return kErrorHardware;
+  }
+
+  string line;
+  if (!Sys::getline_(fs, line)) {
+    return kErrorHardware;
+  }
+
+  if (!strncmp(line.c_str(), "dtv panel", strlen("dtv panel"))) {
+    hw_disp_info->type = kHDMI;
+    DLOGI("display %d is HDMI", node);
+  } else if (!strncmp(line.c_str(), "writeback panel", strlen("writeback panel"))) {
+    hw_disp_info->type = kVirtual;
+    DLOGI("display %d is Virtual", node);
+  } else {
+    hw_disp_info->type = kPrimary;
+    DLOGI("display %d internal display", node);
+  }
+
+  fs.close();
+
+  return kErrorNone;
+}
+
+
 }  // namespace sdm
 

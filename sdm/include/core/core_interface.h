@@ -196,6 +196,19 @@ class CoreInterface {
    */
     virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info) = 0;
 
+  /*! @brief Method to get interface type of specific display.
+
+    @details Client shall use this method to determine if the display is HDMI, virtual or DSI.
+
+    @param[in] hw_disp_info structure that this method will fill with type info only.
+
+    @param[in] node the fb node number that the type info applicable.
+
+    @return \link DisplayError \endlink
+
+   */
+    virtual DisplayError GetDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info, uint32_t node) = 0;
+
   /*! @brief Method to check if a display is pluggable or not.
 
     @param[in] type indicate the display type

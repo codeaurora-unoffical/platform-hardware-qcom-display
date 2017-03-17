@@ -171,6 +171,21 @@ int HWCSession::Init() {
   for (uint32_t i = HWC_DISPLAY_EXTERNAL; i < HWC_NUM_PHYSICAL_DISPLAY_TYPES; i ++) {
     hwc_display_[i] = NULL;
     type = (DisplayType) i;
+
+    // check the interface type
+    error = core_intf_->GetDisplayInterfaceType(&hw_disp_info, i);
+    if (error != kErrorNone) {
+      DLOGI("display %d GetDisplayInterfaceType failed, assume it is not connected", i);
+      error = kErrorNone;
+      hwc_display_[i] = NULL;
+      continue;
+    } else if (hw_disp_info.type == kVirtual) {
+      DLOGI("Skip display %d because it is virtual display", i);
+      error = kErrorNone;
+      hwc_display_[i] = NULL;
+      continue;
+    }
+
     DLOGI("Create Primary for display %d", i);
     error = core_intf_->GetDisplayHotplugInfo(type, &pluggable);
     if (error != kErrorNone) {

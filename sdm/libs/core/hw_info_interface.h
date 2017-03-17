@@ -38,6 +38,7 @@ class HWInfoInterface {
   virtual DisplayError GetHWResourceInfo(HWResourceInfo *hw_resource) = 0;
   virtual DisplayError GetHWDisplayInfo(HWDisplayInfo *hw_disp) = 0;
   virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info) = 0;
+  virtual DisplayError GetDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info, uint32_t node) = 0;
 
  protected:
   virtual ~HWInfoInterface() { }

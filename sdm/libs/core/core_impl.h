@@ -60,6 +60,7 @@ class CoreImpl : public CoreInterface {
   virtual DisplayError DestroyDisplay(DisplayInterface *intf);
   virtual DisplayError SetMaxBandwidthMode(HWBwModes mode);
   virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info);
+  virtual DisplayError GetDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info, uint32_t node);
   virtual DisplayError GetDisplayHotplugInfo(DisplayType type, bool *hotpluggable);
 
  protected:

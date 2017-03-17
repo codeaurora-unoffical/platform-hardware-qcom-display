@@ -194,6 +194,10 @@ DisplayError CoreImpl::GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_d
   return hw_info_intf_->GetFirstDisplayInterfaceType(hw_disp_info);
 }
 
+DisplayError CoreImpl::GetDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info, uint32_t node) {
+  return hw_info_intf_->GetDisplayInterfaceType(hw_disp_info, node);
+}
+
 DisplayError CoreImpl::GetDisplayHotplugInfo(DisplayType type, bool *hotpluggable) {
   if ((type < 0) || (type > kDisplayMax)) {
     DLOGE("Display type %d not valid", type);
