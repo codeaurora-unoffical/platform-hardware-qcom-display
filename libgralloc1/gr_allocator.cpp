@@ -218,6 +218,9 @@ unsigned int Allocator::GetSize(const BufferDescriptor &descriptor, unsigned int
     case HAL_PIXEL_FORMAT_RAW10:
       size = ALIGN(alignedw * alignedh, SIZE_4K);
       break;
+    case HAL_PIXEL_FORMAT_RAW8:
+      size = alignedw * alignedh * 1;
+      break;
 
     // adreno formats
     case HAL_PIXEL_FORMAT_YCrCb_420_SP_ADRENO:  // NV21
@@ -402,6 +405,7 @@ int Allocator::GetYUVPlaneInfo(const private_handle_t *hnd, struct android_ycbcr
     case HAL_PIXEL_FORMAT_NV21_ZSL:
     case HAL_PIXEL_FORMAT_RAW16:
     case HAL_PIXEL_FORMAT_RAW10:
+    case HAL_PIXEL_FORMAT_RAW8:
       GetYuvSPPlaneInfo(hnd->base, width, height, 1, ycbcr);
       std::swap(ycbcr->cb, ycbcr->cr);
       break;
@@ -442,8 +446,6 @@ int Allocator::GetImplDefinedFormat(gralloc1_producer_usage_t prod_usage,
       gr_format = HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC;
     } else if (cons_usage & GRALLOC1_CONSUMER_USAGE_VIDEO_ENCODER) {
       gr_format = HAL_PIXEL_FORMAT_NV12_ENCODEABLE;  // NV12
-    } else if (prod_usage & GRALLOC1_PRODUCER_USAGE_PRIVATE_CAMERA_ZSL) {
-      gr_format = HAL_PIXEL_FORMAT_NV21_ZSL;  // NV21 ZSL
     } else if (cons_usage & GRALLOC1_CONSUMER_USAGE_CAMERA) {
       gr_format = HAL_PIXEL_FORMAT_YCrCb_420_SP;  // NV21
     } else if (prod_usage & GRALLOC1_PRODUCER_USAGE_CAMERA) {
@@ -776,6 +778,9 @@ void Allocator::GetAlignedWidthAndHeight(const BufferDescriptor &descriptor, uns
       break;
     case HAL_PIXEL_FORMAT_RAW10:
       aligned_w = ALIGN(width * 10 / 8, 16);
+      break;
+    case HAL_PIXEL_FORMAT_RAW8:
+      aligned_w = ALIGN(width, 8);
       break;
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_TILED:
       aligned_w = ALIGN(width, 128);

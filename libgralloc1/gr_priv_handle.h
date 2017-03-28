@@ -23,6 +23,7 @@
 #include <cutils/log.h>
 #include <hardware/gralloc1.h>
 #include <hardware/gralloc.h>
+#include <cinttypes>
 
 #define GRALLOC1_FUNCTION_PERFORM 0x00001000
 
@@ -160,6 +161,14 @@ struct private_handle_t : public native_handle_t {
     return 0;
   }
 
+  static void Dump(const private_handle_t *hnd) {
+    ALOGD("handle id:%" PRIu64 " wxh:%dx%d uwxuh:%dx%d size: %d fd:%d fd_meta:%d flags:0x%x"
+          "prod_usage:0x%" PRIx64" cons_usage:0x%" PRIx64 "format:0x%x",
+          hnd->id, hnd->width, hnd->height, hnd->unaligned_width, hnd->unaligned_height, hnd->size,
+          hnd->fd, hnd->fd_metadata, hnd->flags, hnd->producer_usage, hnd->consumer_usage,
+          hnd->format);
+  }
+
   int GetUnalignedWidth() const { return unaligned_width; }
 
   int GetUnalignedHeight() const { return unaligned_height; }
@@ -175,7 +184,7 @@ struct private_handle_t : public native_handle_t {
 
   gralloc1_producer_usage_t GetProducerUsage() const { return producer_usage; }
 
-  int GetBackingstore() const { return fd; }
+  uint64_t GetBackingstore() const { return id; }
 };
 
 #endif  // __GR_PRIV_HANDLE_H__

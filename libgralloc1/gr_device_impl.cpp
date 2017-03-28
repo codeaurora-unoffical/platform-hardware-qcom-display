@@ -29,6 +29,7 @@
 
 #include <cutils/log.h>
 #include <sync/sync.h>
+#include <algorithm>
 #include <sstream>
 #include <string>
 
@@ -100,16 +101,13 @@ int GrallocImpl::CloseDevice(hw_device_t *device) {
 }
 
 void GrallocImpl::GetCapabilities(struct gralloc1_device *device, uint32_t *out_count,
-                                  int32_t /*gralloc1_capability_t*/ *out_capabilities) {
-  if (!device) {
-    // Need to plan for adding more capabilities
-    if (out_capabilities == NULL) {
-      *out_count = 1;
-    } else {
-      *out_capabilities = GRALLOC1_CAPABILITY_TEST_ALLOCATE;
+                                  int32_t  /*gralloc1_capability_t*/ *out_capabilities) {
+  if (device != nullptr) {
+    if (out_capabilities != nullptr && *out_count > 0) {
+      out_capabilities[0] = GRALLOC1_CAPABILITY_TEST_ALLOCATE;
     }
+    *out_count = 1;
   }
-
   return;
 }
 
@@ -175,17 +173,19 @@ gralloc1_error_t GrallocImpl::Dump(gralloc1_device_t *device, uint32_t *out_size
     ALOGE("Gralloc Error : device=%p", (void *)device);
     return GRALLOC1_ERROR_BAD_DESCRIPTOR;
   }
+  const size_t max_dump_size = 8192;
   if (out_buffer == nullptr) {
-    *out_size = 1024;
+    *out_size = max_dump_size;
   } else {
     std::ostringstream os;
-    // TODO(user): implement in buffer manager
     os << "-------------------------------" << std::endl;
     os << "QTI gralloc dump:" << std::endl;
     os << "-------------------------------" << std::endl;
-    auto copy_size = os.str().size() < *out_size ? os.str().size() : *out_size;
-    std::copy_n(out_buffer, copy_size, os.str().begin());
-    *out_size = static_cast<uint32_t>(copy_size);
+    GrallocImpl const *dev = GRALLOC_IMPL(device);
+    dev->buf_mgr_->Dump(&os);
+    os << "-------------------------------" << std::endl;
+    auto copied = os.str().copy(out_buffer, std::min(os.str().size(), max_dump_size), 0);
+    *out_size = UINT(copied);
   }
 
   return GRALLOC1_ERROR_NONE;

@@ -46,6 +46,7 @@
 #include <utils/constants.h>
 #include <utils/debug.h>
 #include <utils/sys.h>
+#include <private/color_params.h>
 
 #include <algorithm>
 #include <string>
@@ -54,6 +55,7 @@
 
 #include "hw_device_drm.h"
 #include "hw_info_interface.h"
+#include "hw_color_manager_drm.h"
 
 #define __CLASS__ "HWDeviceDRM"
 
@@ -68,6 +70,7 @@ using sde_drm::DestroyDRMManager;
 using sde_drm::DRMDisplayType;
 using sde_drm::DRMDisplayToken;
 using sde_drm::DRMConnectorInfo;
+using sde_drm::DRMPPFeatureInfo;
 using sde_drm::DRMRect;
 using sde_drm::DRMBlendType;
 using sde_drm::DRMOps;
@@ -368,9 +371,11 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
 
   for (uint32_t i = 0; i < hw_layer_count; i++) {
     Layer &layer = hw_layer_info.hw_layers.at(i);
-    LayerBuffer &input_buffer = layer.input_buffer;
+    LayerBuffer *input_buffer = &layer.input_buffer;
     HWPipeInfo *left_pipe = &hw_layers->config[i].left_pipe;
     HWPipeInfo *right_pipe = &hw_layers->config[i].right_pipe;
+    HWRotatorSession *hw_rotator_session = &hw_layers->config[i].hw_rotator_session;
+    bool needs_rotation = false;
 
     // TODO(user): Add support for solid fill
     if (layer.flags.solid_fill) {
@@ -379,9 +384,16 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
 
     for (uint32_t count = 0; count < 2; count++) {
       HWPipeInfo *pipe_info = (count == 0) ? left_pipe : right_pipe;
+      HWRotateInfo *hw_rotate_info = &hw_rotator_session->hw_rotate_info[count];
+
+      if (hw_rotate_info->valid) {
+        input_buffer = &hw_rotator_session->output_buffer;
+        needs_rotation = true;
+      }
+
       if (pipe_info->valid) {
         uint32_t pipe_id = pipe_info->pipe_id;
-        if (input_buffer.fb_id == 0) {
+        if (input_buffer->fb_id == 0) {
           // We set these to 0 to clear any previous cycle's state from another buffer.
           // Unfortunately this layer will be skipped from validation because it's dimensions are
           // tied to fb_id which is not available yet.
@@ -400,24 +412,28 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
         DRMRect dst = {};
         SetRect(pipe_info->dst_roi, &dst);
         drm_atomic_intf_->Perform(DRMOps::PLANE_SET_DST_RECT, pipe_id, dst);
+
         uint32_t rot_bit_mask = 0;
-        if (layer.transform.flip_horizontal) {
-          rot_bit_mask |= 1 << DRM_REFLECT_X;
-        }
-        if (layer.transform.flip_vertical) {
-          rot_bit_mask |= 1 << DRM_REFLECT_Y;
+        // In case of rotation, rotator handles flips
+        if (!needs_rotation) {
+          if (layer.transform.flip_horizontal) {
+            rot_bit_mask |= 1 << DRM_REFLECT_X;
+          }
+          if (layer.transform.flip_vertical) {
+            rot_bit_mask |= 1 << DRM_REFLECT_Y;
+          }
         }
 
+        drm_atomic_intf_->Perform(DRMOps::PLANE_SET_ROTATION, pipe_id, rot_bit_mask);
         drm_atomic_intf_->Perform(DRMOps::PLANE_SET_H_DECIMATION, pipe_id,
                                   pipe_info->horizontal_decimation);
         drm_atomic_intf_->Perform(DRMOps::PLANE_SET_V_DECIMATION, pipe_id,
                                   pipe_info->vertical_decimation);
-        drm_atomic_intf_->Perform(DRMOps::PLANE_SET_ROTATION, pipe_id, rot_bit_mask);
-        drm_atomic_intf_->Perform(DRMOps::PLANE_SET_FB_ID, pipe_id, input_buffer.fb_id);
+        drm_atomic_intf_->Perform(DRMOps::PLANE_SET_FB_ID, pipe_id, input_buffer->fb_id);
         drm_atomic_intf_->Perform(DRMOps::PLANE_SET_CRTC, pipe_id, token_.crtc_id);
-        if (!validate && input_buffer.acquire_fence_fd >= 0) {
+        if (!validate && input_buffer->acquire_fence_fd >= 0) {
           drm_atomic_intf_->Perform(DRMOps::PLANE_SET_INPUT_FENCE, pipe_id,
-                                    input_buffer.acquire_fence_fd);
+                                    input_buffer->acquire_fence_fd);
         }
       }
     }
@@ -518,8 +534,14 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
   LayerStack *stack = hw_layer_info.stack;
   stack->retire_fence_fd = retire_fence;
 
-  for (Layer &layer : hw_layer_info.hw_layers) {
-    layer.input_buffer.release_fence_fd = Sys::dup_(release_fence);
+  for (uint32_t i = 0; i < hw_layer_info.hw_layers.size(); i++) {
+    Layer &layer = hw_layer_info.hw_layers.at(i);
+    HWRotatorSession *hw_rotator_session = &hw_layers->config[i].hw_rotator_session;
+    if (hw_rotator_session->hw_block_count) {
+      hw_rotator_session->output_buffer.release_fence_fd = Sys::dup_(release_fence);
+    } else {
+      layer.input_buffer.release_fence_fd = Sys::dup_(release_fence);
+    }
   }
 
   hw_layer_info.sync_handle = release_fence;
@@ -566,11 +588,47 @@ DisplayError HWDeviceDRM::SetCursorPosition(HWLayers *hw_layers, int x, int y) {
 }
 
 DisplayError HWDeviceDRM::GetPPFeaturesVersion(PPFeatureVersion *vers) {
-  return kErrorNotSupported;
+  struct DRMPPFeatureInfo info = {};
+
+  for (uint32_t i = 0; i < kMaxNumPPFeatures; i++) {
+    memset(&info, 0, sizeof(struct DRMPPFeatureInfo));
+    info.id = HWColorManagerDrm::ToDrmFeatureId(i);
+    if (info.id >= sde_drm::kPPFeaturesMax)
+      continue;
+    // use crtc_id_ = 0 since PP features are same across all CRTCs
+    drm_mgr_intf_->GetCrtcPPInfo(0, info);
+    vers->version[i] = HWColorManagerDrm::GetFeatureVersion(info);
+  }
+  return kErrorNone;
 }
 
 DisplayError HWDeviceDRM::SetPPFeatures(PPFeaturesConfig *feature_list) {
-  return kErrorNotSupported;
+  int ret = 0;
+  PPFeatureInfo *feature = NULL;
+  DRMPPFeatureInfo kernel_params = {};
+
+  while (true) {
+    ret = feature_list->RetrieveNextFeature(&feature);
+    if (ret)
+      break;
+
+    if (feature) {
+      DLOGV_IF(kTagDriverConfig, "feature_id = %d", feature->feature_id_);
+      if (!HWColorManagerDrm::GetDrmFeature[feature->feature_id_]) {
+        DLOGE("GetDrmFeature is not valid for feature %d", feature->feature_id_);
+        continue;
+      }
+      ret = HWColorManagerDrm::GetDrmFeature[feature->feature_id_](*feature, &kernel_params);
+      if (!ret)
+        drm_atomic_intf_->Perform(DRMOps::CRTC_SET_POST_PROC, token_.crtc_id, &kernel_params);
+      HWColorManagerDrm::FreeDrmFeatureData(&kernel_params);
+    }
+  }
+
+  // Once all features were consumed, then destroy all feature instance from feature_list,
+  feature_list->Reset();
+
+  return kErrorNone;
 }
 
 DisplayError HWDeviceDRM::SetVSyncState(bool enable) {
@@ -588,6 +646,10 @@ DisplayError HWDeviceDRM::SetRefreshRate(uint32_t refresh_rate) {
 }
 
 DisplayError HWDeviceDRM::SetPanelBrightness(int level) {
+  return kErrorNotSupported;
+}
+
+DisplayError HWDeviceDRM::CachePanelBrightness(int level) {
   return kErrorNotSupported;
 }
 
