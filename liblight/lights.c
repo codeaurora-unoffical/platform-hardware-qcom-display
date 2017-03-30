@@ -76,6 +76,9 @@ char const*const BLUE_BLINK_FILE
 char const*const PERSISTENCE_FILE
         = "/sys/class/graphics/fb0/msm_fb_persist_mode";
 
+char const*const PANEL_BL_EXTN_FILE
+        = "/sys/class/graphics/fb0/panel_bl_extn";
+
 /**
  * device methods
  */
@@ -347,9 +350,12 @@ static int open_lights(const struct hw_module_t* module, char const* name,
             property_get("persist.display.max_brightness", property, "255");
             g_brightness_max = atoi(property);
             set_brightness_ext_init();
+            write_int(PANEL_BL_EXTN_FILE, 1);
             set_light = set_light_backlight_ext;
-        } else
+        } else {
+            write_int(PANEL_BL_EXTN_FILE, 0);
             set_light = set_light_backlight;
+        }
     } else if (0 == strcmp(LIGHT_ID_BATTERY, name))
         set_light = set_light_battery;
     else if (0 == strcmp(LIGHT_ID_NOTIFICATIONS, name))
