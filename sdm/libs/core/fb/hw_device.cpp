@@ -66,13 +66,19 @@ DisplayError HWInterface::Create(DisplayType type, HWInfoInterface *hw_info_intf
                                         HWInterface **intf) {
   DisplayError error = kErrorNone;
   HWDevice *hw = nullptr;
+  HWDisplayInfo hw_disp;
+  hw_info_intf->GetHWDisplayInfo(&hw_disp);
 
   switch (type) {
     case kPrimary:
       hw = new HWPrimary(buffer_sync_handler, hw_info_intf, type);
       break;
     case kHDMI:
-      hw = new HWHDMI(buffer_sync_handler, hw_info_intf, type);
+      if(!hw_disp.hw_display_type_info[type].is_hotplug){
+         hw = new HWPrimary(buffer_sync_handler, hw_info_intf, type);
+      } else {
+         hw = new HWHDMI(buffer_sync_handler, hw_info_intf, type);
+      }
       break;
     case kTertiary:
       hw = new HWPrimary(buffer_sync_handler, hw_info_intf, type);
