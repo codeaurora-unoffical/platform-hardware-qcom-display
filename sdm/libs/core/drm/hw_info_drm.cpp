@@ -54,6 +54,18 @@
 
 #include "hw_info_drm.h"
 
+#ifdef COMPILE_DRM
+#ifndef DRM_FORMAT_MOD_QCOM_COMPRESSED
+#define DRM_FORMAT_MOD_QCOM_COMPRESSED fourcc_mod_code(QCOM, 1)
+#endif
+#ifndef DRM_FORMAT_MOD_QCOM_DX
+#define DRM_FORMAT_MOD_QCOM_DX fourcc_mod_code(QCOM, 0x2)
+#endif
+#ifndef DRM_FORMAT_MOD_QCOM_TIGHT
+#define DRM_FORMAT_MOD_QCOM_TIGHT fourcc_mod_code(QCOM, 0x4)
+#endif
+#endif
+
 #define __CLASS__ "HWInfoDRM"
 
 using drm_utils::DRMMaster;
@@ -430,10 +442,11 @@ DisplayError HWInfoDRM::GetRotatorSupportedFormats(uint32_t v4l2_index,
 }
 
 DisplayError HWInfoDRM::GetHWRotatorInfo(HWResourceInfo *hw_resource) {
+  string v4l2_path = "/sys/class/video4linux/video";
   const uint32_t kMaxV4L2Nodes = 64;
 
   for (uint32_t i = 0; i < kMaxV4L2Nodes; i++) {
-    string path = "/sys/class/video4linux/video" + to_string(i) + "/name";
+    string path = v4l2_path + to_string(i) + "/name";
     Sys::fstream fs(path, fstream::in);
     if (!fs.is_open()) {
       continue;
@@ -446,13 +459,33 @@ DisplayError HWInfoDRM::GetHWRotatorInfo(HWResourceInfo *hw_resource) {
       hw_resource->hw_rot_info.type = HWRotatorInfo::ROT_TYPE_V4L2;
       hw_resource->hw_rot_info.has_downscale = true;
       GetRotatorSupportedFormats(i, hw_resource);
+
+      string caps_path = v4l2_path + to_string(i) + "/device/caps";
+      Sys::fstream caps_fs(caps_path, fstream::in);
+
+      if (caps_fs.is_open()) {
+        string caps;
+        while (Sys::getline_(caps_fs, caps)) {
+          const string downscale_compression = "downscale_compression=";
+          const string min_downscale = "min_downscale=";
+          if (caps.find(downscale_compression) != string::npos) {
+            hw_resource->hw_rot_info.downscale_compression =
+              std::stoi(string(caps, downscale_compression.length()));
+          } else if (caps.find(min_downscale) != string::npos) {
+            hw_resource->hw_rot_info.min_downscale =
+              std::stof(string(caps, min_downscale.length()));
+          }
+        }
+      }
+
       // We support only 1 rotator
       break;
     }
   }
 
-  DLOGI("V4L2 Rotator: Count = %d, Downscale = %d", hw_resource->hw_rot_info.num_rotator,
-        hw_resource->hw_rot_info.has_downscale);
+  DLOGI("V4L2 Rotator: Count = %d, Downscale = %d, Min_downscale = %f, Downscale_compression = %d",
+        hw_resource->hw_rot_info.num_rotator, hw_resource->hw_rot_info.has_downscale,
+        hw_resource->hw_rot_info.min_downscale, hw_resource->hw_rot_info.downscale_compression);
 
   return kErrorNone;
 }
@@ -521,20 +554,24 @@ void HWInfoDRM::GetSDMFormat(uint32_t drm_format, uint64_t drm_format_modifier,
     case DRM_FORMAT_XBGR2101010:
       fmts.push_back(kFormatXBGR2101010);
       break;
-    /* case DRM_FORMAT_P010:
-         fmts.push_back(drm_format_modifier == (DRM_FORMAT_MOD_QCOM_COMPRESSED |
-       DRM_FORMAT_MOD_QCOM_TIGHT) ?
-         kFormatYCbCr420TP10Ubwc : kFormatYCbCr420P010; */
     case DRM_FORMAT_YVU420:
       fmts.push_back(kFormatYCrCb420PlanarStride16);
       break;
     case DRM_FORMAT_NV12:
-      if (drm_format_modifier) {
-        fmts.push_back(kFormatYCbCr420SPVenusUbwc);
+      if (drm_format_modifier == (DRM_FORMAT_MOD_QCOM_COMPRESSED |
+          DRM_FORMAT_MOD_QCOM_DX | DRM_FORMAT_MOD_QCOM_TIGHT)) {
+          fmts.push_back(kFormatYCbCr420TP10Ubwc);
+      } else if (drm_format_modifier == DRM_FORMAT_MOD_QCOM_COMPRESSED) {
+         fmts.push_back(kFormatYCbCr420SPVenusUbwc);
+      } else if (drm_format_modifier == DRM_FORMAT_MOD_QCOM_DX) {
+         fmts.push_back(kFormatYCbCr420P010);
       } else {
-        fmts.push_back(kFormatYCbCr420SemiPlanarVenus);
-        fmts.push_back(kFormatYCbCr420SemiPlanar);
+         fmts.push_back(kFormatYCbCr420SemiPlanarVenus);
+         fmts.push_back(kFormatYCbCr420SemiPlanar);
       }
+      // TODO(user):
+      // else if (drm_format_modifier == (DRM_FORMAT_MOD_QCOM_COMPRESSED | DRM_FORMAT_MOD_QCOM_DX))
+      //   fmts.push_back(kFormatYCbCr420P010Ubwc);
       break;
     case DRM_FORMAT_NV21:
       fmts.push_back(kFormatYCrCb420SemiPlanarVenus);

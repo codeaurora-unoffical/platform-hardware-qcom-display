@@ -48,6 +48,7 @@ class BufferManager {
   gralloc1_error_t Perform(int operation, va_list args);
   gralloc1_error_t GetFlexLayout(const private_handle_t *hnd, struct android_flex_layout *layout);
   gralloc1_error_t GetNumFlexPlanes(const private_handle_t *hnd, uint32_t *out_num_planes);
+  gralloc1_error_t Dump(std::ostringstream *os);
 
   template <typename... Args>
   gralloc1_error_t CallBufferDescriptorFunction(gralloc1_buffer_descriptor_t descriptor_id,
@@ -85,6 +86,12 @@ class BufferManager {
   void CreateSharedHandle(buffer_handle_t inbuffer, const BufferDescriptor &descriptor,
                           buffer_handle_t *out_buffer);
 
+  // Imports the ion fds into the current process. Returns an error for invalid handles
+  gralloc1_error_t ImportHandle(private_handle_t* hnd);
+
+  // Creates a Buffer from the valid private handle and adds it to the map
+  void RegisterHandle(const private_handle_t *hnd, int ion_handle, int ion_handle_meta);
+
   // Wrapper structure over private handle
   // Values associated with the private handle
   // that do not need to go over IPC can be placed here
@@ -105,14 +112,23 @@ class BufferManager {
         ion_handle_main(ih_main),
         ion_handle_meta(ih_meta) {
     }
+    void IncRef() { ++ref_count; }
+    bool DecRef() { return --ref_count == 0; }
   };
+
   gralloc1_error_t FreeBuffer(std::shared_ptr<Buffer> buf);
+
+  // Get the wrapper Buffer object from the handle, returns nullptr if handle is not found
+  std::shared_ptr<Buffer> GetBufferFromHandle(const private_handle_t *hnd);
 
   bool map_fb_mem_ = false;
   bool ubwc_for_fb_ = false;
   Allocator *allocator_ = NULL;
   std::mutex locker_;
-  std::unordered_map<uint64_t, std::shared_ptr<Buffer>> handles_map_ = {};
+  // TODO(user): The private_handle_t is used as a key because the unique ID generated
+  // from next_id_ is not unique across processes. The correct way to resolve this would
+  // be to use the allocator over hwbinder
+  std::unordered_map<const private_handle_t*, std::shared_ptr<Buffer>> handles_map_ = {};
   std::unordered_map<gralloc1_buffer_descriptor_t,
                      std::shared_ptr<BufferDescriptor>> descriptors_map_ = {};
   std::atomic<uint64_t> next_id_;

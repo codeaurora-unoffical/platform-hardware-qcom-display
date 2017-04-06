@@ -29,6 +29,7 @@
 
 #include <cutils/log.h>
 #include <sync/sync.h>
+#include <algorithm>
 #include <sstream>
 #include <string>
 
@@ -64,10 +65,10 @@ int gralloc_device_open(const struct hw_module_t *module, const char *name, hw_d
   if (!strcmp(name, GRALLOC_HARDWARE_MODULE_ID)) {
     gralloc1::GrallocImpl * /*gralloc1_device_t*/ dev = gralloc1::GrallocImpl::GetInstance(module);
     *device = reinterpret_cast<hw_device_t *>(dev);
-    if (dev->Init()) {
+    if (dev) {
       status = 0;
     } else {
-      ALOGE(" Error in opening gralloc1 device");
+      ALOGE("Fatal error opening gralloc1 device");
     }
   }
   return status;
@@ -82,20 +83,20 @@ GrallocImpl::GrallocImpl(const hw_module_t *module) {
   common.close = CloseDevice;
   getFunction = GetFunction;
   getCapabilities = GetCapabilities;
+
+  initalized_ = Init();
 }
 
 bool GrallocImpl::Init() {
   buf_mgr_ = BufferManager::GetInstance();
-  return true;
+  return buf_mgr_ != nullptr;
 }
 
 GrallocImpl::~GrallocImpl() {
 }
 
-int GrallocImpl::CloseDevice(hw_device_t *device) {
-  GrallocImpl *impl = reinterpret_cast<GrallocImpl *>(device);
-  delete impl;
-
+int GrallocImpl::CloseDevice(hw_device_t *device __unused) {
+  // No-op since the gralloc device is a singleton
   return 0;
 }
 
@@ -172,17 +173,19 @@ gralloc1_error_t GrallocImpl::Dump(gralloc1_device_t *device, uint32_t *out_size
     ALOGE("Gralloc Error : device=%p", (void *)device);
     return GRALLOC1_ERROR_BAD_DESCRIPTOR;
   }
+  const size_t max_dump_size = 8192;
   if (out_buffer == nullptr) {
-    *out_size = 1024;
+    *out_size = max_dump_size;
   } else {
     std::ostringstream os;
-    // TODO(user): implement in buffer manager
     os << "-------------------------------" << std::endl;
     os << "QTI gralloc dump:" << std::endl;
     os << "-------------------------------" << std::endl;
-    auto copy_size = os.str().size() < *out_size ? os.str().size() : *out_size;
-    std::copy_n(out_buffer, copy_size, os.str().begin());
-    *out_size = static_cast<uint32_t>(copy_size);
+    GrallocImpl const *dev = GRALLOC_IMPL(device);
+    dev->buf_mgr_->Dump(&os);
+    os << "-------------------------------" << std::endl;
+    auto copied = os.str().copy(out_buffer, std::min(os.str().size(), max_dump_size), 0);
+    *out_size = UINT(copied);
   }
 
   return GRALLOC1_ERROR_NONE;
