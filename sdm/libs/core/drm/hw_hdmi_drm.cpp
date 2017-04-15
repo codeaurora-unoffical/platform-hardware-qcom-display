@@ -207,11 +207,9 @@ DisplayError HWHDMIDRM::SetDisplayAttributes(uint32_t index) {
   current_mode_ = connector_info_.modes[index];
 
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_MODE, token_.crtc_id, &connector_info_.modes[index]);
+  drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 1);
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_OUTPUT_FENCE_OFFSET, token_.crtc_id, 1);
 
-  // TODO(user): Enable this and remove the one in SetupAtomic() onces underruns are fixed
-  // drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 1);
-  // Commit to setup pipeline with mode, which then tells us the topology etc
   if (drm_atomic_intf_->Commit(true /* synchronous */)) {
     DLOGE("Setting up CRTC %d, Connector %d for %s failed", token_.crtc_id, token_.conn_id,
         device_name_);
