@@ -113,7 +113,7 @@ class HWDeviceDRM : public HWInterface {
   void GetHWPanelMaxBrightness();
   void ResetDisplayParams();
   bool EnableHotPlugDetection(int enable);
-  void UpdateMixerAttributes();
+  virtual void UpdateMixerAttributes();
   void InitializeConfigs();
   void SetBlending(const LayerBlending &source, sde_drm::DRMBlendType *target);
   void SetSrcConfig(const LayerBuffer &input_buffer, uint32_t *config);
