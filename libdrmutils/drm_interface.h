@@ -92,6 +92,12 @@ enum struct DRMOps {
    */
   PLANE_SET_V_DECIMATION,
   /*
+   * Op: Sets source config flags
+   * Arg: uint32_t - Plane ID
+   *      uint32_t - flags to enable or disable a specific op. E.g. deinterlacing
+   */
+  PLANE_SET_SRC_CONFIG,
+  /*
    * Op: Sets frame buffer ID for plane. Set together with CRTC.
    * Arg: uint32_t - Plane ID
    *      uint32_t - Framebuffer ID
@@ -109,6 +115,12 @@ enum struct DRMOps {
    *      uint32_t - Input fence
    */
   PLANE_SET_INPUT_FENCE,
+  /*
+   * Op: Sets scaler config on this plane.
+   * Arg: uint32_t - Plane ID
+   *      uint64_t - Address of the scaler config object (version based)
+   */
+  PLANE_SET_SCALER_CONFIG,
   /*
    * Op: Activate or deactivate a CRTC
    * Arg: uint32_t - CRTC ID
@@ -167,6 +179,10 @@ enum struct DRMBlendType {
   OPAQUE = 1,
   PREMULTIPLIED = 2,
   COVERAGE = 3,
+};
+
+enum struct DRMSrcConfig {
+  DEINTERLACE = 0,
 };
 
 /* Display type to identify a suitable connector */
@@ -295,6 +311,15 @@ struct DRMPPFeatureInfo {
   void *payload;
 };
 
+struct DRMScalerLUTInfo {
+  uint32_t dir_lut_size = 0;
+  uint32_t cir_lut_size = 0;
+  uint32_t sep_lut_size = 0;
+  uint64_t dir_lut = 0;
+  uint64_t cir_lut = 0;
+  uint64_t sep_lut = 0;
+};
+
 /* DRM Atomic Request Property Set.
  *
  * Helper class to create and populate atomic properties of DRM components
@@ -403,6 +428,13 @@ class DRMManagerInterface {
    * [return]: Error code if the API fails, 0 on success.
    */
   virtual int DestroyAtomicReq(DRMAtomicReqInterface *intf) = 0;
+  /*
+   * Sets the global scaler LUT
+   * [input]: LUT Info
+   * [return]: Error code if the API fails, 0 on success.
+   */
+  virtual int SetScalerLUT(const DRMScalerLUTInfo &lut_info) = 0;
 };
+
 }  // namespace sde_drm
 #endif  // __DRM_INTERFACE_H__
