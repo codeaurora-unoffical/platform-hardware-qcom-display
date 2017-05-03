@@ -122,6 +122,12 @@ enum struct DRMOps {
    */
   PLANE_SET_SCALER_CONFIG,
   /*
+   * Op: Sets FB Secure mode on this plane.
+   * Arg: uint32_t - Plane ID
+   *      uint64_t - Value of the FB Secure mode.
+   */
+  PLANE_SET_FB_SECURE_MODE,
+  /*
    * Op: Activate or deactivate a CRTC
    * Arg: uint32_t - CRTC ID
    *      uint32_t - 1 to enable, 0 to disable
@@ -153,6 +159,12 @@ enum struct DRMOps {
    *      DRMPPFeatureInfo * - PP feature data pointer
    */
   CRTC_SET_POST_PROC,
+  /*
+   * Op: Sets Secure level on CRTC
+   * Arg: uint32_t - CRTC ID
+   *      uint32_t - Secure mode
+   */
+  CRTC_SET_SECURITY_LEVEL,
   /*
    * Op: Returns retire fence for this commit. Should be called after Commit() on
    * DRMAtomicReqInterface.
