@@ -243,6 +243,7 @@ void HWDeviceDRM::Registry::RegisterCurrent(HWLayers *hw_layers) {
       buf_info.aligned_width = layout.width = input_buffer->width;
       buf_info.aligned_height = layout.height = input_buffer->height;
       buf_info.format = input_buffer->format;
+
       GetDRMFormat(buf_info.format, &layout.drm_format, &layout.drm_format_modifier);
       buffer_allocator_->GetBufferLayout(buf_info, layout.stride, layout.offset,
                                          &layout.num_planes);
@@ -297,8 +298,8 @@ HWDeviceDRM::HWDeviceDRM(BufferSyncHandler *buffer_sync_handler, BufferAllocator
                          HWInfoInterface *hw_info_intf)
     : hw_info_intf_(hw_info_intf), buffer_sync_handler_(buffer_sync_handler),
       registry_(buffer_allocator) {
-  device_type_ = kDevicePrimary;
-  device_name_ = "Peripheral Display";
+  device_type_ = kDeviceHDMI;
+  device_name_ = "HDMI Display";
   hw_info_intf_ = hw_info_intf;
 }
 
@@ -311,7 +312,8 @@ DisplayError HWDeviceDRM::Init() {
     DRMMaster::GetInstance(&drm_master);
     drm_master->GetHandle(&dev_fd);
     DRMLibLoader::GetInstance()->FuncGetDRMManager()(dev_fd, &drm_mgr_intf_);
-    if (drm_mgr_intf_->RegisterDisplay(DRMDisplayType::PERIPHERAL, &token_)) {
+
+    if (drm_mgr_intf_->RegisterDisplay(DRMDisplayType::TV, &token_)) {
       DLOGE("RegisterDisplay failed");
       return kErrorResources;
     }
@@ -341,12 +343,10 @@ DisplayError HWDeviceDRM::Init() {
   PopulateHWPanelInfo();
   UpdateMixerAttributes();
   hw_info_intf_->GetHWResourceInfo(&hw_resource_);
-
   // TODO(user): In future, remove has_qseed3 member, add version and pass version to constructor
   if (hw_resource_.has_qseed3) {
     hw_scale_ = new HWScaleDRM(HWScaleDRM::Version::V2);
   }
-
   return kErrorNone;
 }
 
@@ -511,6 +511,12 @@ void HWDeviceDRM::GetHWPanelMaxBrightness() {
   string kMaxBrightnessNode = "/sys/class/backlight/panel0-backlight/max_brightness";
 
   hw_panel_info_.panel_max_brightness = 255;
+
+  if (device_type_ == kDeviceHDMI) {
+    DLOGI("Does not applicable for HDMI/DP devices");
+    return;
+  }
+  
   int fd = Sys::open_(kMaxBrightnessNode.c_str(), O_RDONLY);
   if (fd < 0) {
     DLOGW("Failed to open max brightness node = %s, error = %s", kMaxBrightnessNode.c_str(),
@@ -837,6 +843,7 @@ DisplayError HWDeviceDRM::GetPPFeaturesVersion(PPFeatureVersion *vers) {
     drm_mgr_intf_->GetCrtcPPInfo(0, info);
     vers->version[i] = HWColorManagerDrm::GetFeatureVersion(info);
   }
+
   return kErrorNone;
 }
 

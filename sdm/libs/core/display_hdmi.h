@@ -44,12 +44,19 @@ class DisplayHDMI : public DisplayBase, HWEventHandler {
   virtual DisplayError Init();
   virtual DisplayError Prepare(LayerStack *layer_stack);
   virtual DisplayError GetRefreshRateRange(uint32_t *min_refresh_rate, uint32_t *max_refresh_rate);
+  virtual DisplayError SetVSyncState(bool enable);
   virtual DisplayError SetRefreshRate(uint32_t refresh_rate);
   virtual bool IsUnderscanSupported();
   virtual DisplayError OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level);
 
   // Implement the HWEventHandlers
   virtual DisplayError VSync(int64_t timestamp);
+  virtual DisplayError VSync(int fd, unsigned int sequence,
+                             unsigned int tv_sec, unsigned int tv_usec,
+                             void *data);
+  virtual DisplayError PFlip(int fd, unsigned int sequence,
+                             unsigned int tv_sec, unsigned int tv_usec,
+                             void *data);
   virtual DisplayError Blank(bool blank) { return kErrorNone; }
   virtual void IdleTimeout() { }
   virtual void ThermalEvent(int64_t thermal_level) { }

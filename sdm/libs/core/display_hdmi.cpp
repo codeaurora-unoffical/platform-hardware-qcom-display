@@ -135,6 +135,18 @@ DisplayError DisplayHDMI::GetRefreshRateRange(uint32_t *min_refresh_rate,
   return error;
 }
 
+DisplayError DisplayHDMI::SetVSyncState(bool enable) {
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
+  DisplayError error = kErrorNone;
+  if (vsync_enable_ != enable) {
+    error = hw_intf_->SetVSyncState(enable);
+    if (error == kErrorNone) {
+      vsync_enable_ = pflip_enable_ = enable;
+    }
+  }
+  return error;
+}
+
 DisplayError DisplayHDMI::SetRefreshRate(uint32_t refresh_rate) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
 
@@ -299,6 +311,30 @@ DisplayError DisplayHDMI::VSync(int64_t timestamp) {
     DisplayEventVSync vsync;
     vsync.timestamp = timestamp;
     event_handler_->VSync(vsync);
+  }
+
+  return kErrorNone;
+}
+
+DisplayError DisplayHDMI::VSync(int fd,
+                                unsigned int sequence,
+                                unsigned int tv_sec,
+                                unsigned int tv_usec,
+                                void *data) {
+  if (vsync_enable_) {
+    event_handler_->VSync(fd, sequence, tv_sec, tv_usec, data);
+  }
+
+  return kErrorNone;
+}
+
+DisplayError DisplayHDMI::PFlip(int fd,
+                                unsigned int sequence,
+                                unsigned int tv_sec,
+                                unsigned int tv_usec,
+                                void *data) {
+  if (pflip_enable_) {
+    event_handler_->PFlip(fd, sequence, tv_sec, tv_usec, data);
   }
 
   return kErrorNone;
