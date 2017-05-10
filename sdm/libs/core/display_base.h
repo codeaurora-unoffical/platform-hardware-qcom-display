@@ -148,6 +148,7 @@ class DisplayBase : public DisplayInterface, DumpImpl {
   HWLayers hw_layers_;
   bool pending_commit_ = false;
   bool vsync_enable_ = false;
+  bool pflip_enable_ = false;
   uint32_t max_mixer_stages_ = 0;
   HWInfoInterface *hw_info_intf_ = NULL;
   ColorManagerProxy *color_mgr_ = NULL;  // each display object owns its ColorManagerProxy

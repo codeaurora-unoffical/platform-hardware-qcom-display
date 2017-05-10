@@ -64,7 +64,9 @@ DisplayError HWInterface::Create(DisplayType type, HWInfoInterface *hw_info_intf
       if (driver_type == DriverType::FB) {
         hw = new HWHDMI(buffer_sync_handler, hw_info_intf);
       } else {
-        return kErrorNotSupported;
+#ifdef COMPILE_DRM
+        hw = new HWDeviceDRM(buffer_sync_handler, buffer_allocator, hw_info_intf);
+#endif
       }
       break;
     case kVirtual:
