@@ -175,7 +175,7 @@ DisplayError DisplayPrimary::SetDisplayState(DisplayState state) {
 
   // Set vsync enable state to false, as driver disables vsync during display power off.
   if (state == kStateOff) {
-    vsync_enable_ = false;
+    vsync_enable_ = pflip_enable_ = false;
   }
 
   return kErrorNone;
@@ -287,6 +287,26 @@ DisplayError DisplayPrimary::VSync(int64_t timestamp) {
     DisplayEventVSync vsync;
     vsync.timestamp = timestamp;
     event_handler_->VSync(vsync);
+  }
+
+  return kErrorNone;
+}
+
+DisplayError DisplayPrimary::VSync(int fd, unsigned int sequence,
+                                   unsigned int tv_sec, unsigned int tv_usec,
+                                   void *data) {
+  if (vsync_enable_) {
+     event_handler_->VSync(fd, sequence, tv_sec, tv_usec, data);
+  }
+
+  return kErrorNone;
+}
+
+DisplayError DisplayPrimary::PFlip(int fd, unsigned int sequence,
+                                   unsigned int tv_sec, unsigned int tv_usec,
+                                   void *data) {
+  if (pflip_enable_) {
+     event_handler_->PFlip(fd, sequence, tv_sec, tv_usec, data);
   }
 
   return kErrorNone;

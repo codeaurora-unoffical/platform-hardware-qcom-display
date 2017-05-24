@@ -35,6 +35,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <xf86drm.h>
 
 #include "hw_events_interface.h"
 #include "hw_interface.h"
@@ -62,9 +63,15 @@ class HWEventsDRM : public HWEventsInterface {
   static void *DisplayEventThread(void *context);
   static void VSyncHandlerCallback(int fd, unsigned int sequence, unsigned int tv_sec,
                                    unsigned int tv_usec, void *data);
+  static void VBlankHandlerCallback(int fd, unsigned int sequence, unsigned int tv_sec,
+                                    unsigned int tv_usec, void *data);
+  static void PFlipHandlerCallback(int fd, unsigned int sequence, unsigned int tv_sec,
+                                   unsigned int tv_usec, void *data);
 
   void *DisplayEventHandler();
   void HandleVSync(char *data);
+  void HandleVBlank(char *data);
+  void HandlePFlip(char *data);
   void HandleIdleTimeout(char *data);
   void HandleCECMessage(char *data);
   void HandleThreadExit(char *data) {}
@@ -76,6 +83,10 @@ class HWEventsDRM : public HWEventsInterface {
   DisplayError InitializePollFd();
   DisplayError CloseFds();
   DisplayError RegisterVSync();
+  DisplayError RegisterVBlankPFlip();
+  DisplayError RequestVBlankEvent(drmVBlank *vbl);
+  DisplayError RequestPageFlip(uint32_t crtc_id, uint32_t fb_id,
+                               uint32_t flags,   void *userdata);
 
   HWEventHandler *event_handler_{};
   vector<HWEventData> event_data_list_{};

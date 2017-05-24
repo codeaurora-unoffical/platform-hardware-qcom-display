@@ -56,6 +56,13 @@ class DisplayPrimary : public DisplayBase, HWEventHandler {
 
   // Implement the HWEventHandlers
   virtual DisplayError VSync(int64_t timestamp);
+  virtual DisplayError VSync(int fd, unsigned int sequence,
+                             unsigned int tv_sec, unsigned int tv_usec,
+                             void *data);
+  virtual DisplayError PFlip(int fd, unsigned int sequence,
+                             unsigned int tv_sec, unsigned int tv_usec,
+                             void *data);
+
   virtual DisplayError Blank(bool blank) { return kErrorNone; }
   virtual void IdleTimeout();
   virtual void ThermalEvent(int64_t thermal_level);
