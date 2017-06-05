@@ -393,6 +393,7 @@ class DRMManagerInterface {
 
   /*
    * Will provide all the information of a selected connector.
+   * [input]: Use conn id 0 to obtain primary connector inforrmation
    * [output]: DRMConnectorInfo: Resource Info for the given connector id
    */
   virtual void GetConnectorInfo(uint32_t conn_id, DRMConnectorInfo *info) = 0;
