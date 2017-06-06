@@ -45,6 +45,9 @@
 
 #define __CLASS__ "HWHDMIDRM"
 
+#define  DRM_BIT_RGB 20
+#define  DRM_BIT_YUV 21
+
 using drm_utils::DRMMaster;
 using drm_utils::DRMResMgr;
 using drm_utils::DRMLibLoader;
@@ -89,26 +92,12 @@ DisplayError HWHDMIDRM::Init() {
     drm_mgr_intf_->CreateAtomicReq(token_, &drm_atomic_intf_);
     drm_mgr_intf_->GetConnectorInfo(token_.conn_id, &connector_info_);
     InitializeConfigs();
-    drm_atomic_intf_->Perform(DRMOps::CRTC_SET_MODE, token_.crtc_id, &current_mode_);
-    drm_atomic_intf_->Perform(DRMOps::CRTC_SET_OUTPUT_FENCE_OFFSET, token_.crtc_id, 1);
-
-    // TODO(user): Enable this and remove the one in SetupAtomic() onces underruns are fixed
-    // drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 1);
-    // Commit to setup pipeline with mode, which then tells us the topology etc
-    if (drm_atomic_intf_->Commit(true /* synchronous */)) {
-      DLOGE("Setting up CRTC %d, Connector %d for %s failed", token_.crtc_id, token_.conn_id,
-            device_name_);
-      return kErrorResources;
-    }
-
-    // Reload connector info for updated info after 1st commit
-    drm_mgr_intf_->GetConnectorInfo(token_.conn_id, &connector_info_);
-    DLOGI("Setup CRTC %d, Connector %d for %s", token_.crtc_id, token_.conn_id, device_name_);
+   }
+  hw_info_intf_->GetHWResourceInfo(&hw_resource_);
+  // TODO(user): In future, remove has_qseed3 member, add version and pass version to constructor
+  if (hw_resource_.has_qseed3) {
+    hw_scale_ = new HWScaleDRM(HWScaleDRM::Version::V2);
   }
-
-  PopulateDisplayAttributes();
-  PopulateHWPanelInfo();
-  UpdateMixerAttributes();
 
   if (error != kErrorNone) {
     return error;
@@ -131,30 +120,125 @@ DisplayError HWHDMIDRM::GetActiveConfig(uint32_t *active_config_index) {
   return kErrorNone;
 }
 
-DisplayError HWHDMIDRM::SetDisplayAttributes(uint32_t index) {
-  DTRACE_SCOPED();
+DisplayError HWHDMIDRM::GetDisplayAttributes(uint32_t index,
+                                            HWDisplayAttributes *display_attributes) {
+  *display_attributes = display_attributes_;
+  drmModeModeInfo mode = {};
+  uint32_t mm_width = 0;
+  uint32_t mm_height = 0;
+  DRMTopology topology = DRMTopology::SINGLE_LM;
 
-  // TODO(user) check if index will start from 0? then >=
+  if (default_mode_) {
+    DRMResMgr *res_mgr = nullptr;
+    int ret = DRMResMgr::GetInstance(&res_mgr);
+    if (ret < 0) {
+      DLOGE("Failed to acquire DRMResMgr instance");
+      return kErrorResources;
+    }
+
+    res_mgr->GetMode(&mode);
+    res_mgr->GetDisplayDimInMM(&mm_width, &mm_height);
+  } else {
+    mode = connector_info_.modes[index];
+    mm_width = mode.hdisplay;
+    mm_height = mode.vdisplay;
+    topology = connector_info_.topology;
+  }
+
+  display_attributes-> x_pixels = mode.hdisplay;
+  display_attributes->y_pixels = mode.vdisplay;
+  display_attributes->fps = mode.vrefresh;
+  display_attributes->vsync_period_ns = UINT32(1000000000L / display_attributes->fps);
+
+  /*
+              Active                 Front           Sync           Back
+              Region                 Porch                          Porch
+     <-----------------------><----------------><-------------><-------------->
+     <----- [hv]display ----->
+     <------------- [hv]sync_start ------------>
+     <--------------------- [hv]sync_end --------------------->
+     <-------------------------------- [hv]total ----------------------------->
+   */
+
+  display_attributes->v_front_porch = mode.vsync_start - mode.vdisplay;
+  display_attributes->v_pulse_width = mode.vsync_end - mode.vsync_start;
+  display_attributes->v_back_porch = mode.vtotal - mode.vsync_end;
+  display_attributes->v_total = mode.vtotal;
+
+  display_attributes->h_total = mode.htotal;
+  uint32_t h_blanking = mode.htotal - mode.hdisplay;
+  display_attributes->is_device_split =
+      (topology == DRMTopology::DUAL_LM || topology == DRMTopology::DUAL_LM_MERGE);
+  display_attributes->h_total += display_attributes->is_device_split ? h_blanking : 0;
+
+  display_attributes->x_dpi = (FLOAT(mode.hdisplay) * 25.4f) / FLOAT(mm_width);
+  display_attributes->y_dpi = (FLOAT(mode.vdisplay) * 25.4f) / FLOAT(mm_height);
+
+  return kErrorNone;
+}
+
+DisplayError HWHDMIDRM::SetDisplayAttributes(uint32_t index) {
+  // TODO check if index will start from 0? then >=
   if (index >= connector_info_.num_modes) {
     return kErrorNotSupported;
   }
 
   active_config_index_ = index;
-
-  // TODO(user): fix this hard coding
-  frame_rate_ = 60;
-
   // Get the display attributes for current active config index
   GetDisplayAttributes(active_config_index_, &display_attributes_);
-  UpdateMixerAttributes();
 
+  frame_rate_ = display_attributes_.fps;
+  current_mode_ = connector_info_.modes[index];
+
+  drm_atomic_intf_->Perform(DRMOps::CRTC_SET_MODE, token_.crtc_id, &connector_info_.modes[index]);
+  drm_atomic_intf_->Perform(DRMOps::CRTC_SET_OUTPUT_FENCE_OFFSET, token_.crtc_id, 1);
+
+  // TODO(user): Enable this and remove the one in SetupAtomic() onces underruns are fixed
+  // drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 1);
+  // Commit to setup pipeline with mode, which then tells us the topology etc
+  if (drm_atomic_intf_->Commit(true /* synchronous */)) {
+    DLOGE("Setting up CRTC %d, Connector %d for %s failed", token_.crtc_id, token_.conn_id,
+        device_name_);
+  return kErrorResources;
+  }
+
+  // Reload connector info for updated info after 1st commit
+  drm_mgr_intf_->GetConnectorInfo(token_.conn_id, &connector_info_);
+  DLOGI("Setup CRTC %d, Connector %d for %s", token_.crtc_id, token_.conn_id, device_name_);
+
+  PopulateDisplayAttributes();
+  PopulateHWPanelInfo();
+  UpdateMixerAttributes();
   return kErrorNone;
 }
 
-DisplayError HWHDMIDRM::GetConfigIndex(uint32_t mode, uint32_t *index) {
-  // TODO(user): Cehck: Do we really have mode which is not same as crtcmode?
-  *index = mode;
+DisplayError HWHDMIDRM::GetConfigIndex(char *mode, uint32_t *index) {
 
+  uint32_t width = 0, height = 0, fps = 0, format = 0;
+  std::string str(mode);
+
+  //mode should be in width:height:fps:format
+  //TODO: it is not fully robust, User needs to provide in above format only
+  if(str.length()!=0) {
+    width = UINT32(stoi(str));
+    height = UINT32(stoi(str.substr(str.find(':') + 1)));
+    std::string str3 = str.substr(str.find(':') + 1);
+    fps = UINT32(stoi(str3.substr(str3.find(':')  + 1)));
+    std::string str4 = str3.substr(str3.find(':') + 1);
+    format = UINT32(stoi(str4.substr(str4.find(':') + 1)));
+  }
+  for (size_t idex = 0; idex < connector_info_.num_modes; idex ++) {
+    if ((height == connector_info_.modes[idex].vdisplay) &&
+        (width == connector_info_.modes[idex].hdisplay) &&
+        (fps == connector_info_.modes[idex].vrefresh)) {
+
+      if((format>>1)&(connector_info_.modes[idex].flags >> DRM_BIT_YUV))
+        *index = UINT32(idex);
+
+      if(format & (connector_info_.modes[idex].flags >> DRM_BIT_RGB))
+        *index = UINT32(idex);
+	}
+  }
   return kErrorNone;
 }
 
