@@ -822,7 +822,7 @@ DisplayError DisplayBase::SetVSyncState(bool enable) {
   if (vsync_enable_ != enable) {
     error = hw_intf_->SetVSyncState(enable);
     if (error == kErrorNone) {
-      vsync_enable_ = enable;
+      vsync_enable_ = pflip_enable_ = enable;
     }
   }
   return error;

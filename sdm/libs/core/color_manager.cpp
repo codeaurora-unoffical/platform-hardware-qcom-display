@@ -77,7 +77,6 @@ DisplayError PPFeaturesConfig::RetrieveNextFeature(PPFeatureInfo **feature) {
 
 DisplayError ColorManagerProxy::Init(const HWResourceInfo &hw_res_info) {
   DisplayError error = kErrorNone;
-
   // Load color service library and retrieve its entry points.
   if (color_lib_.Open(COLORMGR_LIBRARY_NAME)) {
     if (!color_lib_.Sym(CREATE_COLOR_INTERFACE_NAME, reinterpret_cast<void **>(&create_intf_)) ||
@@ -89,7 +88,6 @@ DisplayError ColorManagerProxy::Init(const HWResourceInfo &hw_res_info) {
     DLOGW("Fail to load = %s", COLORMGR_LIBRARY_NAME);
     error = kErrorResources;
   }
-
   hw_res_info_ = hw_res_info;
 
   return error;
