@@ -17,19 +17,10 @@
  * limitations under the License.
  */
 
-#ifndef __TONEMAPPER_EGLIMAGE_BUFFER_H__
-#define __TONEMAPPER_EGLIMAGE_BUFFER_H__
+#include "EGLImageWrapperBase.h"
 
-#include <cutils/native_handle.h>
-#include <gralloc_priv.h>
-#include <ui/GraphicBuffer.h>
-#include "engine.h"
-#include "EGLImageBufferBase.h"
-
-class EGLImageBuffer : public EGLImageBufferBase{
- public:
-  EGLImageBuffer(android::sp<android::GraphicBuffer>);
-  static EGLImageBuffer *from(const private_handle_t *src);
-};
-
-#endif  //__TONEMAPPER_EGLIMAGE_BUFFER_H__
+//-----------------------------------------------------------------------------
+EGLImageWrapperBase::EGLImageWrapperBase()
+//-----------------------------------------------------------------------------
+{
+}
