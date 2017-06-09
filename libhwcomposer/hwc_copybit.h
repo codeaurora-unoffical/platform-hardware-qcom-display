@@ -91,7 +91,7 @@ private:
                                 int dpy, int *fd);
     // Helper functions for copybit composition
     int  drawLayerUsingCopybit(hwc_context_t *dev, hwc_layer_1_t *layer,
-                          private_handle_t *renderBuffer, bool isFG);
+                          private_handle_t *renderBuffer, bool isFG, int dpy=0);
     // Helper function to draw copybit layer for PTOR comp
     int drawRectUsingCopybit(hwc_context_t *dev, hwc_layer_1_t *layer,
                           private_handle_t *renderBuffer, hwc_rect_t overlap,

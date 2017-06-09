@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2010 The Android Open Source Project
- * Copyright (C) 2012-2015, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2012-2015, 2017 The Linux Foundation. All rights reserved.
  *
  * Not a Contribution.
  *
@@ -564,7 +564,7 @@ bool CopyBit::drawUsingAppBufferComposition(hwc_context_t *ctx,
           for(int i = abcRenderBufIdx + 1; i < layerCount; i++){
              mSwapRect = 0;
              int retVal = drawLayerUsingCopybit(ctx,
-               &(list->hwLayers[i]),renderBuffer, 0);
+               &(list->hwLayers[i]),renderBuffer, 0, dpy);
              if(retVal < 0) {
                 ALOGE("%s : Copybit failed", __FUNCTION__);
              }
@@ -665,7 +665,7 @@ bool  CopyBit::draw(hwc_context_t *ctx, hwc_display_contents_1_t *list,
             list->hwLayers[i].acquireFenceFd = -1;
         }
         retVal = drawLayerUsingCopybit(ctx, &(list->hwLayers[i]),
-                                          renderBuffer, !i);
+                                          renderBuffer, !i, dpy);
         copybitLayerCount++;
         if(retVal < 0) {
             ALOGE("%s : drawLayerUsingCopybit failed", __FUNCTION__);
@@ -873,7 +873,7 @@ int CopyBit::drawRectUsingCopybit(hwc_context_t *dev, hwc_layer_1_t *layer,
 }
 
 int  CopyBit::drawLayerUsingCopybit(hwc_context_t *dev, hwc_layer_1_t *layer,
-                          private_handle_t *renderBuffer, bool isFG)
+                          private_handle_t *renderBuffer, bool isFG, int dpy)
 {
     hwc_context_t* ctx = (hwc_context_t*)(dev);
     int err = 0, acquireFd;
@@ -1128,7 +1128,8 @@ int  CopyBit::drawLayerUsingCopybit(hwc_context_t *dev, hwc_layer_1_t *layer,
     copybit->set_parameter(copybit, COPYBIT_DYNAMIC_FPS, dynamic_fps);
     copybit->set_parameter(copybit, COPYBIT_BLEND_MODE,
                                               layer->blending);
-    copybit->set_parameter(copybit, COPYBIT_DITHER,
+    if (isYuvBuffer(hnd) || !(ctx->listStats[dpy].yuvCount))
+        copybit->set_parameter(copybit, COPYBIT_DITHER,
                              (dst.format == HAL_PIXEL_FORMAT_RGB_565)?
                                              COPYBIT_ENABLE : COPYBIT_DISABLE);
     copybit->set_parameter(copybit, COPYBIT_FG_LAYER,
@@ -1142,6 +1143,7 @@ int  CopyBit::drawLayerUsingCopybit(hwc_context_t *dev, hwc_layer_1_t *layer,
                                                    &copybitRegion);
     copybit->set_parameter(copybit, COPYBIT_BLIT_TO_FRAMEBUFFER,
                                                COPYBIT_DISABLE);
+    copybit->set_parameter(copybit, COPYBIT_DITHER, COPYBIT_DISABLE);
 
     if(tmpHnd) {
         if (ctx->mMDP.version < qdutils::MDP_V4_0){
@@ -1190,9 +1192,6 @@ int CopyBit::fillColorUsingCopybit(hwc_layer_1_t *layer,
                            renderBuffer->width);
     copybit->set_parameter(copybit, COPYBIT_FRAMEBUFFER_HEIGHT,
                            renderBuffer->height);
-    copybit->set_parameter(copybit, COPYBIT_DITHER,
-                           (dst.format == HAL_PIXEL_FORMAT_RGB_565) ?
-                           COPYBIT_ENABLE : COPYBIT_DISABLE);
     copybit->set_parameter(copybit, COPYBIT_TRANSFORM, 0);
     copybit->set_parameter(copybit, COPYBIT_BLEND_MODE, layer->blending);
     copybit->set_parameter(copybit, COPYBIT_PLANE_ALPHA, layer->planeAlpha);
