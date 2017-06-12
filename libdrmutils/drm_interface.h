@@ -37,6 +37,7 @@
 
 #include "xf86drm.h"
 #include "xf86drmMode.h"
+#include <drm/msm_drm.h>
 
 namespace sde_drm {
 /*
@@ -300,6 +301,7 @@ struct DRMConnectorInfo {
   uint32_t num_modes;
   drmModeModeInfo *modes;
   DRMTopology topology;
+  drm_msm_ext_panel_hdr_properties hdr_prop;
   std::string panel_name;
   DRMPanelMode panel_mode;
   bool is_primary;

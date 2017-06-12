@@ -106,6 +106,18 @@ DisplayError HWHDMIDRM::Init() {
   return error;
 }
 
+void HWHDMIDRM::PopulateHWPanelInfo() {
+  hw_panel_info_ = {};
+
+  HWDeviceDRM::PopulateHWPanelInfo();
+  hw_panel_info_.hdr_metadata_type_one = connector_info_.hdr_prop.hdr_metadata_type_one;
+  hw_panel_info_.hdr_enabled = connector_info_.hdr_prop.hdr_supported;
+  hw_panel_info_.hdr_eotf = connector_info_.hdr_prop.hdr_eotf;
+  hw_panel_info_.peak_luminance = connector_info_.hdr_prop.hdr_max_luminance;
+  hw_panel_info_.average_luminance = connector_info_.hdr_prop.hdr_avg_luminance;
+  hw_panel_info_.blackness_level = connector_info_.hdr_prop.hdr_min_luminance;
+}
+
 DisplayError HWHDMIDRM::GetNumDisplayAttributes(uint32_t *count) {
   *count = connector_info_.num_modes;
   if (*count <= 0) {

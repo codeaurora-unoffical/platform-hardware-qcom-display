@@ -73,6 +73,7 @@ class HWHDMIDRM : public HWDeviceDRM {
   };
 
   virtual DisplayError Init();
+  void PopulateHWPanelInfo();
   virtual DisplayError GetNumDisplayAttributes(uint32_t *count);
   // Requirement to call this only after the first config has been explicitly set by client
   virtual DisplayError GetActiveConfig(uint32_t *active_config);
