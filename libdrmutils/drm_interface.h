@@ -197,6 +197,12 @@ enum struct DRMOps {
    *      int32_t - ppm
    */
   CONNECTOR_UPDATE_DISPLAY_PLL,
+  /*
+   * Op: Sets connector hdr metadata
+   * Arg: uint32_t - Connector ID
+   *      drm_msm_ext_panel_hdr_metadata - hdr_metadata
+   */
+  CONNECTOR_SET_HDR_PROP,
 };
 
 enum struct DRMRotation {
@@ -302,6 +308,7 @@ struct DRMConnectorInfo {
   drmModeModeInfo *modes;
   DRMTopology topology;
   drm_msm_ext_panel_hdr_properties hdr_prop;
+  drm_msm_ext_panel_hdr_metadata hdr_metadata;
   std::string panel_name;
   DRMPanelMode panel_mode;
   bool is_primary;

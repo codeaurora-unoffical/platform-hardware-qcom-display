@@ -36,7 +36,7 @@
 #include <utils/debug.h>
 #include <utils/sys.h>
 #include <utils/formats.h>
-
+#include <linux/msm_mdp_ext.h>
 #include <vector>
 #include <map>
 #include <utility>
@@ -254,6 +254,80 @@ DisplayError HWHDMIDRM::GetConfigIndex(char *mode, uint32_t *index) {
   return kErrorNone;
 }
 
+static int32_t GetEOTF(const GammaTransfer &transfer) {
+  int32_t hdr_transfer = -1;
+
+  switch (transfer) {
+  case Transfer_SMPTE_ST2084:
+    hdr_transfer = MDP_HDR_EOTF_SMTPE_ST2084;
+    break;
+  case Transfer_HLG:
+    hdr_transfer = MDP_HDR_EOTF_HLG;
+    break;
+  default:
+    DLOGW("Unknown Transfer: %d", transfer);
+  }
+
+  return hdr_transfer;
+}
+
+DisplayError HWHDMIDRM::UpdateHDRMetaData(HWLayers *hw_layers) {
+  const HWHDRLayerInfo &hdr_layer_info = hw_layers->info.hdr_layer_info;
+  if (!hw_panel_info_.hdr_enabled || hdr_layer_info.operation == HWHDRLayerInfo::kNoOp) {
+    return kErrorNone;
+  }
+
+  DisplayError error = kErrorNone;
+
+  Layer hdr_layer = {};
+  if (hdr_layer_info.operation == HWHDRLayerInfo::kSet && hdr_layer_info.layer_index > -1) {
+    hdr_layer = *(hw_layers->info.stack->layers.at(UINT32(hdr_layer_info.layer_index)));
+  }
+
+  const LayerBuffer *layer_buffer = &hdr_layer.input_buffer;
+  const MasteringDisplay &mastering_display = layer_buffer->color_metadata.masteringDisplayInfo;
+  const ContentLightLevel &light_level = layer_buffer->color_metadata.contentLightLevel;
+  const Primaries &primaries = mastering_display.primaries;
+
+  if (hdr_layer_info.operation == HWHDRLayerInfo::kSet) {
+    int32_t eotf = GetEOTF(layer_buffer->color_metadata.transfer);
+    connector_info_.hdr_metadata.eotf = (eotf < 0) ? 0 : UINT32(eotf);
+    connector_info_.hdr_metadata.white_point_x = primaries.whitePoint[0];
+    connector_info_.hdr_metadata.white_point_y = primaries.whitePoint[1];
+    connector_info_.hdr_metadata.display_primaries_x[0] = primaries.rgbPrimaries[0][0];
+    connector_info_.hdr_metadata.display_primaries_y[0] = primaries.rgbPrimaries[0][1];
+    connector_info_.hdr_metadata.display_primaries_x[1] = primaries.rgbPrimaries[1][0];
+    connector_info_.hdr_metadata.display_primaries_y[1] = primaries.rgbPrimaries[1][1];
+    connector_info_.hdr_metadata.display_primaries_x[2] = primaries.rgbPrimaries[2][0];
+    connector_info_.hdr_metadata.display_primaries_y[2] = primaries.rgbPrimaries[2][1];
+    connector_info_.hdr_metadata.min_luminance = mastering_display.minDisplayLuminance;
+    connector_info_.hdr_metadata.max_luminance = mastering_display.maxDisplayLuminance/10000;
+    connector_info_.hdr_metadata.max_content_light_level = light_level.maxContentLightLevel;
+    connector_info_.hdr_metadata.max_average_light_level = light_level.minPicAverageLightLevel;
+
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_HDR_PROP, token_.conn_id,
+                              &connector_info_.hdr_metadata);
+
+    DLOGI("HDR metadata: MaxDisplayLuminance = %d MinDisplayLuminance = %d\n"
+      "MaxContentLightLevel = %d MaxAverageLightLevel = %d Red_x = %d Red_y = %d Green_x = %d\n"
+      "Green_y = %d Blue_x = %d Blue_y = %d WhitePoint_x = %d WhitePoint_y = %d EOTF = %d\n",
+      connector_info_.hdr_metadata.max_luminance,  connector_info_.hdr_metadata.min_luminance,
+      connector_info_.hdr_metadata.max_content_light_level,
+      connector_info_.hdr_metadata.max_average_light_level,
+      connector_info_.hdr_metadata.display_primaries_x[0],
+      connector_info_.hdr_metadata.display_primaries_y[0],
+      connector_info_.hdr_metadata.display_primaries_x[1],
+      connector_info_.hdr_metadata.display_primaries_y[1],
+      connector_info_.hdr_metadata.display_primaries_x[2],
+      connector_info_.hdr_metadata.display_primaries_y[2],
+      connector_info_.hdr_metadata.white_point_x,
+      connector_info_.hdr_metadata.white_point_y,
+      connector_info_.hdr_metadata.eotf);
+  }
+
+  return error;
+}
+
 DisplayError HWHDMIDRM::Validate(HWLayers *hw_layers) {
   HWDeviceDRM::ResetDisplayParams();
 
@@ -261,6 +335,10 @@ DisplayError HWHDMIDRM::Validate(HWLayers *hw_layers) {
 }
 
 DisplayError HWHDMIDRM::Commit(HWLayers *hw_layers) {
+  DisplayError error = UpdateHDRMetaData(hw_layers);
+  if (error != kErrorNone) {
+    return error;
+  }
   return HWDeviceDRM::Commit(hw_layers);
 }
 

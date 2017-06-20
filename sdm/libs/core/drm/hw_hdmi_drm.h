@@ -87,6 +87,7 @@ class HWHDMIDRM : public HWDeviceDRM {
   virtual DisplayError UpdateDisplayPll(int32_t ppm);
 
  private:
+  DisplayError UpdateHDRMetaData(HWLayers *hw_layers);
   static const int kThresholdRefreshRate = 1000;
   vector<uint32_t> hdmi_modes_;
   uint32_t active_config_index_;
