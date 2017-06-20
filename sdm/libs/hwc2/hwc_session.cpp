@@ -35,6 +35,8 @@
 #include <algorithm>
 #include <string>
 #include <bitset>
+#include <thread>
+#include <memory>
 
 #include "hwc_buffer_allocator.h"
 #include "hwc_buffer_sync_handler.h"
@@ -65,7 +67,54 @@ hwc_module_t HAL_MODULE_INFO_SYM = {
 };
 
 namespace sdm {
+
+static HWCUEvent g_hwc_uevent_;
 Locker HWCSession::locker_;
+
+void * HWCUEvent::UEventThread(HWCUEvent *hwc_event) {
+  const char *uevent_thread_name = "HWC_UeventThread";
+
+  prctl(PR_SET_NAME, uevent_thread_name, 0, 0, 0);
+  setpriority(PRIO_PROCESS, 0, HAL_PRIORITY_URGENT_DISPLAY);
+
+  if (!uevent_init()) {
+    DLOGE("Failed to init uevent");
+    pthread_exit(0);
+    return NULL;
+  }
+
+  while (1) {
+    char uevent_data[PAGE_SIZE] = {};
+
+    // keep last 2 zeroes to ensure double 0 termination
+    int length = uevent_next_event(uevent_data, INT32(sizeof(uevent_data)) - 2);
+
+    // scope of lock to this block only, so that caller is free to set event handler to nullptr;
+    {
+      std::lock_guard<std::mutex> guard(hwc_event->mutex_);
+      if (hwc_event->event_handler_) {
+        hwc_event->event_handler_->UEvent(uevent_data, length);
+      } else {
+        DLOGW("UEvent dropped. No uevent listener.");
+      }
+    }
+  }
+  pthread_exit(0);
+
+  return NULL;
+}
+
+HWCUEvent::HWCUEvent() {
+  std::thread thread(HWCUEvent::UEventThread, this);
+  thread.detach();
+}
+
+void HWCUEvent::Register(HWCUEventHandler *event_handler) {
+  DLOGI("Set uevent listener = %p", event_handler);
+
+  std::lock_guard<std::mutex> obj(mutex_);
+  event_handler_ = event_handler;
+}
 
 HWCSession::HWCSession(const hw_module_t *module) {
   hwc2_device_t::common.tag = HARDWARE_DEVICE_TAG;
@@ -93,6 +142,7 @@ int HWCSession::Init() {
     return -EINVAL;
   }
 
+  StartServices();
 
   DisplayError error = CoreInterface::CreateCore(HWCDebugHandler::Get(), &buffer_allocator_,
                                                  &buffer_sync_handler_, &socket_handler_,
@@ -144,8 +194,7 @@ int HWCSession::Init() {
     }
   }
 
-  std::thread uevent_thread(HWCUeventThread, this);
-  uevent_thread_.swap(uevent_thread);
+  g_hwc_uevent_.Register(this);
 
   return 0;
 }
@@ -165,10 +214,7 @@ int HWCSession::Deinit() {
     color_mgr_->DestroyColorManager();
   }
 
-  DLOGD("Terminating uevent thread");
-  uevent_thread_exit_ = true;
-  // todo(user): add a local event to interrupt thread execution and join.
-  uevent_thread_.detach();
+  g_hwc_uevent_.Register(nullptr);
 
   DisplayError error = CoreInterface::DestroyCore();
   if (error != kErrorNone) {
@@ -778,8 +824,6 @@ int HWCSession::DisconnectDisplay(int disp) {
 // Qclient methods
 android::status_t HWCSession::notifyCallback(uint32_t command, const android::Parcel *input_parcel,
                                              android::Parcel *output_parcel) {
-  SEQUENCE_WAIT_SCOPE_LOCK(locker_);
-
   android::status_t status = 0;
 
   switch (command) {
@@ -788,14 +832,11 @@ android::status_t HWCSession::notifyCallback(uint32_t command, const android::Pa
       break;
 
     case qService::IQService::SCREEN_REFRESH:
-      callbacks_.Refresh(HWC_DISPLAY_PRIMARY);
+      refreshScreen();
       break;
 
     case qService::IQService::SET_IDLE_TIMEOUT:
-      if (hwc_display_[HWC_DISPLAY_PRIMARY]) {
-        uint32_t timeout = UINT32(input_parcel->readInt32());
-        hwc_display_[HWC_DISPLAY_PRIMARY]->SetIdleTimeoutMs(timeout);
-      }
+      setIdleTimeout(UINT32(input_parcel->readInt32()));
       break;
 
     case qService::IQService::SET_FRAME_DUMP_CONFIG:
@@ -810,8 +851,13 @@ android::status_t HWCSession::notifyCallback(uint32_t command, const android::Pa
       status = SetDisplayMode(input_parcel);
       break;
 
-    case qService::IQService::SET_SECONDARY_DISPLAY_STATUS:
-      status = SetSecondaryDisplayStatus(input_parcel, output_parcel);
+    case qService::IQService::SET_SECONDARY_DISPLAY_STATUS: {
+        int disp_id = INT(input_parcel->readInt32());
+        HWCDisplay::DisplayStatus disp_status =
+              static_cast<HWCDisplay::DisplayStatus>(input_parcel->readInt32());
+        status = SetSecondaryDisplayStatus(disp_id, disp_status);
+        output_parcel->writeInt32(status);
+      }
       break;
 
     case qService::IQService::CONFIGURE_DYN_REFRESH_RATE:
@@ -821,56 +867,89 @@ android::status_t HWCSession::notifyCallback(uint32_t command, const android::Pa
     case qService::IQService::SET_VIEW_FRAME:
       break;
 
-    case qService::IQService::TOGGLE_SCREEN_UPDATES:
-      status = ToggleScreenUpdates(input_parcel, output_parcel);
+    case qService::IQService::TOGGLE_SCREEN_UPDATES: {
+        int32_t input = input_parcel->readInt32();
+        status = toggleScreenUpdate(input == 1);
+        output_parcel->writeInt32(status);
+      }
       break;
 
     case qService::IQService::QDCM_SVC_CMDS:
       status = QdcmCMDHandler(input_parcel, output_parcel);
       break;
 
-    case qService::IQService::MIN_HDCP_ENCRYPTION_LEVEL_CHANGED:
-      status = OnMinHdcpEncryptionLevelChange(input_parcel, output_parcel);
+    case qService::IQService::MIN_HDCP_ENCRYPTION_LEVEL_CHANGED: {
+        int disp_id = input_parcel->readInt32();
+        uint32_t min_enc_level = UINT32(input_parcel->readInt32());
+        status = MinHdcpEncryptionLevelChanged(disp_id, min_enc_level);
+        output_parcel->writeInt32(status);
+      }
       break;
 
-    case qService::IQService::CONTROL_PARTIAL_UPDATE:
-      status = ControlPartialUpdate(input_parcel, output_parcel);
+    case qService::IQService::CONTROL_PARTIAL_UPDATE: {
+        int disp_id = input_parcel->readInt32();
+        uint32_t enable = UINT32(input_parcel->readInt32());
+        status = ControlPartialUpdate(disp_id, enable == 1);
+        output_parcel->writeInt32(status);
+      }
       break;
 
-    case qService::IQService::SET_ACTIVE_CONFIG:
-      status = HandleSetActiveDisplayConfig(input_parcel, output_parcel);
+    case qService::IQService::SET_ACTIVE_CONFIG: {
+        uint32_t config = UINT32(input_parcel->readInt32());
+        int disp_id = input_parcel->readInt32();
+        status = SetActiveConfigIndex(disp_id, config);
+      }
       break;
 
-    case qService::IQService::GET_ACTIVE_CONFIG:
-      status = HandleGetActiveDisplayConfig(input_parcel, output_parcel);
+    case qService::IQService::GET_ACTIVE_CONFIG: {
+        int disp_id = input_parcel->readInt32();
+        uint32_t config = 0;
+        status = GetActiveConfigIndex(disp_id, &config);
+        output_parcel->writeInt32(INT(config));
+      }
       break;
 
-    case qService::IQService::GET_CONFIG_COUNT:
-      status = HandleGetDisplayConfigCount(input_parcel, output_parcel);
+    case qService::IQService::GET_CONFIG_COUNT: {
+        int disp_id = input_parcel->readInt32();
+        uint32_t count = 0;
+        status = GetConfigCount(disp_id, &count);
+        output_parcel->writeInt32(INT(count));
+      }
       break;
 
     case qService::IQService::GET_DISPLAY_ATTRIBUTES_FOR_CONFIG:
       status = HandleGetDisplayAttributesForConfig(input_parcel, output_parcel);
       break;
 
-    case qService::IQService::GET_PANEL_BRIGHTNESS:
-      status = GetPanelBrightness(input_parcel, output_parcel);
+    case qService::IQService::GET_PANEL_BRIGHTNESS: {
+        int level = 0;
+        status = GetPanelBrightness(&level);
+        output_parcel->writeInt32(level);
+      }
       break;
 
-    case qService::IQService::SET_PANEL_BRIGHTNESS:
-      status = SetPanelBrightness(input_parcel, output_parcel);
+    case qService::IQService::SET_PANEL_BRIGHTNESS: {
+        uint32_t level = UINT32(input_parcel->readInt32());
+        status = setPanelBrightness(level);
+        output_parcel->writeInt32(status);
+      }
       break;
 
     case qService::IQService::GET_DISPLAY_VISIBLE_REGION:
       status = GetVisibleDisplayRect(input_parcel, output_parcel);
       break;
 
-    case qService::IQService::SET_CAMERA_STATUS:
-      status = SetDynamicBWForCamera(input_parcel, output_parcel);
+    case qService::IQService::SET_CAMERA_STATUS: {
+        uint32_t camera_status = UINT32(input_parcel->readInt32());
+        status = setCameraLaunchStatus(camera_status);
+      }
       break;
 
-    case qService::IQService::GET_BW_TRANSACTION_STATUS:
-      status = GetBWTransactionStatus(input_parcel, output_parcel);
+    case qService::IQService::GET_BW_TRANSACTION_STATUS: {
+        bool state = true;
+        status = DisplayBWTransactionPending(&state);
+        output_parcel->writeInt32(state);
+      }
       break;
 
     case qService::IQService::SET_LAYER_MIXER_RESOLUTION:
@@ -889,167 +968,11 @@ android::status_t HWCSession::notifyCallback(uint32_t command, const android::Pa
   return status;
 }
 
-android::status_t HWCSession::ToggleScreenUpdates(const android::Parcel *input_parcel,
-                                                  android::Parcel *output_parcel) {
-  int input = input_parcel->readInt32();
-  int error = android::BAD_VALUE;
-
-  if (hwc_display_[HWC_DISPLAY_PRIMARY] && (input <= 1) && (input >= 0)) {
-    error = hwc_display_[HWC_DISPLAY_PRIMARY]->ToggleScreenUpdates(input == 1);
-    if (error != 0) {
-      DLOGE("Failed to toggle screen updates = %d. Error = %d", input, error);
-    }
-  }
-  output_parcel->writeInt32(error);
-
-  return error;
-}
-
-android::status_t HWCSession::SetPanelBrightness(const android::Parcel *input_parcel,
-                                                 android::Parcel *output_parcel) {
-  int level = input_parcel->readInt32();
-  int error = android::BAD_VALUE;
-
-  if (hwc_display_[HWC_DISPLAY_PRIMARY]) {
-    error = hwc_display_[HWC_DISPLAY_PRIMARY]->SetPanelBrightness(level);
-    if (error != 0) {
-      DLOGE("Failed to set the panel brightness = %d. Error = %d", level, error);
-    }
-  }
-  output_parcel->writeInt32(error);
-
-  return error;
-}
-
-android::status_t HWCSession::GetPanelBrightness(const android::Parcel *input_parcel,
-                                                 android::Parcel *output_parcel) {
-  int error = android::BAD_VALUE;
-  int ret = error;
-
-  if (hwc_display_[HWC_DISPLAY_PRIMARY]) {
-    error = hwc_display_[HWC_DISPLAY_PRIMARY]->GetPanelBrightness(&ret);
-    if (error != 0) {
-      ret = error;
-      DLOGE("Failed to get the panel brightness. Error = %d", error);
-    }
-  }
-  output_parcel->writeInt32(ret);
-
-  return error;
-}
-
-android::status_t HWCSession::ControlPartialUpdate(const android::Parcel *input_parcel,
-                                                   android::Parcel *out) {
-  DisplayError error = kErrorNone;
-  int ret = 0;
-  uint32_t disp_id = UINT32(input_parcel->readInt32());
-  uint32_t enable = UINT32(input_parcel->readInt32());
-
-  if (disp_id != HWC_DISPLAY_PRIMARY) {
-    DLOGW("CONTROL_PARTIAL_UPDATE is not applicable for display = %d", disp_id);
-    ret = -EINVAL;
-    out->writeInt32(ret);
-    return ret;
-  }
-
-  if (!hwc_display_[HWC_DISPLAY_PRIMARY]) {
-    DLOGE("primary display object is not instantiated");
-    ret = -EINVAL;
-    out->writeInt32(ret);
-    return ret;
-  }
-
-  uint32_t pending = 0;
-  error = hwc_display_[HWC_DISPLAY_PRIMARY]->ControlPartialUpdate(enable, &pending);
-
-  if (error == kErrorNone) {
-    if (!pending) {
-      out->writeInt32(ret);
-      return ret;
-    }
-  } else if (error == kErrorNotSupported) {
-    out->writeInt32(ret);
-    return ret;
-  } else {
-    ret = -EINVAL;
-    out->writeInt32(ret);
-    return ret;
-  }
-
-  // Todo(user): Unlock it before sending events to client. It may cause deadlocks in future.
-  callbacks_.Refresh(HWC_DISPLAY_PRIMARY);
-
-  // Wait until partial update control is complete
-  ret = locker_.WaitFinite(kPartialUpdateControlTimeoutMs);
-
-  out->writeInt32(ret);
-
-  return ret;
-}
-
-android::status_t HWCSession::HandleSetActiveDisplayConfig(const android::Parcel *input_parcel,
-                                                           android::Parcel *output_parcel) {
-  int config = input_parcel->readInt32();
-  int dpy = input_parcel->readInt32();
-  int error = android::BAD_VALUE;
-
-  if (dpy > HWC_DISPLAY_VIRTUAL) {
-    return android::BAD_VALUE;
-  }
-
-  if (hwc_display_[dpy]) {
-    error = hwc_display_[dpy]->SetActiveDisplayConfig(config);
-    if (error == 0) {
-      callbacks_.Refresh(0);
-    }
-  }
-
-  return error;
-}
-
-android::status_t HWCSession::HandleGetActiveDisplayConfig(const android::Parcel *input_parcel,
-                                                           android::Parcel *output_parcel) {
-  int dpy = input_parcel->readInt32();
-  int error = android::BAD_VALUE;
-
-  if (dpy > HWC_DISPLAY_VIRTUAL) {
-    return android::BAD_VALUE;
-  }
-
-  if (hwc_display_[dpy]) {
-    uint32_t config = 0;
-    error = hwc_display_[dpy]->GetActiveDisplayConfig(&config);
-    if (error == 0) {
-      output_parcel->writeInt32(INT(config));
-    }
-  }
-
-  return error;
-}
-
-android::status_t HWCSession::HandleGetDisplayConfigCount(const android::Parcel *input_parcel,
-                                                          android::Parcel *output_parcel) {
-  int dpy = input_parcel->readInt32();
-  int error = android::BAD_VALUE;
-
-  if (dpy > HWC_DISPLAY_VIRTUAL) {
-    return android::BAD_VALUE;
-  }
-
-  uint32_t count = 0;
-  if (hwc_display_[dpy]) {
-    error = hwc_display_[dpy]->GetDisplayConfigCount(&count);
-    if (error == 0) {
-      output_parcel->writeInt32(INT(count));
-    }
-  }
-
-  return error;
-}
-
 android::status_t HWCSession::HandleGetDisplayAttributesForConfig(const android::Parcel
                                                                   *input_parcel,
                                                                   android::Parcel *output_parcel) {
+  SEQUENCE_WAIT_SCOPE_LOCK(locker_);
+
   int config = input_parcel->readInt32();
   int dpy = input_parcel->readInt32();
   int error = android::BAD_VALUE;
@@ -1074,44 +997,24 @@ android::status_t HWCSession::HandleGetDisplayAttributesForConfig(const android:
   return error;
 }
 
-android::status_t HWCSession::SetSecondaryDisplayStatus(const android::Parcel *input_parcel,
-                                                        android::Parcel *output_parcel) {
-  int ret = -EINVAL;
-
-  uint32_t display_id = UINT32(input_parcel->readInt32());
-  uint32_t display_status = UINT32(input_parcel->readInt32());
-
-  DLOGI("Display = %d, Status = %d", display_id, display_status);
-
-  if (display_id >= HWC_NUM_DISPLAY_TYPES) {
-    DLOGE("Invalid display_id");
-  } else if (display_id == HWC_DISPLAY_PRIMARY) {
-    DLOGE("Not supported for this display");
-  } else if (!hwc_display_[display_id]) {
-    DLOGW("Display is not connected");
-  } else {
-    ret = hwc_display_[display_id]->SetDisplayStatus(display_status);
-  }
-
-  output_parcel->writeInt32(ret);
-
-  return ret;
-}
-
 android::status_t HWCSession::ConfigureRefreshRate(const android::Parcel *input_parcel) {
+  SEQUENCE_WAIT_SCOPE_LOCK(locker_);
+
   uint32_t operation = UINT32(input_parcel->readInt32());
+  HWCDisplay *hwc_display = hwc_display_[HWC_DISPLAY_PRIMARY];
+
   switch (operation) {
     case qdutils::DISABLE_METADATA_DYN_REFRESH_RATE:
-      return hwc_display_[HWC_DISPLAY_PRIMARY]->Perform(
-          HWCDisplayPrimary::SET_METADATA_DYN_REFRESH_RATE, false);
+      return hwc_display->Perform(HWCDisplayPrimary::SET_METADATA_DYN_REFRESH_RATE, false);
+
     case qdutils::ENABLE_METADATA_DYN_REFRESH_RATE:
-      return hwc_display_[HWC_DISPLAY_PRIMARY]->Perform(
-          HWCDisplayPrimary::SET_METADATA_DYN_REFRESH_RATE, true);
+      return hwc_display->Perform(HWCDisplayPrimary::SET_METADATA_DYN_REFRESH_RATE, true);
+
     case qdutils::SET_BINDER_DYN_REFRESH_RATE: {
       uint32_t refresh_rate = UINT32(input_parcel->readInt32());
-      return hwc_display_[HWC_DISPLAY_PRIMARY]->Perform(
-          HWCDisplayPrimary::SET_BINDER_DYN_REFRESH_RATE, refresh_rate);
+      return hwc_display->Perform(HWCDisplayPrimary::SET_BINDER_DYN_REFRESH_RATE, refresh_rate);
     }
+
     default:
       DLOGW("Invalid operation %d", operation);
       return -EINVAL;
@@ -1121,11 +1024,15 @@ android::status_t HWCSession::ConfigureRefreshRate(const android::Parcel *input_
 }
 
 android::status_t HWCSession::SetDisplayMode(const android::Parcel *input_parcel) {
+  SEQUENCE_WAIT_SCOPE_LOCK(locker_);
+
   uint32_t mode = UINT32(input_parcel->readInt32());
   return hwc_display_[HWC_DISPLAY_PRIMARY]->Perform(HWCDisplayPrimary::SET_DISPLAY_MODE, mode);
 }
 
 android::status_t HWCSession::SetMaxMixerStages(const android::Parcel *input_parcel) {
+  SEQUENCE_WAIT_SCOPE_LOCK(locker_);
+
   DisplayError error = kErrorNone;
   std::bitset<32> bit_mask_display_type = UINT32(input_parcel->readInt32());
   uint32_t max_mixer_stages = UINT32(input_parcel->readInt32());
@@ -1160,42 +1067,9 @@ android::status_t HWCSession::SetMaxMixerStages(const android::Parcel *input_par
   return 0;
 }
 
-android::status_t HWCSession::SetDynamicBWForCamera(const android::Parcel *input_parcel,
-                                                    android::Parcel *output_parcel) {
-  DisplayError error = kErrorNone;
-  uint32_t camera_status = UINT32(input_parcel->readInt32());
-  HWBwModes mode = camera_status > 0 ? kBwCamera : kBwDefault;
-
-  // trigger invalidate to apply new bw caps.
-  callbacks_.Refresh(HWC_DISPLAY_PRIMARY);
-
-  error = core_intf_->SetMaxBandwidthMode(mode);
-  if (error != kErrorNone) {
-    return -EINVAL;
-  }
-
-  new_bw_mode_ = true;
-  need_invalidate_ = true;
-
-  return 0;
-}
-
-android::status_t HWCSession::GetBWTransactionStatus(const android::Parcel *input_parcel,
-                                                     android::Parcel *output_parcel) {
-  bool state = true;
-
-  if (hwc_display_[HWC_DISPLAY_PRIMARY]) {
-    if (sync_wait(bw_mode_release_fd_, 0) < 0) {
-      DLOGI("bw_transaction_release_fd is not yet signalled: err= %s", strerror(errno));
-      state = false;
-    }
-    output_parcel->writeInt32(state);
-  }
-
-  return 0;
-}
-
 void HWCSession::SetFrameDumpConfig(const android::Parcel *input_parcel) {
+  SEQUENCE_WAIT_SCOPE_LOCK(locker_);
+
   uint32_t frame_dump_count = UINT32(input_parcel->readInt32());
   std::bitset<32> bit_mask_display_type = UINT32(input_parcel->readInt32());
   uint32_t bit_mask_layer_type = UINT32(input_parcel->readInt32());
@@ -1220,6 +1094,8 @@ void HWCSession::SetFrameDumpConfig(const android::Parcel *input_parcel) {
 }
 
 android::status_t HWCSession::SetMixerResolution(const android::Parcel *input_parcel) {
+  SEQUENCE_WAIT_SCOPE_LOCK(locker_);
+
   DisplayError error = kErrorNone;
   uint32_t dpy = UINT32(input_parcel->readInt32());
 
@@ -1245,6 +1121,8 @@ android::status_t HWCSession::SetMixerResolution(const android::Parcel *input_pa
 }
 
 android::status_t HWCSession::SetColorModeOverride(const android::Parcel *input_parcel) {
+  SEQUENCE_WAIT_SCOPE_LOCK(locker_);
+
   auto display = static_cast<hwc2_display_t >(input_parcel->readInt32());
   auto mode = static_cast<android_color_mode_t>(input_parcel->readInt32());
   auto device = static_cast<hwc2_device_t *>(this);
@@ -1255,6 +1133,8 @@ android::status_t HWCSession::SetColorModeOverride(const android::Parcel *input_
 }
 
 void HWCSession::DynamicDebug(const android::Parcel *input_parcel) {
+  SEQUENCE_WAIT_SCOPE_LOCK(locker_);
+
   int type = input_parcel->readInt32();
   bool enable = (input_parcel->readInt32() > 0);
   DLOGI("type = %d enable = %d", type, enable);
@@ -1295,6 +1175,8 @@ void HWCSession::DynamicDebug(const android::Parcel *input_parcel) {
 
 android::status_t HWCSession::QdcmCMDHandler(const android::Parcel *input_parcel,
                                              android::Parcel *output_parcel) {
+  SEQUENCE_WAIT_SCOPE_LOCK(locker_);
+
   int ret = 0;
   int32_t *brightness_value = NULL;
   uint32_t display_id(0);
@@ -1386,73 +1268,24 @@ android::status_t HWCSession::QdcmCMDHandler(const android::Parcel *input_parcel
   return (ret ? -EINVAL : 0);
 }
 
-android::status_t HWCSession::OnMinHdcpEncryptionLevelChange(const android::Parcel *input_parcel,
-                                                             android::Parcel *output_parcel) {
-  int ret = -EINVAL;
-  uint32_t display_id = UINT32(input_parcel->readInt32());
-  uint32_t min_enc_level = UINT32(input_parcel->readInt32());
-
-  DLOGI("Display %d", display_id);
-
-  if (display_id >= HWC_NUM_DISPLAY_TYPES) {
-    DLOGE("Invalid display_id");
-  } else if (display_id != HWC_DISPLAY_EXTERNAL) {
-    DLOGE("Not supported for display");
-  } else if (!hwc_display_[display_id]) {
-    DLOGW("Display is not connected");
-  } else {
-    ret = hwc_display_[display_id]->OnMinHdcpEncryptionLevelChange(min_enc_level);
-  }
-
-  output_parcel->writeInt32(ret);
-
-  return ret;
-}
-
-void *HWCSession::HWCUeventThread(void *context) {
-  if (context) {
-    return reinterpret_cast<HWCSession *>(context)->HWCUeventThreadHandler();
-  }
-
-  return NULL;
-}
-
-void *HWCSession::HWCUeventThreadHandler() {
-  static char uevent_data[PAGE_SIZE];
-  int length = 0;
-  prctl(PR_SET_NAME, uevent_thread_name_, 0, 0, 0);
-  setpriority(PRIO_PROCESS, 0, HAL_PRIORITY_URGENT_DISPLAY);
-  if (!uevent_init()) {
-    DLOGE("Failed to init uevent");
-    pthread_exit(0);
-    return NULL;
-  }
-
-  while (!uevent_thread_exit_) {
-    // keep last 2 zeroes to ensure double 0 termination
-    length = uevent_next_event(uevent_data, INT32(sizeof(uevent_data)) - 2);
-
-    if (strcasestr(HWC_UEVENT_SWITCH_HDMI, uevent_data)) {
-      DLOGI("Uevent HDMI = %s", uevent_data);
-      int connected = GetEventValue(uevent_data, length, "SWITCH_STATE=");
-      if (connected >= 0) {
-        DLOGI("HDMI = %s", connected ? "connected" : "disconnected");
-        if (HotPlugHandler(connected) == -1) {
-          DLOGE("Failed handling Hotplug = %s", connected ? "connected" : "disconnected");
-        }
-      }
-    } else if (strcasestr(HWC_UEVENT_GRAPHICS_FB0, uevent_data)) {
-      DLOGI("Uevent FB0 = %s", uevent_data);
-      int panel_reset = GetEventValue(uevent_data, length, "PANEL_ALIVE=");
-      if (panel_reset == 0) {
-        callbacks_.Refresh(0);
-        reset_panel_ = true;
+void HWCSession::UEvent(const char *uevent_data, int length) {
+  if (strcasestr(HWC_UEVENT_SWITCH_HDMI, uevent_data)) {
+    DLOGI("Uevent HDMI = %s", uevent_data);
+    int connected = GetEventValue(uevent_data, length, "SWITCH_STATE=");
+    if (connected >= 0) {
+      DLOGI("HDMI = %s", connected ? "connected" : "disconnected");
+      if (HotPlugHandler(connected) == -1) {
+        DLOGE("Failed handling Hotplug = %s", connected ? "connected" : "disconnected");
       }
     }
+  } else if (strcasestr(HWC_UEVENT_GRAPHICS_FB0, uevent_data)) {
+    DLOGI("Uevent FB0 = %s", uevent_data);
+    int panel_reset = GetEventValue(uevent_data, length, "PANEL_ALIVE=");
+    if (panel_reset == 0) {
+      callbacks_.Refresh(0);
+      reset_panel_ = true;
+    }
   }
-  pthread_exit(0);
-
-  return NULL;
 }
 
 int HWCSession::GetEventValue(const char *uevent_data, int length, const char *event_info) {
@@ -1586,6 +1419,8 @@ int HWCSession::GetVsyncPeriod(int disp) {
 
 android::status_t HWCSession::GetVisibleDisplayRect(const android::Parcel *input_parcel,
                                                     android::Parcel *output_parcel) {
+  SEQUENCE_WAIT_SCOPE_LOCK(locker_);
+
   int dpy = input_parcel->readInt32();
 
   if (dpy < HWC_DISPLAY_PRIMARY || dpy > HWC_DISPLAY_VIRTUAL) {
