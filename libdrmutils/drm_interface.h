@@ -184,6 +184,18 @@ enum struct DRMOps {
    *      uint32_t - Framebuffer ID
    */
   CONNECTOR_SET_OUTPUT_FB_ID,
+  /*
+   * Op: Enable PLL update for connector.
+   * Arg: uint32_t - Connector ID
+   *      bool - enable
+   */
+  CONNECTOR_ENABLE_PLL_UPDATE,
+  /*
+   * Op: Sets PLL delta for connector.
+   * Arg: uint32_t - Connector ID
+   *      int32_t - ppm
+   */
+  CONNECTOR_UPDATE_DISPLAY_PLL,
 };
 
 enum struct DRMRotation {

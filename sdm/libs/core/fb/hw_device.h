@@ -97,6 +97,8 @@ class HWDevice : public HWInterface {
   virtual DisplayError SetScaleLutConfig(HWScaleLutInfo *lut_info);
   virtual DisplayError SetMixerAttributes(const HWMixerAttributes &mixer_attributes);
   virtual DisplayError GetMixerAttributes(HWMixerAttributes *mixer_attributes);
+  virtual DisplayError EnablePllUpdate(int32_t enable) { return kErrorNotSupported; };
+  virtual DisplayError UpdateDisplayPll(int32_t ppm) { return kErrorNotSupported; };
 
   enum {
     kHWEventVSync,
