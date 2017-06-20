@@ -6,8 +6,8 @@ cpp_sources = QService.cpp \
               IQClient.cpp \
               IQHDMIClient.cpp
 
-library_includedir = $(includedir)
-library_include_HEADERS = $(h_sources)
+qservice_includedir = $(pkgincludedir)/display
+qservice_include_HEADERS = $(h_sources)
 
 lib_LTLIBRARIES = libqservice.la
 libqservice_la_CC = @CC@
