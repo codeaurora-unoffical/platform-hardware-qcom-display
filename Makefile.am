@@ -2,7 +2,7 @@
 
 ACLOCAL_AMFLAGS = -I m4
 
-SUBDIRS = sdm/libs/utils
+SUBDIRS = libqservice libqdutils libgralloc sdm/libs/utils
 if ENABLE_SDMHALDRM
 SUBDIRS += libdrmutils
 endif

@@ -45,6 +45,7 @@
 #include "hw_hdmi.h"
 
 #define __CLASS__ "HWHDMI"
+#define VIDEO_FORMAT_ARRAY 8
 
 namespace sdm {
 
@@ -174,6 +175,18 @@ static bool MapHDMIDisplayTiming(const msm_hdmi_mode_timing_info *mode,
   std::bitset<32> pixel_formats = mode->pixel_formats;
   if (pixel_formats[1]) {
     info->grayscale = V4L2_PIX_FMT_NV12;
+  }
+
+  if (!mode->active_low_h) {
+    info->sync |= (uint32_t)FB_SYNC_HOR_HIGH_ACT;
+  } else {
+    info->sync &= (uint32_t)~FB_SYNC_HOR_HIGH_ACT;
+  }
+
+  if (!mode->active_low_v) {
+    info->sync |= (uint32_t)FB_SYNC_VERT_HIGH_ACT;
+  } else {
+    info->sync &= (uint32_t)~FB_SYNC_VERT_HIGH_ACT;
   }
 
   return true;
@@ -407,17 +420,21 @@ DisplayError HWHDMI::SetDisplayAttributes(uint32_t index) {
   return kErrorNone;
 }
 
-DisplayError HWHDMI::GetConfigIndex(uint32_t mode, uint32_t *index) {
+DisplayError HWHDMI::GetConfigIndex(char *mode, uint32_t *index) {
+
+  std::string str(mode);
+  uint32_t value = UINT32(stoi(str));
+
   // Check if the mode is valid and return corresponding index
   for (uint32_t i = 0; i < hdmi_modes_.size(); i++) {
-    if (hdmi_modes_[i] == mode) {
+    if (hdmi_modes_[i] == value) {
       *index = i;
-      DLOGI("Index = %d for config = %d", *index, mode);
+      DLOGI("Index = %d for config = %d", *index, value);
       return kErrorNone;
     }
   }
 
-  DLOGE("Config = %d not supported", mode);
+  DLOGE("Config = %d not supported", value);
   return kErrorNotSupported;
 }
 
@@ -864,7 +881,9 @@ DisplayError HWHDMI::GetDynamicFrameRateMode(uint32_t refresh_rate, uint32_t *mo
     return kErrorNotSupported;
   }
 
-  GetConfigIndex(dst->video_format, config_index);
+  char mode_val[VIDEO_FORMAT_ARRAY]={};
+  snprintf(mode_val,sizeof(mode_val),"%d",dst->video_format);
+  GetConfigIndex(mode_val, config_index);
 
   data->hor_front_porch = dst->front_porch_h;
   data->hor_back_porch = dst->back_porch_h;
