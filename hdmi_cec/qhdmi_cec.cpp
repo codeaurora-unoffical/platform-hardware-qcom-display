@@ -29,14 +29,15 @@
 
 #define DEBUG 0
 #define ATRACE_TAG (ATRACE_TAG_GRAPHICS | ATRACE_TAG_HAL)
-#include <cstdlib>
 #include <cutils/log.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <hardware/hdmi_cec.h>
 #include <utils/Trace.h>
+#include <utils/debug.h>
+#include <utils/sys.h>
+#include <cstdlib>
 #include "qhdmi_cec.h"
-#include "QHDMIClient.h"
 
 namespace qhdmicec {
 
@@ -66,6 +67,18 @@ enum {
 static void cec_close_context(cec_context_t* ctx __unused);
 static int cec_enable(cec_context_t *ctx, int enable);
 static int cec_is_connected(const struct hdmi_cec_device* dev, int port_id);
+static void cec_msg_monitor(cec_context_t* ctx);
+static void initialize_pollfd_cecmsg (cec_context_t* ctx);
+static void cec_msg_monitor_deinit(cec_context_t* ctx, std::thread *cec_message_monitor);
+
+void event_monitor(cec_context_t* ctx);  // hdmi event monitor function
+void cec_msg_monitor(cec_context_t* ctx);  // cec message monitor function
+static int get_event_value(const char *uevent_data, int length, const char *event_info);
+static int uevent_init(int *uevent_fd);
+static int uevent_next_event(int *, char* buffer, int buffer_length);
+static bool read_lock(std::mutex *mutex_variable, bool *lock_variable);
+static bool write_lock(std::mutex *mutex_variable, bool *lock_variable, bool set_lock_variable);
+
 
 static ssize_t read_node(const char *path, char *data)
 {
@@ -142,7 +155,6 @@ static ssize_t cec_get_fb_node_number(cec_context_t *ctx)
     for(int num = 0; num < MAX_FB_DEVICES; num++) {
         snprintf(fb_type_path, sizeof(fb_type_path),"%s%d/msm_fb_type",
                 SYSFS_BASE,num);
-        ALOGD_IF(DEBUG, "%s: num: %d fb_type_path: %s", __FUNCTION__, num, fb_type_path);
         len = read_node(fb_type_path, fb_type);
         ALOGD_IF(DEBUG, "%s: fb_type:%s", __FUNCTION__, fb_type);
         if(len > 0 && (strncmp(fb_type, dtv_panel_str, strlen(dtv_panel_str)) == 0)){
@@ -240,7 +252,6 @@ static int cec_send_message(const struct hdmi_cec_device* dev,
     //msg length + initiator + destination
     write_msg[CEC_OFFSET_FRAME_LENGTH] = (unsigned char) (msg->length + 1);
     hex_to_string(write_msg, sizeof(write_msg), dump);
-    ALOGD_IF(DEBUG, "%s: message to driver: %s", __FUNCTION__, dump);
     snprintf(write_msg_path, sizeof(write_msg_path), "%s/cec/wr_msg",
             ctx->fb_sysfs_path);
     int retry_count = 0;
@@ -445,20 +456,24 @@ static void cec_init_context(cec_context_t *ctx)
     ctx->vendor_id = 0xA47733;
     cec_clear_logical_address((hdmi_cec_device_t*)ctx);
 
-    //Set up listener for HDMI events
-    ctx->disp_client = new qClient::QHDMIClient();
-    ctx->disp_client->setCECContext(ctx);
-    ctx->disp_client->registerClient(ctx->disp_client);
-
     //Enable CEC - framework expects it to be enabled by default
     cec_enable(ctx, true);
 
     ALOGD("%s: CEC enabled", __FUNCTION__);
+    write_lock(&ctx->hdmi_plugin_monitor_exit_mutex, &ctx->hdmi_plugin_monitor_exit, false);
+    ctx->hdmi_plugin_monitor = new std::thread(event_monitor, ctx);
 }
 
 static void cec_close_context(cec_context_t* ctx __unused)
 {
     ALOGD("%s: Closing context", __FUNCTION__);
+    if (ctx->hdmi_plugin_monitor != NULL) {
+       if (ctx->hdmi_plugin_monitor->joinable()) {
+          write_lock(&ctx->hdmi_plugin_monitor_exit_mutex, &ctx->hdmi_plugin_monitor_exit, true);
+          ctx->hdmi_plugin_monitor->join();
+       }
+       delete ctx->hdmi_plugin_monitor;
+    }
 }
 
 static int cec_device_open(const struct hw_module_t* module,
@@ -472,7 +487,6 @@ static int cec_device_open(const struct hw_module_t* module,
         dev = (cec_context_t *) calloc (1, sizeof(*dev));
         if (dev) {
             cec_init_context(dev);
-
             //Setup CEC methods
             dev->device.common.tag       = HARDWARE_DEVICE_TAG;
             dev->device.common.version   = HDMI_CEC_DEVICE_API_VERSION_1_0;
@@ -498,6 +512,223 @@ static int cec_device_open(const struct hw_module_t* module,
     }
     return status;
 }
+
+void event_monitor(cec_context_t* ctx) {
+    static char uevent_data[PAGE_SIZE];
+    int length = 0;
+    std::thread *cec_message_monitor = NULL;
+    prctl(PR_SET_NAME, "hotplugeventmonitor", 0, 0, 0);
+    setpriority(PRIO_PROCESS, 0, HAL_PRIORITY_URGENT_DISPLAY);
+
+    if (!uevent_init(&ctx->uevent_fd)) {
+        ALOGE("Failed to init uevent");
+        write_lock(&ctx->hdmi_plugin_monitor_exit_mutex, &ctx->hdmi_plugin_monitor_exit, true);
+        return;
+    }
+
+    if (cec_is_connected((const struct hdmi_cec_device*)ctx, 0) > 0) {
+            initialize_pollfd_cecmsg(ctx);
+            cec_message_monitor = new std::thread(cec_msg_monitor, ctx);
+    }
+
+    while (!read_lock(&ctx->hdmi_plugin_monitor_exit_mutex, &ctx->hdmi_plugin_monitor_exit)) {
+        length = uevent_next_event(&ctx->uevent_fd, uevent_data,
+                    INT32(sizeof(uevent_data)) - 2);
+        if (strcasestr(UEVENT_SWITCH_HDMI, uevent_data)) {
+            int connected = get_event_value(uevent_data, length, "SWITCH_STATE=");
+            if (connected >= 0) {
+                cec_hdmi_hotplug(ctx, connected);
+                if (connected) {
+                    // if cec message monitor thread existed please remove.
+                    if (cec_message_monitor != NULL) {
+                        cec_msg_monitor_deinit(ctx, cec_message_monitor);
+                        cec_message_monitor = NULL;
+                    }
+                    initialize_pollfd_cecmsg(ctx);
+                    cec_message_monitor = new std::thread(cec_msg_monitor, ctx);
+                } else {
+                    // hdmi removed please stop the cec message poll
+                    if (cec_message_monitor != NULL) {
+                        cec_msg_monitor_deinit(ctx, cec_message_monitor);
+                        cec_message_monitor = NULL;
+                    }
+                }
+            } else {
+                ALOGE("Failed handling Hotplug = %s", connected ? "connected" : "disconnected");
+            }
+        }
+    }
+
+    // hdmi monitor thread stopped please stop the cec message poll
+    if (cec_message_monitor != NULL) {
+        cec_msg_monitor_deinit(ctx, cec_message_monitor);
+        cec_message_monitor = NULL;
+    }
+    ALOGD("Exit of %s ", __FUNCTION__);
+    return;
+}
+
+static void cec_msg_monitor_deinit(cec_context_t* ctx, std::thread *cec_message_monitor){
+
+    ctx->cec_exit_thread_ = true;
+    uint64_t exit_value = 1;
+    long int write_size = write(ctx->exit_fd_, &exit_value, sizeof(uint64_t));
+
+    if (write_size != sizeof(uint64_t)){
+        ALOGD("Error triggering exit_fd_ (%d). write size = %ld, error = %s", ctx->exit_fd_, write_size,
+        strerror(errno));
+        return;
+    }
+    if (cec_message_monitor->joinable()) {
+        cec_message_monitor->join();
+    }
+    delete cec_message_monitor;
+
+    for (uint32_t i = 0; i < 2; i++) {
+        close(ctx->poll_fds_[i].fd);
+        ctx->poll_fds_[i].fd = -1;
+    }
+}
+
+static void initialize_pollfd_cecmsg (cec_context_t* ctx) {
+
+    char data[MAX_STRING_LENGTH] = {0};
+    int fb_num_ = 0;
+    char node_path[MAX_STRING_LENGTH] = {0};
+    pollfd poll_cecmsg_fd, poll_exit_fd;
+    poll_cecmsg_fd.fd = -1;
+    poll_exit_fd.fd = -1;
+    ctx->exit_fd_ = -1;
+    ctx->poll_fds_.resize(2);
+    ctx->cec_exit_thread_ = false;
+
+    // initialize fd for exit signal to the cec message monitor thread
+    poll_exit_fd.fd = eventfd(0, 0);
+    poll_exit_fd.events |= POLLIN;
+    ctx->exit_fd_ = poll_exit_fd.fd;
+    ctx->poll_fds_[1] = poll_exit_fd;
+
+    // initialize poll fd for cec message monitor
+    prctl(PR_SET_NAME, "cecmsgmonitor", 0, 0, 0);
+    setpriority(PRIO_PROCESS, 0, ctx->kThreadPriorityUrgent);
+    poll_cecmsg_fd.fd = -1;
+    snprintf(node_path, sizeof(node_path), "%s%d/%s", FB_PATH, fb_num_,
+        "cec/rd_msg");
+
+    poll_cecmsg_fd.fd = open(node_path, O_RDONLY);
+    poll_cecmsg_fd.events |= POLLPRI | POLLERR;
+    if (poll_cecmsg_fd.fd < 0) {
+        ALOGI("open failed for display=%d event=%s, error=%s", fb_num_,
+            "cec/rd_msg", strerror(errno));
+        return;
+    }
+    pread(poll_cecmsg_fd.fd, data , MAX_STRING_LENGTH, 0);
+    ctx->poll_fds_[0] = poll_cecmsg_fd;
+}
+
+static void cec_msg_monitor(cec_context_t* ctx) {
+
+        char data[MAX_STRING_LENGTH] = {0};
+        while (!ctx->cec_exit_thread_) {
+        int error = poll(ctx->poll_fds_.data(), 2, -1);
+        if (error <= 0) {
+            ALOGI("poll failed. error = %s", strerror(errno));
+            continue;
+        }
+            for (int i = 0; i < 2; i++) {
+            pollfd &poll_fd = ctx->poll_fds_[i];
+            if (i == 1) {
+                // check for exit event
+                if ((poll_fd.revents & POLLIN) && (pread(poll_fd.fd, data, MAX_STRING_LENGTH,0) > 0)) {
+                    ctx->cec_exit_thread_ = true;
+                    break;
+            }
+            }else {
+                if ((poll_fd.revents & POLLPRI) &&
+                    (pread(poll_fd.fd, data, MAX_STRING_LENGTH, 0) > 0)) {
+                        cec_receive_message(ctx, data, 0);
+                    }
+            }
+        }
+    }
+    ALOGD("Exit CEC Monitor Thread %s ", __FUNCTION__);
+    return;
+}
+
+static int get_event_value(const char *uevent_data, int length, const char *event_info) {
+    const char *iterator_str = uevent_data;
+    while (((iterator_str - uevent_data) <= length) && (*iterator_str)) {
+        const char *pstr = strstr(iterator_str, event_info);
+        if (pstr != NULL) {
+            return (atoi(iterator_str + strlen(event_info)));
+        }
+        iterator_str += strlen(iterator_str) + 1;
+    }
+    return -1;
+}
+
+/* Returns 0 on failure, 1 on success */
+static int uevent_init(int *uevent_fd) {
+    struct sockaddr_nl addr;
+    int sz = 64*1024;
+    int s;
+
+    memset(&addr, 0, sizeof(addr));
+    addr.nl_family = AF_NETLINK;
+    addr.nl_pid = getpid();
+    addr.nl_groups = 0xffffffff;
+
+    s = socket(PF_NETLINK, SOCK_DGRAM, NETLINK_KOBJECT_UEVENT);
+    if (s < 0)
+        return 0;
+
+    setsockopt(s, SOL_SOCKET, SO_RCVBUFFORCE, &sz, sizeof(sz));
+
+    if (bind(s, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
+        close(s);
+        return 0;
+    }
+
+    *uevent_fd = s;
+    return (*uevent_fd > 0);
+}
+
+static int uevent_next_event(int *uevent_fd, char* buffer, int buffer_length) {
+    while (1) {
+        struct pollfd fds;
+        int nr;
+
+        fds.fd = *uevent_fd;
+        fds.events = POLLIN;
+        fds.revents = 0;
+        nr = poll(&fds, 1, 100);  // adding polling time as 100 milliseconds
+
+        if (nr > 0 && (fds.revents & POLLIN)) {
+            int count = static_cast<int> (recv(*uevent_fd, buffer, buffer_length, 0));
+            if (count > 0) {
+                return count;
+            }
+        }
+    }
+    // won't get here
+    return 0;
+}
+
+static bool read_lock(std::mutex *mutex_variable, bool *lock_variable) {
+    bool current_lock = false;
+    mutex_variable->lock();
+    current_lock = *lock_variable;
+    mutex_variable->unlock();
+    return current_lock;
+}
+
+static bool write_lock(std::mutex *mutex_variable, bool *lock_variable, bool set_lock_variable) {
+    mutex_variable->lock();
+    *lock_variable = set_lock_variable;
+    mutex_variable->unlock();
+    return true;
+}
+
 }; //namespace qhdmicec
 
 // Standard HAL module, should be outside qhdmicec namespace

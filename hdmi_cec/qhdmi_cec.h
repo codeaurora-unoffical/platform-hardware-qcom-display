@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 The Linux Foundation. All rights reserved.
+* Copyright (c) 2017 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -31,15 +31,29 @@
 
 #include <hardware/hdmi_cec.h>
 #include <utils/RefBase.h>
-
-namespace qClient {
-    class QHDMIClient;
-};
+#include <sys/poll.h>
+#include <sys/resource.h>
+#include <sys/prctl.h>
+#include <malloc.h>
+#include <string.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <sys/queue.h>
+#include <linux/netlink.h>
+#include <thread>
+#include <vector>
+#include <mutex>
 
 namespace qhdmicec {
 
-#define SYSFS_BASE  "/sys/class/graphics/fb"
+#define SYSFS_BASE  "/sys/devices/virtual/graphics/fb"
 #define MAX_PATH_LENGTH  128
+#define MAX_STRING_LENGTH 1024
+#define UEVENT_SWITCH_HDMI "change@/devices/virtual/switch/hdmi"
+#define FB_PATH "/sys/devices/virtual/graphics/fb"
+
 
 struct cec_callback_t {
     // Function in HDMI service to call back on CEC messages
@@ -64,7 +78,17 @@ struct cec_context_t {
     int logical_address[CEC_ADDR_BROADCAST];
     int version;
     uint32_t vendor_id;
-    android::sp<qClient::QHDMIClient> disp_client;
+
+    std::vector<pollfd> poll_fds_;              // poll fds for cec message monitor and exit signal
+                                                // on cec message monitor thread
+    int exit_fd_;
+    bool cec_exit_thread_;
+    bool hdmi_plugin_monitor_exit = true;       // hdmi plugin monitor thread will exit on true
+    std::mutex hdmi_plugin_monitor_exit_mutex;  // hdmi plugin monitor variable mutex
+    std::thread *hdmi_plugin_monitor = NULL;    // hdmi plugin monitor thread variable
+    int uevent_fd = -1;                         // uevent file descriptor used to monitor hdmi uevents
+
+    const int kThreadPriorityUrgent = -9;
 };
 
 void cec_receive_message(cec_context_t *ctx, char *msg, ssize_t len);
