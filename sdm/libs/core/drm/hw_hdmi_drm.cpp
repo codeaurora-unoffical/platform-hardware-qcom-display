@@ -252,5 +252,19 @@ DisplayError HWHDMIDRM::Commit(HWLayers *hw_layers) {
   return HWDeviceDRM::Commit(hw_layers);
 }
 
+DisplayError HWHDMIDRM::EnablePllUpdate(int32_t enable) {
+  drm_atomic_intf_->Perform(DRMOps::CONNECTOR_ENABLE_PLL_UPDATE,
+                         token_.conn_id, enable);
+
+  return kErrorNone;
+}
+
+DisplayError HWHDMIDRM::UpdateDisplayPll(int32_t ppm) {
+  drm_atomic_intf_->Perform(DRMOps::CONNECTOR_UPDATE_DISPLAY_PLL,
+                         token_.conn_id, ppm);
+
+  return kErrorNone;
+}
+
 }  // namespace sdm
 

@@ -5,7 +5,7 @@ h_sources = alloc_controller.h \
 cpp_sources = ionalloc.cpp \
               alloc_controller.cpp
 
-memalloc_includedir = $(pkgincludedir)
+memalloc_includedir = $(pkgincludedir)/display
 memalloc_include_HEADERS = $(h_sources)
 
 lib_LTLIBRARIES = libmemalloc.la
@@ -27,7 +27,7 @@ c_sources = gpu.cpp \
             framebuffer.cpp \
             mapper.cpp
 
-library_includedir = $(pkgincludedir)
+library_includedir = $(pkgincludedir)/display
 library_include_HEADERS = $(header_sources)
 
 lib_LTLIBRARIES += libgralloc.la

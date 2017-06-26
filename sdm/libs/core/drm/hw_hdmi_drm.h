@@ -82,6 +82,8 @@ class HWHDMIDRM : public HWDeviceDRM {
   virtual DisplayError GetConfigIndex(char *mode, uint32_t *index);
   virtual DisplayError Validate(HWLayers *hw_layers);
   virtual DisplayError Commit(HWLayers *hw_layers);
+  virtual DisplayError EnablePllUpdate(int32_t enable);
+  virtual DisplayError UpdateDisplayPll(int32_t ppm);
 
  private:
   static const int kThresholdRefreshRate = 1000;

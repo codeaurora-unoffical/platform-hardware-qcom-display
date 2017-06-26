@@ -639,6 +639,20 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
           }
         }
 
+        if (input_buffer->flags.secure) {
+          if (input_buffer->flags.secure_camera) {
+            drm_atomic_intf_->Perform(DRMOps::PLANE_SET_FB_SECURE_MODE, pipe_id,
+                                      SDE_DRM_FB_SEC_DIR_TRANS);
+          } else if (input_buffer->flags.secure_display) {
+            drm_atomic_intf_->Perform(DRMOps::PLANE_SET_FB_SECURE_MODE, pipe_id,
+                                      SDE_DRM_FB_NON_SEC_DIR_TRANS);
+            drm_atomic_intf_->Perform(DRMOps::CRTC_SET_SECURITY_LEVEL, token_.crtc_id,
+                                      SDE_DRM_SEC_ONLY);
+          } else {
+            drm_atomic_intf_->Perform(DRMOps::PLANE_SET_FB_SECURE_MODE, pipe_id, SDE_DRM_FB_SEC);
+          }
+        }
+
         drm_atomic_intf_->Perform(DRMOps::PLANE_SET_ROTATION, pipe_id, rot_bit_mask);
         drm_atomic_intf_->Perform(DRMOps::PLANE_SET_H_DECIMATION, pipe_id,
                                   pipe_info->horizontal_decimation);

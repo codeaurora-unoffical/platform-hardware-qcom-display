@@ -337,5 +337,19 @@ DisplayError DisplayHDMI::PFlip(int fd,
   return kErrorNone;
 }
 
+DisplayError DisplayHDMI::EnablePllUpdate(int32_t enable) {
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
+
+  DLOGD("Enable PLL Update: %d", enable);
+  return hw_intf_->EnablePllUpdate(enable);
+}
+
+DisplayError DisplayHDMI::UpdateDisplayPll(int32_t ppm) {
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
+
+  DLOGD("Update Display PLL: %d", ppm);
+  return hw_intf_->UpdateDisplayPll(ppm);
+}
+
 }  // namespace sdm
 
