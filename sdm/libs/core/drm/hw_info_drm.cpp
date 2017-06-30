@@ -106,6 +106,23 @@ class DRMLoggerImpl : public DRMLogger {
   char buf_[1024] = {};
 };
 
+static HWQseedStepVersion GetQseedStepVersion(sde_drm::QSEEDStepVersion drm_version) {
+  HWQseedStepVersion sdm_version;
+  switch (drm_version) {
+    case sde_drm::QSEEDStepVersion::V2:
+    default:
+      sdm_version = kQseed3v2;
+      break;
+    case sde_drm::QSEEDStepVersion::V3:
+      sdm_version = kQseed3v3;
+      break;
+    case sde_drm::QSEEDStepVersion::V4:
+      sdm_version = kQseed3v4;
+      break;
+  }
+  return sdm_version;
+}
+
 HWResourceInfo *HWInfoDRM::hw_resource_ = nullptr;
 
 HWInfoDRM::HWInfoDRM() {
@@ -314,6 +331,7 @@ void HWInfoDRM::PopulatePipeCaps(const sde_drm::DRMPlaneTypeInfo &info,
   hw_resource->max_scale_down = info.max_downscale;
   hw_resource->max_scale_up = info.max_upscale;
   hw_resource->has_decimation = info.max_horizontal_deci > 1 && info.max_vertical_deci > 1;
+  hw_resource->pipe_qseed3_version = GetQseedStepVersion(info.qseed3_version);
 }
 
 void HWInfoDRM::PopulateSupportedFmts(HWSubBlockType sub_blk_type,
