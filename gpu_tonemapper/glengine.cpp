@@ -16,10 +16,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include "glengine.h"
-#include <utils/Log.h>
 #include "engine.h"
+
+/* TODO: Replacing ALOGE, ALOGI with fprintf to keep logs platform agnostic */
+/* TODO: Will need to replace for generic implementation for logging.       */ 
 
 void checkGlError(const char *, int);
 void checkEglError(const char *, int);
@@ -67,6 +68,21 @@ void engine_free_backup(void* context)
   delete callerContext;
 }
 
+static int GetDrmMasterFd() {
+    DRMMaster *master = nullptr;
+    int ret = DRMMaster::GetInstance(&master);
+    int fd;
+
+    if (ret < 0) {
+        fprintf(stderr, "Failed to acquire DRMMaster instance. \n");
+        return -1;
+    }
+
+    master->GetHandle(&fd);
+
+    return fd;
+}
+
 //-----------------------------------------------------------------------------
 // initialize GL
 //
@@ -75,13 +91,19 @@ void* engine_initialize()
 {
   EngineContext* engineContext = new EngineContext();
 
+  int drm_fd = GetDrmMasterFd();
+
+  // TODO (user): Need to destroy gbm_device on destructor.
+  struct gbm_device *gbm;
+  if (!(drm_fd < 0))
+      gbm = gbm_create_device(drm_fd);
+
   // display
-  engineContext->eglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+  engineContext->eglDisplay = eglGetDisplay((void*) gbm);
   EGL(eglBindAPI(EGL_OPENGL_ES_API));
 
   // initialize
   EGL(eglInitialize(engineContext->eglDisplay, 0, 0));
-
   // config
   EGLConfig eglConfig;
   EGLint eglConfigAttribList[] = {EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
@@ -102,8 +124,7 @@ void* engine_initialize()
   engineContext->eglSurface = eglCreatePbufferSurface(engineContext->eglDisplay, eglConfig, eglSurfaceAttribList);
 
   eglMakeCurrent(engineContext->eglDisplay, engineContext->eglSurface, engineContext->eglSurface, engineContext->eglContext);
-
-  ALOGI("In %s context = %p", __FUNCTION__, (void *)(engineContext->eglContext));
+  fprintf(stderr, "In %s context = %p", __FUNCTION__, (void *)(engineContext->eglContext));
 
   return (void*)(engineContext);
 }
@@ -194,7 +215,7 @@ void dumpShaderLog(int shader)
   GL(glGetShaderiv(shader, GL_COMPILE_STATUS, &success));
   if (!success) {
     glGetShaderInfoLog(shader, 512, NULL, infoLog);
-    ALOGI("Shader Failed to compile: %s\n", infoLog);
+    fprintf(stderr, "Shader Failed to compile: %s\n", infoLog);
   }
 }
 
@@ -240,7 +261,7 @@ void WaitOnNativeFence(int fd)
     EGLSyncKHR sync = eglCreateSyncKHR(eglGetCurrentDisplay(), EGL_SYNC_NATIVE_FENCE_ANDROID, attribs);
 
     if (sync == EGL_NO_SYNC_KHR) {
-      ALOGE("%s - Failed to Create sync from source fd", __FUNCTION__);
+      fprintf(stderr, "%s - Failed to Create sync from source fd", __FUNCTION__);
     } else {
       // the gpu will wait for this sync - not this cpu thread.
       EGL(eglWaitSyncKHR(eglGetCurrentDisplay(), sync, 0));
@@ -258,11 +279,11 @@ int CreateNativeFence()
   EGLSyncKHR sync = eglCreateSyncKHR(eglGetCurrentDisplay(), EGL_SYNC_NATIVE_FENCE_ANDROID, NULL);
   GL(glFlush());
   if (sync == EGL_NO_SYNC_KHR) {
-    ALOGE("%s - Failed to Create Native Fence sync", __FUNCTION__);
+    fprintf(stderr, "%s - Failed to Create Native Fence sync", __FUNCTION__);
   } else {
     fd = eglDupNativeFenceFDANDROID(eglGetCurrentDisplay(), sync);
     if (fd == EGL_NO_NATIVE_FENCE_FD_ANDROID) {
-      ALOGE("%s - Failed to dup sync", __FUNCTION__);
+      fprintf(stderr, "%s - Failed to dup sync", __FUNCTION__);
     }
     EGL(eglDestroySyncKHR(eglGetCurrentDisplay(), sync));
   }
@@ -351,11 +372,11 @@ void checkGlError(const char *file, int line)
         break;
 
       default:
-        ALOGE("glError (0x%x) %s:%d\n", error, file, line);
+        fprintf(stderr, "glError (0x%x) %s:%d\n", error, file, line);
         return;
     }
 
-    ALOGE("glError (%s) %s:%d\n", pError, file, line);
+    fprintf(stderr, "glError (%s) %s:%d\n", pError, file, line);
     return;
   }
   return;
@@ -419,10 +440,10 @@ void checkEglError(const char *file, int line)
         pError = (char *)"EGL_CONTEXT_LOST";
         break;
       default:
-        ALOGE("eglError (0x%x) %s:%d\n", error, file, line);
+        fprintf(stderr, "eglError (0x%x) %s:%d\n", error, file, line);
         return;
     }
-    ALOGE("eglError (%s) %s:%d\n", pError, file, line);
+    fprintf(stderr, "eglError (%s) %s:%d\n", pError, file, line);
     return;
   }
   return;

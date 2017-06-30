@@ -17,38 +17,21 @@
  * limitations under the License.
  */
 
-#ifndef __TONEMAPPER_GLENGINE_H__
-#define __TONEMAPPER_GLENGINE_H__
-#include <EGL/egl.h>
-#define EGL_EGLEXT_PROTOTYPES
-#include <EGL/eglext.h>
-#include <GLES3/gl31.h>
-#define GL_GLEXT_PROTOTYPES
-#include <GLES2/gl2ext.h>
-#include <GLES3/gl3ext.h>
+#ifndef __TONEMAPPER_EGLIMAGE_BUFFER_LE_H__
+#define __TONEMAPPER_EGLIMAGE_BUFFER_LE_H__
 
+#include "engine.h"
+#include "EGLImageBufferBase.h"
 #include <gbm.h>
 #include <gbm_priv.h>
 
-#include <string.h>
-#include <assert.h>
-#include "drm_master.h"
 
-using namespace drm_utils;
 
-#if defined(CHECK_GL_ERRORS)
-#define GL(func) func;
-#define EGL(func) func;
-#else
-#define GL(func) \
-  func;          \
-  checkGlError(__FILE__, __LINE__);
-#define EGL(func) \
-  func;           \
-  checkEglError(__FILE__, __LINE__);
-#endif
+class EGLImageBufferLE : public EGLImageBufferBase{
+ public:
+    EGLImageBufferLE(struct gbm_buf_info *gbo_info);
+    ~EGLImageBufferLE();
+    static EGLImageBufferLE *from(const void *src);
+};
 
-void checkGlError(const char *file, int line);
-void checkEglError(const char *file, int line);
-
-#endif  //__TONEMAPPER_GLENGINE_H__
+#endif  //__TONEMAPPER_EGLIMAGE_BUFFER_LE_H__

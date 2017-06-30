@@ -22,8 +22,9 @@
 
 #include <utils/LruCache.h>
 #include "EGLImageBuffer.h"
+#include "EGLImageWrapperBase.h"
 
-class EGLImageWrapper {
+class EGLImageWrapper : public EGLImageWrapperBase {
     private:
         class DeleteEGLImageCallback : public android::OnEntryRemoved<int, EGLImageBuffer*>
         {

@@ -17,19 +17,24 @@
  * limitations under the License.
  */
 
-#ifndef __TONEMAPPER_EGLIMAGE_BUFFER_H__
-#define __TONEMAPPER_EGLIMAGE_BUFFER_H__
+#ifndef __TONEMAPPER_TONEMAPPERFACTORY_LE_H__
+#define __TONEMAPPER_TONEMAPPERFACTORY_LE_H__
 
-#include <cutils/native_handle.h>
-#include <gralloc_priv.h>
-#include <ui/GraphicBuffer.h>
-#include "engine.h"
-#include "EGLImageBufferBase.h"
+#include "TonemapperLE.h"
 
-class EGLImageBuffer : public EGLImageBufferBase{
- public:
-  EGLImageBuffer(android::sp<android::GraphicBuffer>);
-  static EGLImageBuffer *from(const private_handle_t *src);
-};
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-#endif  //__TONEMAPPER_EGLIMAGE_BUFFER_H__
+// returns an instance of Tonemapper
+Tonemapper *TonemapperFactory_GetInstance(int type, void *colorMap, int colorMapSize,
+                                          void *lutXform, int lutXformSize);
+
+   // destroy tonemap session
+   void TonemapperFactory_Destroy();
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif  //__TONEMAPPER_TONEMAPPERFACTORY_LE_H__

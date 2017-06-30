@@ -17,19 +17,31 @@
  * limitations under the License.
  */
 
-#ifndef __TONEMAPPER_EGLIMAGE_BUFFER_H__
-#define __TONEMAPPER_EGLIMAGE_BUFFER_H__
+#ifndef __TONEMAPPER_TONEMAP_LE_H__
+#define __TONEMAPPER_TONEMAP_LE_H__
 
-#include <cutils/native_handle.h>
-#include <gralloc_priv.h>
-#include <ui/GraphicBuffer.h>
+#define TONEMAP_FORWARD 0
+#define TONEMAP_INVERSE 1
+
+#include "EGLImageWrapperLE.h"
 #include "engine.h"
-#include "EGLImageBufferBase.h"
 
-class EGLImageBuffer : public EGLImageBufferBase{
+class Tonemapper {
+ private:
+  void* engineContext;
+  unsigned int tonemapTexture;
+  unsigned int lutXformTexture;
+  unsigned int programID;
+  float lutXformScaleOffset[2];
+  float tonemapScaleOffset[2];
+  EGLImageWrapperLE* eglImageWrapperLE;
+  Tonemapper();
+
  public:
-  EGLImageBuffer(android::sp<android::GraphicBuffer>);
-  static EGLImageBuffer *from(const private_handle_t *src);
+  ~Tonemapper();
+  static Tonemapper *build(int type, void *colorMap, int colorMapSize, void *lutXform,
+                           int lutXformSize);
+  int blit(void *dst, void *src, int srcFenceFd);
 };
 
-#endif  //__TONEMAPPER_EGLIMAGE_BUFFER_H__
+#endif  //__TONEMAPPER_TONEMAP_LE_H__
