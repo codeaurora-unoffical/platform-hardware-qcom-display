@@ -61,6 +61,7 @@ class HWEvents : public HWEventsInterface {
   void HandleBlank(char *data) { }
   void HandleIdleTimeout(char *data);
   void HandleThermal(char *data);
+  void HandleCECMessage(char *data);
   void HandleThreadExit(char *data) { }
   void HandleIdlePowerCollapse(char *data);
   void PopulateHWEventData();

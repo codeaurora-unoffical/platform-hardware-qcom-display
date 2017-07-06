@@ -290,6 +290,10 @@ void DisplayHDMI::SetS3DMode(LayerStack *layer_stack) {
   DisplayBase::ReconfigureDisplay();
 }
 
+void DisplayHDMI::CECMessage(char *message) {
+  event_handler_->CECMessage(message);
+}
+
 DisplayError DisplayHDMI::VSync(int64_t timestamp) {
   if (vsync_enable_) {
     DisplayEventVSync vsync;

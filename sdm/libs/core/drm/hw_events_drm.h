@@ -66,6 +66,7 @@ class HWEventsDRM : public HWEventsInterface {
   void *DisplayEventHandler();
   void HandleVSync(char *data);
   void HandleIdleTimeout(char *data);
+  void HandleCECMessage(char *data);
   void HandleThreadExit(char *data) {}
   void HandleThermal(char *data) {}
   void HandleBlank(char *data) {}
