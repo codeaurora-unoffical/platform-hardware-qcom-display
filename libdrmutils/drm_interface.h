@@ -254,6 +254,7 @@ enum struct SmartDMARevision {
 /* Per CRTC Resource Info*/
 struct DRMCrtcInfo {
   bool has_src_split;
+  bool has_hdr;
   uint32_t max_blend_stages;
   QSEEDVersion qseed_version;
   SmartDMARevision smart_dma_rev;
