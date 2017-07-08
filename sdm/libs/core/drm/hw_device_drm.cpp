@@ -563,7 +563,7 @@ DisplayError HWDeviceDRM::SetDisplayAttributes(const HWDisplayAttributes &displa
   return kErrorNotSupported;
 }
 
-DisplayError HWDeviceDRM::GetConfigIndex(uint32_t mode, uint32_t *index) {
+DisplayError HWDeviceDRM::GetConfigIndex(char *mode, uint32_t *index) {
   return kErrorNone;
 }
 
@@ -636,6 +636,20 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
           }
           if (layer.transform.flip_vertical) {
             rot_bit_mask |= UINT32(DRMRotation::FLIP_V);
+          }
+        }
+
+        if (input_buffer->flags.secure) {
+          if (input_buffer->flags.secure_camera) {
+            drm_atomic_intf_->Perform(DRMOps::PLANE_SET_FB_SECURE_MODE, pipe_id,
+                                      SDE_DRM_FB_SEC_DIR_TRANS);
+          } else if (input_buffer->flags.secure_display) {
+            drm_atomic_intf_->Perform(DRMOps::PLANE_SET_FB_SECURE_MODE, pipe_id,
+                                      SDE_DRM_FB_NON_SEC_DIR_TRANS);
+            drm_atomic_intf_->Perform(DRMOps::CRTC_SET_SECURITY_LEVEL, token_.crtc_id,
+                                      SDE_DRM_SEC_ONLY);
+          } else {
+            drm_atomic_intf_->Perform(DRMOps::PLANE_SET_FB_SECURE_MODE, pipe_id, SDE_DRM_FB_SEC);
           }
         }
 

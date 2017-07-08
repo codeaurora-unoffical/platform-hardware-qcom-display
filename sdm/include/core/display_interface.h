@@ -674,6 +674,22 @@ class DisplayInterface {
   */
   virtual DisplayError SetCompositionState(LayerComposition composition_type, bool enable) = 0;
 
+  /*! @brief Method to enable display PLL update.
+
+    @param[in] enable enable or disable the PLL update function.
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError EnablePllUpdate(int32_t enable) = 0;
+
+  /*! @brief Method to update display PLL.
+
+    @param[in] ppm how much the PLL will be changed.
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError UpdateDisplayPll(int32_t ppm) = 0;
+
  protected:
   virtual ~DisplayInterface() { }
 };

@@ -47,6 +47,7 @@
 
 #define HWC_UEVENT_SWITCH_HDMI "change@/devices/virtual/switch/hdmi"
 #define HWC_UEVENT_GRAPHICS_FB0 "change@/devices/virtual/graphics/fb0"
+#define HWC_UEVENT_DRM_EXT_HOTPLUG "mdss_mdp/drm/card"
 
 static sdm::HWCSession::HWCModuleMethods g_hwc_module_methods;
 
@@ -1439,11 +1440,34 @@ void *HWCSession::HWCUeventThreadHandler() {
         callbacks_.Refresh(0);
         reset_panel_ = true;
       }
+    } else if (strcasestr(uevent_data, HWC_UEVENT_DRM_EXT_HOTPLUG)) {
+      HandleExtHPD(uevent_data, length);
     }
   }
   pthread_exit(0);
 
   return NULL;
+}
+
+void HWCSession::HandleExtHPD(const char *uevent_data, int length) {
+  const char *iterator_str = uevent_data;
+  const char *event_info = "status=";
+  const char *pstr = NULL;
+  while (((iterator_str - uevent_data) <= length) && (*iterator_str)) {
+    pstr = strstr(iterator_str, event_info);
+    if (pstr != NULL) {
+      break;
+    }
+    iterator_str += strlen(iterator_str) + 1;
+  }
+
+  // ignore event if 'status' is not available
+  if (pstr) {
+    bool connected = !!strcasestr(pstr, "connected");
+    if (HotPlugHandler(connected) == -1) {
+     DLOGE("Failed handling Hotplug = %s", connected ? "connected" : "disconnected");
+    }
+  }
 }
 
 int HWCSession::GetEventValue(const char *uevent_data, int length, const char *event_info) {

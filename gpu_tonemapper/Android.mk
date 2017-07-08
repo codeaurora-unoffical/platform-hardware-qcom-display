@@ -25,6 +25,8 @@ LOCAL_CFLAGS              := $(version_flag) -Wno-missing-field-initializers -Wa
 
 LOCAL_SRC_FILES           := TonemapFactory.cpp \
                              glengine.cpp \
+                             EGLImageBufferBase.cpp \
+                             EGLImageWrapperBase.cpp \
                              EGLImageBuffer.cpp \
                              EGLImageWrapper.cpp \
                              Tonemapper.cpp

@@ -7,7 +7,7 @@
 # Requires autoconf tool later than 2.61
 AC_PREREQ(2.61)
 # Initialize the display package version 1.0.0
-AC_INIT([display],1.0.0)
+AC_INIT([qcom],1.0.0)
 # Does not strictly follow GNU Coding standards
 AM_INIT_AUTOMAKE([foreign])
 # Disables auto rebuilding of configure, Makefile.ins
@@ -60,6 +60,7 @@ AC_CONFIG_FILES([ \
         libqdutils/Makefile \
         libgralloc/Makefile \
         libdrmutils/Makefile \
+        gpu_tonemapper/Makefile \
         sdm/libs/utils/Makefile \
         sdm/libs/core/Makefile
         ])

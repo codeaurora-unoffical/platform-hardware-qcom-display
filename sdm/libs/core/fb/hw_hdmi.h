@@ -83,7 +83,7 @@ class HWHDMI : public HWDevice {
   virtual DisplayError GetMaxCEAFormat(uint32_t *max_cea_format);
   virtual DisplayError OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level);
   virtual DisplayError SetDisplayAttributes(uint32_t index);
-  virtual DisplayError GetConfigIndex(uint32_t mode, uint32_t *index);
+  virtual DisplayError GetConfigIndex(char *mode, uint32_t *index);
   virtual DisplayError Validate(HWLayers *hw_layers);
   virtual DisplayError Commit(HWLayers *hw_layers);
   virtual DisplayError SetS3DMode(HWS3DMode s3d_mode);

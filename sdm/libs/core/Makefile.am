@@ -26,6 +26,7 @@ c_sources = core_interface.cpp \
 if ENABLE_SDMHALDRM
 c_sources += drm/hw_info_drm.cpp \
              drm/hw_device_drm.cpp \
+             drm/hw_hdmi_drm.cpp \
              drm/hw_events_drm.cpp \
              drm/hw_scale_drm.cpp \
              drm/hw_color_manager_drm.cpp
@@ -51,7 +52,7 @@ libsdmcore_la_CC = @CC@
 libsdmcore_la_SOURCES = $(c_sources)
 libsdmcore_la_CFLAGS = $(COMMON_CFLAGS) -DLOG_TAG=\"SDM\"
 libsdmcore_la_CPPFLAGS = $(AM_CPPFLAGS)
-libsdmcore_la_LIBADD = ../utils/libsdmutils.la 
+libsdmcore_la_LIBADD = ../utils/libsdmutils.la
 if ENABLE_SDMHALDRM
 libsdmcore_la_LIBADD += ../../../libdrmutils/libdrmutils.la
 endif

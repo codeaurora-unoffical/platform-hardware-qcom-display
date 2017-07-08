@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -22,74 +22,77 @@
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef __HW_PRIMARY_H__
-#define __HW_PRIMARY_H__
+#ifndef __HW_HDMI_DRM_H__
+#define __HW_HDMI_DRM_H__
 
-#include <sys/poll.h>
+#include <map>
 #include <vector>
-#include <string>
 
-#include "hw_device.h"
+#include "hw_device_drm.h"
 
 namespace sdm {
 
-class HWPrimary : public HWDevice {
+using std::vector;
+
+class HWHDMIDRM : public HWDeviceDRM {
  public:
-  HWPrimary(BufferSyncHandler *buffer_sync_handler, HWInfoInterface *hw_info_intf);
+  explicit HWHDMIDRM(BufferSyncHandler *buffer_sync_handler, BufferAllocator *buffer_allocator,
+                     HWInfoInterface *hw_info_intf);
 
  protected:
+  enum HWFramerateUpdate {
+    // Switch framerate by switch to other standard modes though panel blank/unblank
+    kModeSuspendResume,
+    // Switch framerate by tuning pixel clock
+    kModeClock,
+    // Switch framerate by tuning vertical front porch
+    kModeVFP,
+    // Switch framerate by tuning horizontal front porch
+    kModeHFP,
+    // Switch framerate by tuning horizontal front porch and clock
+    kModeClockHFP,
+    // Switch framerate by tuning horizontal front porch and re-caculate clock
+    kModeHFPCalcClock,
+    kModeMAX
+  };
+
+  /**
+   * struct DynamicFPSData - defines dynamic fps related data
+   * @hor_front_porch: horizontal front porch
+   * @hor_back_porch: horizontal back porch
+   * @hor_pulse_width: horizontal pulse width
+   * @clk_rate_hz: panel clock rate in HZ
+   * @fps: frames per second
+   */
+  struct DynamicFPSData {
+    uint32_t hor_front_porch;
+    uint32_t hor_back_porch;
+    uint32_t hor_pulse_width;
+    uint32_t clk_rate_hz;
+    uint32_t fps;
+  };
+
   virtual DisplayError Init();
   virtual DisplayError GetNumDisplayAttributes(uint32_t *count);
+  // Requirement to call this only after the first config has been explicitly set by client
   virtual DisplayError GetActiveConfig(uint32_t *active_config);
   virtual DisplayError GetDisplayAttributes(uint32_t index,
                                             HWDisplayAttributes *display_attributes);
   virtual DisplayError SetDisplayAttributes(uint32_t index);
   virtual DisplayError GetConfigIndex(char *mode, uint32_t *index);
-  virtual DisplayError PowerOff();
-  virtual DisplayError Doze();
-  virtual DisplayError DozeSuspend();
   virtual DisplayError Validate(HWLayers *hw_layers);
   virtual DisplayError Commit(HWLayers *hw_layers);
-  virtual void SetIdleTimeoutMs(uint32_t timeout_ms);
-  virtual DisplayError SetVSyncState(bool enable);
-  virtual DisplayError SetDisplayMode(const HWDisplayMode hw_display_mode);
-  virtual DisplayError SetRefreshRate(uint32_t refresh_rate);
-  virtual DisplayError SetPanelBrightness(int level);
-  virtual DisplayError CachePanelBrightness(int level);
-  virtual DisplayError GetPPFeaturesVersion(PPFeatureVersion *vers);
-  virtual DisplayError SetPPFeatures(PPFeaturesConfig *feature_list);
-  virtual DisplayError GetPanelBrightness(int *level);
-  virtual DisplayError SetAutoRefresh(bool enable);
-  virtual DisplayError SetMixerAttributes(const HWMixerAttributes &mixer_attributes);
+  virtual DisplayError EnablePllUpdate(int32_t enable);
+  virtual DisplayError UpdateDisplayPll(int32_t ppm);
 
  private:
-  // Panel modes for the MSMFB_LPM_ENABLE ioctl
-  enum {
-    kModeLPMVideo,
-    kModeLPMCommand,
-  };
-
-  enum {
-    kMaxSysfsCommandLength = 12,
-  };
-
-  DisplayError PopulateDisplayAttributes();
-  void InitializeConfigs();
-  bool IsResolutionSwitchEnabled() { return !display_configs_.empty(); }
-  bool GetCurrentModeFromSysfs(size_t *curr_x_pixels, size_t *curr_y_pixels);
-  void UpdateMixerAttributes();
-  void SetAVRFlags(const HWAVRInfo &hw_avr_info, uint32_t *avr_flags);
-
-  std::vector<DisplayConfigVariableInfo> display_configs_;
-  std::vector<std::string> display_config_strings_;
-  uint32_t active_config_index_ = 0;
-  const char *kBrightnessNode = "/sys/class/leds/lcd-backlight/brightness";
-  const char *kAutoRefreshNode = "/sys/devices/virtual/graphics/fb0/msm_cmd_autorefresh_en";
-  bool auto_refresh_ = false;
-  bool avr_prop_disabled_ = false;
+  static const int kThresholdRefreshRate = 1000;
+  vector<uint32_t> hdmi_modes_;
+  uint32_t active_config_index_;
+  uint32_t frame_rate_ = 0;
 };
 
 }  // namespace sdm
 
-#endif  // __HW_PRIMARY_H__
+#endif  // __HW_HDMI_DRM_H__
 
