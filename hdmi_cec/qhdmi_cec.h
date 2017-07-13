@@ -30,30 +30,17 @@
 #define QHDMI_CEC_H
 
 #include <hardware/hdmi_cec.h>
-#include <utils/RefBase.h>
 #include <sys/poll.h>
-#include <sys/resource.h>
 #include <sys/prctl.h>
-#include <malloc.h>
-#include <string.h>
-#include <unistd.h>
-#include <pthread.h>
 #include <sys/socket.h>
-#include <sys/un.h>
-#include <sys/queue.h>
+#include <sys/resource.h>
 #include <linux/netlink.h>
 #include <thread>
 #include <vector>
-#include <mutex>
 
 namespace qhdmicec {
 
-#define SYSFS_BASE  "/sys/devices/virtual/graphics/fb"
-#define MAX_PATH_LENGTH  128
-#define MAX_STRING_LENGTH 1024
-#define UEVENT_SWITCH_HDMI "change@/devices/virtual/switch/hdmi"
-#define FB_PATH "/sys/devices/virtual/graphics/fb"
-
+const int MAX_PATH_LENGTH = 128;
 
 struct cec_callback_t {
     // Function in HDMI service to call back on CEC messages
@@ -79,16 +66,16 @@ struct cec_context_t {
     int version;
     uint32_t vendor_id;
 
-    std::vector<pollfd> poll_fds_;              // poll fds for cec message monitor and exit signal
+    std::vector<pollfd> poll_fds;               // poll fds for cec message monitor and exit signal
                                                 // on cec message monitor thread
-    int exit_fd_;
-    bool cec_exit_thread_;
-    bool hdmi_plugin_monitor_exit = true;       // hdmi plugin monitor thread will exit on true
-    std::mutex hdmi_plugin_monitor_exit_mutex;  // hdmi plugin monitor variable mutex
-    std::thread *hdmi_plugin_monitor = NULL;    // hdmi plugin monitor thread variable
-    int uevent_fd = -1;                         // uevent file descriptor used to monitor hdmi uevents
+    int exit_fd = -1;
+    bool cec_exit_thread;
+    std::thread *hdmi_cec_monitor = NULL;    // hdmi plugin monitor thread variable
+};
 
-    const int kThreadPriorityUrgent = -9;
+struct eventData {
+    const char* event_name = NULL;
+    void (*event_parser)(cec_context_t* ctx, uint32_t node_event) = NULL;
 };
 
 void cec_receive_message(cec_context_t *ctx, char *msg, ssize_t len);
