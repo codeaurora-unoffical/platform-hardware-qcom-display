@@ -619,7 +619,6 @@ void DisplayBase::AppendDump(char *buffer, uint32_t length) {
     char idx[8] = { 0 };
     const char *comp_type = GetName(sdm_layer->composition);
     const char *buffer_format = GetFormatString(input_buffer->format);
-    const char *rotate_split[2] = { "Rot-1", "Rot-2" };
     const char *comp_split[2] = { "Comp-1", "Comp-2" };
 
     snprintf(idx, sizeof(idx), "%d", layer_index);
@@ -629,10 +628,13 @@ void DisplayBase::AppendDump(char *buffer, uint32_t length) {
       HWRotateInfo &rotate = hw_rotator_session.hw_rotate_info[count];
       LayerRect &src_roi = rotate.src_roi;
       LayerRect &dst_roi = rotate.dst_roi;
+      char rot[8] = { 0 };
 
       snprintf(writeback_id, sizeof(writeback_id), "%d", rotate.writeback_id);
 
-      DumpImpl::AppendString(buffer, length, format, idx, comp_type, rotate_split[count],
+      snprintf(rot, sizeof(rot), "Rot-%d", count + 1);
+
+      DumpImpl::AppendString(buffer, length, format, idx, comp_type, rot,
                              writeback_id, rotate.pipe_id, input_buffer->width,
                              input_buffer->height, buffer_format, INT(src_roi.left),
                              INT(src_roi.top), INT(src_roi.right), INT(src_roi.bottom),
