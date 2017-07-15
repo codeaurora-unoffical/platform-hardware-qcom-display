@@ -309,7 +309,7 @@ struct DRMConnectorInfo {
   drmModeModeInfo *modes;
   DRMTopology topology;
   drm_msm_ext_panel_hdr_properties hdr_prop;
-  drm_msm_ext_panel_hdr_metadata hdr_metadata;
+  drm_msm_ext_panel_hdr_ctrl hdr_ctrl;
   std::string panel_name;
   DRMPanelMode panel_mode;
   bool is_primary;
