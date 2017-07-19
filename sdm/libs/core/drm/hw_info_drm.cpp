@@ -209,6 +209,7 @@ DisplayError HWInfoDRM::GetHWResourceInfo(HWResourceInfo *hw_resource) {
   DLOGI("Has Source Split = %d", hw_resource->is_src_split);
   DLOGI("Has QSEED3 = %d", hw_resource->has_qseed3);
   DLOGI("Has UBWC = %d", hw_resource->has_ubwc);
+  DLOGI("Has HDR = %d", hw_resource->has_hdr);
   DLOGI("Has Concurrent Writeback = %d", hw_resource->has_concurrent_writeback);
   DLOGI("Max Low Bw = %" PRIu64 "", hw_resource->max_bandwidth_low);
   DLOGI("Max High Bw = % " PRIu64 "", hw_resource->max_bandwidth_high);
@@ -252,6 +253,7 @@ DisplayError HWInfoDRM::GetHWResourceInfo(HWResourceInfo *hw_resource) {
 void HWInfoDRM::GetSystemInfo(HWResourceInfo *hw_resource) {
   DRMCrtcInfo info;
   drm_mgr_intf_->GetCrtcInfo(0 /* system_info */, &info);
+  hw_resource->has_hdr = true;
   hw_resource->is_src_split = info.has_src_split;
   hw_resource->has_qseed3 = (info.qseed_version == sde_drm::QSEEDVersion::V3);
   hw_resource->num_blending_stages = info.max_blend_stages;

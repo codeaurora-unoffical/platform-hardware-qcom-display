@@ -73,6 +73,7 @@ class HWHDMIDRM : public HWDeviceDRM {
   };
 
   virtual DisplayError Init();
+  void PopulateHWPanelInfo();
   virtual DisplayError GetNumDisplayAttributes(uint32_t *count);
   // Requirement to call this only after the first config has been explicitly set by client
   virtual DisplayError GetActiveConfig(uint32_t *active_config);
@@ -86,6 +87,7 @@ class HWHDMIDRM : public HWDeviceDRM {
   virtual DisplayError UpdateDisplayPll(int32_t ppm);
 
  private:
+  DisplayError UpdateHDRMetaData(HWLayers *hw_layers);
   static const int kThresholdRefreshRate = 1000;
   vector<uint32_t> hdmi_modes_;
   uint32_t active_config_index_;
