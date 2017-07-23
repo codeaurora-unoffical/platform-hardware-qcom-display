@@ -14,6 +14,7 @@ LOCAL_HEADER_LIBRARIES        := display_headers
 LOCAL_CFLAGS                  := -Wno-missing-field-initializers -Wno-unused-parameter \
                                  -std=c++11 -fcolor-diagnostics\
                                  -DLOG_TAG=\"SDM\" $(common_flags) \
+                                 -Wno-error -Wno-user-defined-warnings \
                                  -I $(display_top)/sdm/libs/hwc
 LOCAL_CLANG                   := true
 
