@@ -751,6 +751,12 @@ gralloc1_error_t BufferManager::Perform(int operation, va_list args) {
       }
 
       *flag = hnd->flags &private_handle_t::PRIV_FLAGS_UBWC_ALIGNED;
+      int linear_format = 0;
+      if (getMetaData(hnd, GET_LINEAR_FORMAT, &linear_format) == 0) {
+        if (linear_format) {
+         *flag = 0;
+        }
+      }
     } break;
 
     case GRALLOC_MODULE_PERFORM_GET_RGB_DATA_ADDRESS: {
