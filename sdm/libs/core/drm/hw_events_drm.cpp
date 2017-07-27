@@ -281,7 +281,7 @@ void *HWEventsDRM::DisplayEventHandler() {
     }
   }
 
-  pthread_exit(0);
+  //pthread_exit(0);
 
   return nullptr;
 }
