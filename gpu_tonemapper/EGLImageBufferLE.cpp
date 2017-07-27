@@ -20,44 +20,70 @@
 #include "EGLImageBufferLE.h"
 #include <map>
 #include "EGLImageWrapperLE.h"
+#include "glengine.h"
+#include "drm_master.h"
+#include <EGL/eglwaylandext.h>
+#include <wayland-server.h>
+using namespace drm_utils;
 
 //-----------------------------------------------------------------------------
 EGLImageKHR EGLImageBufferLE::create_eglImage(struct gbm_buf_info *gbo_info)
 //-----------------------------------------------------------------------------
 {
-  struct gbm_bo *bo = NULL;
+  struct wl_resource resource;
+  unsigned int gbm_ret;
+  EGLImageKHR eglImage;
   PFNEGLCREATEIMAGEKHRPROC create_image;
+  create_image = reinterpret_cast<PFNEGLCREATEIMAGEKHRPROC>
+                                  (eglGetProcAddress("eglCreateImageKHR"));
 
-  create_image = reinterpret_cast<PFNEGLCREATEIMAGEKHRPROC> (eglGetProcAddress("eglCreateImageKHR"));
-  bo = gbm_bo_import(gbm_, GBM_BO_IMPORT_GBM_BUF_TYPE, gbo_info,
-                     GBM_BO_USE_SCANOUT|GBM_BO_USE_RENDERING);
-
-  /* TODO (user): to determine if attribute for secure/ protected conmtent is to be added */
   EGLint attribs[20];
-  int i=0;
+  //We need to pass wl_resource to create egl image to support TP10_UBWC and NV12 formats in
+  // Forward tone mapper
+  if(gbo_info->format == GBM_FORMAT_YCbCr_420_TP10_UBWC || gbo_info->format == GBM_FORMAT_NV12) {
 
-  attribs[i++] = EGL_WIDTH;
-  attribs[i++] = gbm_bo_get_width(bo);
-  attribs[i++] = EGL_HEIGHT;
-  attribs[i++] = gbm_bo_get_height(bo);
-  attribs[i++] = EGL_LINUX_DRM_FOURCC_EXT;
-  attribs[i++] = gbm_bo_get_format(bo);
-  attribs[i++] = EGL_DMA_BUF_PLANE0_FD_EXT;
-  attribs[i++] = gbm_bo_get_fd(bo);
-  attribs[i++] = EGL_DMA_BUF_PLANE0_OFFSET_EXT;
-  attribs[i++] = 0;
-  attribs[i++] = EGL_DMA_BUF_PLANE0_PITCH_EXT;
-  attribs[i++] = gbm_bo_get_stride(bo);
-  attribs[i++] = EGL_NONE;
+   attribs[0] = EGL_WAYLAND_PLANE_WL;
+   attribs[1] = 0;
+   attribs[2] = EGL_NONE;
+   //TODO: we need to get the wl_resource handle from SdmDisplay::PrepareNormalLayerGeometry
+   //to create egl image
+   gbm_ret = gbm_perform(GBM_PERFORM_GET_WL_RESOURCE_FROM_GBM_BUF_INFO, gbo_info, &resource);
+   EGLClientBuffer buffer = reinterpret_cast<EGLClientBuffer>(&resource);
 
-  // we no longer need the bo
-  if (bo) {
-     gbm_bo_destroy(bo);
+   if (gbm_ret == GBM_ERROR_NONE) {
+
+    eglImage = create_image(eglGetCurrentDisplay(), (EGLContext)EGL_NO_CONTEXT,
+                                      EGL_WAYLAND_BUFFER_WL, buffer, attribs);
+   }
   }
+  else {
+   struct gbm_bo *bo = NULL;
+   int i=0;
 
-  EGLImageKHR eglImage = create_image(eglGetCurrentDisplay(), (EGLContext)EGL_NO_CONTEXT,
+   bo = gbm_bo_import(gbm_, GBM_BO_IMPORT_GBM_BUF_TYPE, gbo_info,
+                        GBM_BO_USE_SCANOUT|GBM_BO_USE_RENDERING);
+
+   attribs[i++] = EGL_WIDTH;
+   attribs[i++] = gbm_bo_get_width(bo);
+   attribs[i++] = EGL_HEIGHT;
+   attribs[i++] = gbm_bo_get_height(bo);
+   attribs[i++] = EGL_LINUX_DRM_FOURCC_EXT;
+   attribs[i++] = gbm_bo_get_format(bo);
+   attribs[i++] = EGL_DMA_BUF_PLANE0_FD_EXT;
+   attribs[i++] = gbm_bo_get_fd(bo);
+   attribs[i++] = EGL_DMA_BUF_PLANE0_OFFSET_EXT;
+   attribs[i++] = 0;
+   attribs[i++] = EGL_DMA_BUF_PLANE0_PITCH_EXT;
+   attribs[i++] = gbm_bo_get_stride(bo);
+   attribs[i++] = EGL_NONE;
+  // we no longer need the bo
+   if (bo) {
+     gbm_bo_destroy(bo);
+   }
+
+   eglImage = create_image(eglGetCurrentDisplay(), (EGLContext)EGL_NO_CONTEXT,
                                            EGL_LINUX_DMA_BUF_EXT, NULL, attribs);
-
+  }
   return eglImage;
 }
 
@@ -78,9 +104,6 @@ EGLImageBufferLE::EGLImageBufferLE(struct gbm_buf_info *gbuf_info)
     master->GetHandle(&fd);
 
     gbm_ = gbm_create_device(fd);
-
-    if (gbm_)
-       fprintf(stderr, "EGLImageBufferLE=>sdm::gbm_ = %d\n", reinterpret_cast<intptr_t>(gbm_));
 
     this->eglImageID = create_eglImage(gbo_info);
     this->width = gbo_info->width;
@@ -132,4 +155,3 @@ EGLImageBufferLE::~EGLImageBufferLE() {
 static EGLImageBufferLE EGLImageBufferLE::*from(const void *src) {
 
 }
-
