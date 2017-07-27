@@ -266,6 +266,17 @@ HWC2::Error HWCLayer::SetLayerDisplayFrame(hwc_rect_t frame) {
   return HWC2::Error::None;
 }
 
+HWC2::Error HWCLayer::SetCursorPosition(int32_t x, int32_t y) {
+  hwc_rect_t frame = {};
+  frame.left = x;
+  frame.top = y;
+  frame.right = x + INT(layer_->dst_rect.right - layer_->dst_rect.left);
+  frame.bottom = y + INT(layer_->dst_rect.bottom - layer_->dst_rect.top);
+  SetLayerDisplayFrame(frame);
+
+  return HWC2::Error::None;
+}
+
 HWC2::Error HWCLayer::SetLayerPlaneAlpha(float alpha) {
   // Conversion of float alpha in range 0.0 to 1.0 similar to the HWC Adapter
   uint8_t plane_alpha = static_cast<uint8_t>(std::round(255.0f * alpha));
@@ -426,6 +437,9 @@ LayerBufferFormat HWCLayer::GetSDMFormat(const int32_t &source, const int flags)
     case HAL_PIXEL_FORMAT_RGB_888:
       format = kFormatRGB888;
       break;
+    case HAL_PIXEL_FORMAT_BGR_888:
+      format = kFormatBGR888;
+      break;
     case HAL_PIXEL_FORMAT_RGB_565:
       format = kFormatRGB565;
       break;
@@ -456,6 +470,9 @@ LayerBufferFormat HWCLayer::GetSDMFormat(const int32_t &source, const int flags)
       break;
     case HAL_PIXEL_FORMAT_YCbCr_422_I:
       format = kFormatYCbCr422H2V1Packed;
+      break;
+    case HAL_PIXEL_FORMAT_CbYCrY_422_I:
+      format = kFormatCbYCrY422H2V1Packed;
       break;
     case HAL_PIXEL_FORMAT_RGBA_1010102:
       format = kFormatRGBA1010102;
