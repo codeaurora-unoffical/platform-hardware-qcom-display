@@ -98,6 +98,9 @@ class HWEventsDRM : public HWEventsInterface {
   bool exit_threads_ = false;
   uint32_t vsync_index_ = 0;
   bool vsync_enabled_ = true;
+  bool vbl_pending_ = false;
+  pthread_mutex_t vbl_mutex_ = PTHREAD_MUTEX_INITIALIZER;
+  pthread_cond_t vbl_cond_ = PTHREAD_COND_INITIALIZER;
 };
 
 }  // namespace sdm

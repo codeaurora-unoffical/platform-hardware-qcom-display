@@ -171,8 +171,16 @@ DisplayError HWEventsDRM::SetEventState(HWEvent event, bool enable, void *arg) {
   switch (event) {
     case HWEvent::VSYNC:
       vsync_enabled_ = enable;
+
       if (enable) {
         WakeUpEventThread();
+      } else {
+        //wait till pending vblank is consumed...
+        pthread_mutex_lock(&vbl_mutex_);
+        while (vbl_pending_) {
+          pthread_cond_wait(&vbl_cond_, &vbl_mutex_);
+        }
+        pthread_mutex_unlock(&vbl_mutex_);
       }
       break;
     default:
@@ -279,6 +287,7 @@ void *HWEventsDRM::DisplayEventHandler() {
 }
 
 DisplayError HWEventsDRM::RegisterVSync() {
+  pthread_mutex_lock(&vbl_mutex_);
   drmVBlank vblank{};
   vblank.request.type = (drmVBlankSeqType)(DRM_VBLANK_RELATIVE | DRM_VBLANK_EVENT);
   vblank.request.sequence = 1;
@@ -288,8 +297,12 @@ DisplayError HWEventsDRM::RegisterVSync() {
   int error = drmWaitVBlank(poll_fds_[vsync_index_].fd, &vblank);
   if (error < 0) {
     DLOGE("drmWaitVBlank failed with err %d", errno);
+    pthread_mutex_unlock(&vbl_mutex_);
     return kErrorResources;
   }
+
+  vbl_pending_ = true;
+  pthread_mutex_unlock(&vbl_mutex_);
 
   return kErrorNone;
 }
@@ -346,14 +359,20 @@ void HWEventsDRM::VSyncHandlerCallback(int fd, unsigned int sequence, unsigned i
 
 void HWEventsDRM::HandleVBlank(char *data) {
   if (poll_fds_[vsync_index_].revents & (POLLIN | POLLPRI)) {
+    pthread_mutex_lock(&vbl_mutex_);
+
     drmEventContext event = {};
     event.version = DRM_EVENT_CONTEXT_VERSION;
     event.vblank_handler = &HWEventsDRM::VBlankHandlerCallback;
     int error = drmHandleEvent(poll_fds_[vsync_index_].fd, &event);
-
     if (error != 0) {
       DLOGE("drmHandleEvent failed: %i", error);
     }
+
+    vbl_pending_ = false;
+    pthread_cond_signal(&vbl_cond_);
+
+    pthread_mutex_unlock(&vbl_mutex_);
   }
 }
 
