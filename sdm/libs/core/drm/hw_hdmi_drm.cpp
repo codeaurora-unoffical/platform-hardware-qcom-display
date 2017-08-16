@@ -40,6 +40,7 @@
 #include <vector>
 #include <map>
 #include <utility>
+#include <sys/time.h>
 
 #include "hw_hdmi_drm.h"
 
@@ -47,6 +48,9 @@
 
 #define  DRM_BIT_RGB 20
 #define  DRM_BIT_YUV 21
+#define  MIN_HDR_RESET_WAITTIME 2
+#define  HDR_ENABLE 1
+#define  HDR_DISABLE 0
 
 using drm_utils::DRMMaster;
 using drm_utils::DRMResMgr;
@@ -245,11 +249,17 @@ DisplayError HWHDMIDRM::GetConfigIndex(char *mode, uint32_t *index) {
         (fps == connector_info_.modes[idex].vrefresh)) {
 
       if((format>>1)&(connector_info_.modes[idex].flags >> DRM_BIT_YUV))
+       {
         *index = UINT32(idex);
+        break;
+       }
 
       if(format & (connector_info_.modes[idex].flags >> DRM_BIT_RGB))
+       {
         *index = UINT32(idex);
-	}
+        break;
+       }
+     }
   }
   return kErrorNone;
 }
@@ -272,8 +282,10 @@ static int32_t GetEOTF(const GammaTransfer &transfer) {
 }
 
 DisplayError HWHDMIDRM::UpdateHDRMetaData(HWLayers *hw_layers) {
+  static struct timeval hdr_reset_start,hdr_reset_end;
+  static bool reset_hdr_flag = false;
   const HWHDRLayerInfo &hdr_layer_info = hw_layers->info.hdr_layer_info;
-  if (!hw_panel_info_.hdr_enabled || hdr_layer_info.operation == HWHDRLayerInfo::kNoOp) {
+  if (!hw_panel_info_.hdr_enabled ) {
     return kErrorNone;
   }
 
@@ -290,41 +302,94 @@ DisplayError HWHDMIDRM::UpdateHDRMetaData(HWLayers *hw_layers) {
   const Primaries &primaries = mastering_display.primaries;
 
   if (hdr_layer_info.operation == HWHDRLayerInfo::kSet) {
+    //reset reset_hdr_flag to handle where there are two consecutive HDR video playbacks with not
+    //enough non-HDR frames in between to reset the HDR metadata.
+    reset_hdr_flag = false;
+
     int32_t eotf = GetEOTF(layer_buffer->color_metadata.transfer);
-    connector_info_.hdr_metadata.eotf = (eotf < 0) ? 0 : UINT32(eotf);
-    connector_info_.hdr_metadata.white_point_x = primaries.whitePoint[0];
-    connector_info_.hdr_metadata.white_point_y = primaries.whitePoint[1];
-    connector_info_.hdr_metadata.display_primaries_x[0] = primaries.rgbPrimaries[0][0];
-    connector_info_.hdr_metadata.display_primaries_y[0] = primaries.rgbPrimaries[0][1];
-    connector_info_.hdr_metadata.display_primaries_x[1] = primaries.rgbPrimaries[1][0];
-    connector_info_.hdr_metadata.display_primaries_y[1] = primaries.rgbPrimaries[1][1];
-    connector_info_.hdr_metadata.display_primaries_x[2] = primaries.rgbPrimaries[2][0];
-    connector_info_.hdr_metadata.display_primaries_y[2] = primaries.rgbPrimaries[2][1];
-    connector_info_.hdr_metadata.min_luminance = mastering_display.minDisplayLuminance;
-    connector_info_.hdr_metadata.max_luminance = mastering_display.maxDisplayLuminance/10000;
-    connector_info_.hdr_metadata.max_content_light_level = light_level.maxContentLightLevel;
-    connector_info_.hdr_metadata.max_average_light_level = light_level.minPicAverageLightLevel;
+    connector_info_.hdr_ctrl.hdr_meta.eotf = (eotf < 0) ? 0 : UINT32(eotf);
+    connector_info_.hdr_ctrl.hdr_meta.white_point_x = primaries.whitePoint[0];
+    connector_info_.hdr_ctrl.hdr_meta.white_point_y = primaries.whitePoint[1];
+    connector_info_.hdr_ctrl.hdr_meta.display_primaries_x[0] = primaries.rgbPrimaries[0][0];
+    connector_info_.hdr_ctrl.hdr_meta.display_primaries_y[0] = primaries.rgbPrimaries[0][1];
+    connector_info_.hdr_ctrl.hdr_meta.display_primaries_x[1] = primaries.rgbPrimaries[1][0];
+    connector_info_.hdr_ctrl.hdr_meta.display_primaries_y[1] = primaries.rgbPrimaries[1][1];
+    connector_info_.hdr_ctrl.hdr_meta.display_primaries_x[2] = primaries.rgbPrimaries[2][0];
+    connector_info_.hdr_ctrl.hdr_meta.display_primaries_y[2] = primaries.rgbPrimaries[2][1];
+    connector_info_.hdr_ctrl.hdr_meta.min_luminance = mastering_display.minDisplayLuminance;
+    connector_info_.hdr_ctrl.hdr_meta.max_luminance = mastering_display.maxDisplayLuminance/10000;
+    connector_info_.hdr_ctrl.hdr_meta.max_content_light_level = light_level.maxContentLightLevel;
+    connector_info_.hdr_ctrl.hdr_meta.max_average_light_level = light_level.minPicAverageLightLevel;
+    connector_info_.hdr_ctrl.hdr_state = HDR_ENABLE;
 
     drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_HDR_PROP, token_.conn_id,
-                              &connector_info_.hdr_metadata);
+                              &connector_info_.hdr_ctrl);
 
-    DLOGI("HDR metadata: MaxDisplayLuminance = %d MinDisplayLuminance = %d\n"
+    DLOGI("kset: HDR metadata: MaxDisplayLuminance = %d MinDisplayLuminance = %d\n"
       "MaxContentLightLevel = %d MaxAverageLightLevel = %d Red_x = %d Red_y = %d Green_x = %d\n"
       "Green_y = %d Blue_x = %d Blue_y = %d WhitePoint_x = %d WhitePoint_y = %d EOTF = %d\n",
-      connector_info_.hdr_metadata.max_luminance,  connector_info_.hdr_metadata.min_luminance,
-      connector_info_.hdr_metadata.max_content_light_level,
-      connector_info_.hdr_metadata.max_average_light_level,
-      connector_info_.hdr_metadata.display_primaries_x[0],
-      connector_info_.hdr_metadata.display_primaries_y[0],
-      connector_info_.hdr_metadata.display_primaries_x[1],
-      connector_info_.hdr_metadata.display_primaries_y[1],
-      connector_info_.hdr_metadata.display_primaries_x[2],
-      connector_info_.hdr_metadata.display_primaries_y[2],
-      connector_info_.hdr_metadata.white_point_x,
-      connector_info_.hdr_metadata.white_point_y,
-      connector_info_.hdr_metadata.eotf);
+      connector_info_.hdr_ctrl.hdr_meta.max_luminance,
+      connector_info_.hdr_ctrl.hdr_meta.min_luminance,
+      connector_info_.hdr_ctrl.hdr_meta.max_content_light_level,
+      connector_info_.hdr_ctrl.hdr_meta.max_average_light_level,
+      connector_info_.hdr_ctrl.hdr_meta.display_primaries_x[0],
+      connector_info_.hdr_ctrl.hdr_meta.display_primaries_y[0],
+      connector_info_.hdr_ctrl.hdr_meta.display_primaries_x[1],
+      connector_info_.hdr_ctrl.hdr_meta.display_primaries_y[1],
+      connector_info_.hdr_ctrl.hdr_meta.display_primaries_x[2],
+      connector_info_.hdr_ctrl.hdr_meta.display_primaries_y[2],
+      connector_info_.hdr_ctrl.hdr_meta.white_point_x,
+      connector_info_.hdr_ctrl.hdr_meta.white_point_y,
+      connector_info_.hdr_ctrl.hdr_meta.eotf);
   }
+  else if (hdr_layer_info.operation == HWHDRLayerInfo::kReset) {
+        memset(&connector_info_.hdr_ctrl.hdr_meta,0,sizeof(connector_info_.hdr_ctrl.hdr_meta));
+        connector_info_.hdr_ctrl.hdr_meta.hdr_supported = 1;
+        connector_info_.hdr_ctrl.hdr_state = HDR_ENABLE;
+        reset_hdr_flag = true;
+        gettimeofday(&hdr_reset_start, NULL);
+        drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_HDR_PROP, token_.conn_id,
+                                  &connector_info_.hdr_ctrl);
 
+    DLOGI("kReset: HDR metadata: MaxDisplayLuminance = %d MinDisplayLuminance = %d\n"
+      "MaxContentLightLevel = %d MaxAverageLightLevel = %d Red_x = %d Red_y = %d Green_x = %d\n"
+      "Green_y = %d Blue_x = %d Blue_y = %d WhitePoint_x = %d WhitePoint_y = %d EOTF = %d\n",
+      connector_info_.hdr_ctrl.hdr_meta.max_luminance,
+      connector_info_.hdr_ctrl.hdr_meta.min_luminance,
+      connector_info_.hdr_ctrl.hdr_meta.max_content_light_level,
+      connector_info_.hdr_ctrl.hdr_meta.max_average_light_level,
+      connector_info_.hdr_ctrl.hdr_meta.display_primaries_x[0],
+      connector_info_.hdr_ctrl.hdr_meta.display_primaries_y[0],
+      connector_info_.hdr_ctrl.hdr_meta.display_primaries_x[1],
+      connector_info_.hdr_ctrl.hdr_meta.display_primaries_y[1],
+      connector_info_.hdr_ctrl.hdr_meta.display_primaries_x[2],
+      connector_info_.hdr_ctrl.hdr_meta.display_primaries_y[2],
+      connector_info_.hdr_ctrl.hdr_meta.white_point_x,
+      connector_info_.hdr_ctrl.hdr_meta.white_point_y,
+      connector_info_.hdr_ctrl.hdr_meta.eotf);
+   }
+   //TODO: Below case handles the state transition from HDR_ENABLED to HDR_DISABLED.
+   //As per HDMI spec requirement, we need to send zero metadata for atleast 2 sec after end of
+   //playback.This timer calculates the 2 sec window after playback stops to stop sending metadata.
+   //This will be replaced with an idle timer implementation in the future.
+   else if (hdr_layer_info.operation == HWHDRLayerInfo::kNoOp) {
+    if(reset_hdr_flag) {
+     gettimeofday(&hdr_reset_end, NULL);
+     float hdr_reset_time_start = (hdr_reset_start.tv_sec*1000 + hdr_reset_start.tv_usec/1000);
+     float hdr_reset_time_end = (hdr_reset_end.tv_sec*1000 + hdr_reset_end.tv_usec/1000);
+
+     if(((hdr_reset_time_end-hdr_reset_time_start)/1000) >= MIN_HDR_RESET_WAITTIME)
+      {
+       reset_hdr_flag = false;
+       memset(&connector_info_.hdr_ctrl.hdr_meta,0,sizeof(connector_info_.hdr_ctrl.hdr_meta));
+       connector_info_.hdr_ctrl.hdr_meta.hdr_supported = 1;
+       connector_info_.hdr_ctrl.hdr_state = HDR_DISABLE;
+
+       drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_HDR_PROP, token_.conn_id,
+                              &connector_info_.hdr_ctrl);
+      }
+     }
+    }
   return error;
 }
 
