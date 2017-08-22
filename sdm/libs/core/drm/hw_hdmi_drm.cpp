@@ -249,11 +249,17 @@ DisplayError HWHDMIDRM::GetConfigIndex(char *mode, uint32_t *index) {
         (fps == connector_info_.modes[idex].vrefresh)) {
 
       if((format>>1)&(connector_info_.modes[idex].flags >> DRM_BIT_YUV))
+       {
         *index = UINT32(idex);
+        break;
+       }
 
       if(format & (connector_info_.modes[idex].flags >> DRM_BIT_RGB))
+       {
         *index = UINT32(idex);
-	}
+        break;
+       }
+     }
   }
   return kErrorNone;
 }
@@ -296,6 +302,10 @@ DisplayError HWHDMIDRM::UpdateHDRMetaData(HWLayers *hw_layers) {
   const Primaries &primaries = mastering_display.primaries;
 
   if (hdr_layer_info.operation == HWHDRLayerInfo::kSet) {
+    //reset reset_hdr_flag to handle where there are two consecutive HDR video playbacks with not
+    //enough non-HDR frames in between to reset the HDR metadata.
+    reset_hdr_flag = false;
+
     int32_t eotf = GetEOTF(layer_buffer->color_metadata.transfer);
     connector_info_.hdr_ctrl.hdr_meta.eotf = (eotf < 0) ? 0 : UINT32(eotf);
     connector_info_.hdr_ctrl.hdr_meta.white_point_x = primaries.whitePoint[0];
