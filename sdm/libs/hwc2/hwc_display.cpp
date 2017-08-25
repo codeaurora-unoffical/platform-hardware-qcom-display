@@ -200,8 +200,8 @@ void HWCColorMode::PopulateColorModes() {
     DLOGV_IF(kTagQDCM, "Color Mode[%d] = %s", i, mode_string.c_str());
     AttrVal attr;
     error = display_intf_->GetColorModeAttr(mode_string, &attr);
+    std::string color_gamut, dynamic_range, pic_quality;
     if (!attr.empty()) {
-      std::string color_gamut, dynamic_range, pic_quality;
       for (auto &it : attr) {
         if (it.first.find(kColorGamutAttribute) != std::string::npos) {
           color_gamut = it.second;
@@ -222,12 +222,15 @@ void HWCColorMode::PopulateColorModes() {
         PopulateTransform(HAL_COLOR_MODE_SRGB, mode_string, color_transform);
       } else if ((color_gamut == kDcip3) &&
                  (pic_quality.empty() || pic_quality == kStandard)) {
-        PopulateTransform(HAL_COLOR_MODE_DCI_P3, mode_string, color_transform);
+        PopulateTransform(HAL_COLOR_MODE_DISPLAY_P3, mode_string, color_transform);
       } else if ((color_gamut == kDisplayP3) &&
                  (pic_quality.empty() || pic_quality == kStandard)) {
         PopulateTransform(HAL_COLOR_MODE_DISPLAY_P3, mode_string, color_transform);
       }
-    } else {
+    }
+
+    // Look at the mode name, if no color gamut is found
+    if (color_gamut.empty()) {
       if (mode_string.find("hal_native") != std::string::npos) {
         PopulateTransform(HAL_COLOR_MODE_NATIVE, mode_string, mode_string);
       } else if (mode_string.find("hal_srgb") != std::string::npos) {
@@ -395,7 +398,6 @@ HWC2::Error HWCDisplay::CreateLayer(hwc2_layer_t *out_layer_id) {
   HWCLayer *layer = *layer_set_.emplace(new HWCLayer(id_, buffer_allocator_));
   layer_map_.emplace(std::make_pair(layer->GetId(), layer));
   *out_layer_id = layer->GetId();
-  validated_ = false;
   geometry_changes_ |= GeometryChanges::kAdded;
   return HWC2::Error::None;
 }
@@ -426,7 +428,6 @@ HWC2::Error HWCDisplay::DestroyLayer(hwc2_layer_t layer_id) {
       break;
     }
   }
-  validated_ = false;
 
   geometry_changes_ |= GeometryChanges::kRemoved;
   return HWC2::Error::None;
@@ -583,7 +584,6 @@ HWC2::Error HWCDisplay::SetLayerZOrder(hwc2_layer_t layer_id, uint32_t z) {
     DLOGE("[%" PRIu64 "] updateLayerZ failed to find layer", id_);
     return HWC2::Error::BadLayer;
   }
-  validated_ = false;
 
   const auto layer = map_layer->second;
   const auto z_range = layer_set_.equal_range(layer);

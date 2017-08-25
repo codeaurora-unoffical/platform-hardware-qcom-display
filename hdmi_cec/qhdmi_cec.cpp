@@ -44,14 +44,10 @@ const int NUM_HDMI_PORTS = 1;
 const int MAX_SYSFS_DATA = 128;
 const int MAX_CEC_FRAME_SIZE = 20;
 const int MAX_SEND_MESSAGE_RETRIES = 1;
-const int MAX_STRING_LENGTH = 1024;
-const int FB_NUM = 0;
 
-static const char* SYSFS_BASE = "/sys/devices/virtual/graphics/fb";
-static const char* UEVENT_SWITCH_HDMI = "change@/devices/virtual/switch/hdmi";
-static const char* FB_PATH = "/sys/devices/virtual/graphics/fb";
-static std::vector<const char *> node_list = {"cec_msg_event", "hotplug_event", "exit_event"};
-static std::vector<eventData> event_data_list = {};
+const char* SYSFS_BASE = "/sys/devices/virtual/graphics/fb";
+const char* UEVENT_SWITCH_HDMI = "change@/devices/virtual/switch/hdmi";
+const char* FB_PATH = "/sys/devices/virtual/graphics/fb";
 
 enum {
     LOGICAL_ADDRESS_SET   =  1,
@@ -74,7 +70,7 @@ enum {
 static void cec_close_context(cec_context_t* ctx __unused);
 static int cec_enable(cec_context_t *ctx, int enable);
 static int cec_is_connected(const struct hdmi_cec_device* dev, int port_id);
-static void hdmi_cec_monitor_deinit(cec_context_t* ctx);
+static void cec_monitor_deinit(cec_context_t* ctx);
 static void handle_cec_msg_event(cec_context_t* ctx, uint32_t node_event);
 
 void event_monitor(cec_context_t* ctx);  // hdmi event monitor function
@@ -127,12 +123,12 @@ static ssize_t write_int_to_node(cec_context_t *ctx,
         const char *path_postfix,
         const int value)
 {
-    char sysfs_full_path[MAX_PATH_LENGTH];
+    std::string sysfs_full_path;
     char sysfs_data[MAX_SYSFS_DATA];
     snprintf(sysfs_data, sizeof(sysfs_data), "%d",value);
-    snprintf(sysfs_full_path,sizeof(sysfs_full_path), "%s/%s",
-            ctx->fb_sysfs_path, path_postfix);
-    ssize_t err = write_node(sysfs_full_path, sysfs_data, strlen(sysfs_data));
+    sysfs_full_path = ctx->fb_sysfs_path + "/";
+    sysfs_full_path.append(path_postfix);
+    ssize_t err = write_node(sysfs_full_path.c_str(), sysfs_data, strlen(sysfs_data));
     return err;
 }
 
@@ -154,20 +150,18 @@ static ssize_t cec_get_fb_node_number(cec_context_t *ctx)
     //XXX: Do this from a common utility library across the display HALs
     const int MAX_FB_DEVICES = 2;
     ssize_t len = 0;
-    char fb_type_path[MAX_PATH_LENGTH];
+    std::string fb_type_path;
     char fb_type[MAX_SYSFS_DATA];
     const char *dtv_panel_str = "dtv panel";
 
     for(int num = 0; num < MAX_FB_DEVICES; num++) {
-        snprintf(fb_type_path, sizeof(fb_type_path),"%s%d/msm_fb_type",
-                SYSFS_BASE,num);
-        len = read_node(fb_type_path, fb_type);
+        fb_type_path = SYSFS_BASE + std::to_string(ctx->fb_num) + "/msm_fb_type";
+        len = read_node(fb_type_path.c_str(), fb_type);
         ALOGD_IF(DEBUG, "%s: fb_type:%s", __FUNCTION__, fb_type);
         if(len > 0 && (strncmp(fb_type, dtv_panel_str, strlen(dtv_panel_str)) == 0)){
             ALOGD_IF(DEBUG, "%s: Found DTV panel at fb%d", __FUNCTION__, num);
             ctx->fb_num = num;
-            snprintf(ctx->fb_sysfs_path, sizeof(ctx->fb_sysfs_path),
-                    "%s%d", SYSFS_BASE, num);
+            ctx->fb_sysfs_path = SYSFS_BASE + std::to_string(ctx->fb_num);
             break;
         }
     }
@@ -208,11 +202,11 @@ static int cec_get_physical_address(const struct hdmi_cec_device* dev,
         uint16_t* addr)
 {
     cec_context_t* ctx = (cec_context_t*)(dev);
-    char pa_path[MAX_PATH_LENGTH];
+    std::string pa_path;
     char pa_data[MAX_SYSFS_DATA];
-    snprintf (pa_path, sizeof(pa_path),"%s/pa",
-            ctx->fb_sysfs_path);
-    int err = (int) read_node(pa_path, pa_data);
+    pa_path = ctx->fb_sysfs_path;
+    pa_path.append("/pa");
+    int err = (int) read_node(pa_path.c_str(), pa_data);
     *addr = (uint16_t) atoi(pa_data);
     ALOGD_IF(DEBUG, "%s: Physical Address: 0x%x", __FUNCTION__, *addr);
     if (err < 0)
@@ -240,7 +234,7 @@ static int cec_send_message(const struct hdmi_cec_device* dev,
         ALOGD_IF(DEBUG, "%s: message from framework: %s", __FUNCTION__, dump);
     }
 
-    char write_msg_path[MAX_PATH_LENGTH];
+    std::string write_msg_path;
     char write_msg[MAX_CEC_FRAME_SIZE];
     memset(write_msg, 0, sizeof(write_msg));
     // See definition of struct hdmi_cec_msg in driver code
@@ -258,13 +252,13 @@ static int cec_send_message(const struct hdmi_cec_device* dev,
     //msg length + initiator + destination
     write_msg[CEC_OFFSET_FRAME_LENGTH] = (unsigned char) (msg->length + 1);
     hex_to_string(write_msg, sizeof(write_msg), dump);
-    snprintf(write_msg_path, sizeof(write_msg_path), "%s/cec/wr_msg",
-            ctx->fb_sysfs_path);
+    write_msg_path = ctx->fb_sysfs_path;
+    write_msg_path.append("/cec/wr_msg");
     int retry_count = 0;
     ssize_t err = 0;
     //HAL spec requires us to retry at least once.
     while (true) {
-        err = write_node(write_msg_path, write_msg, sizeof(write_msg));
+        err = write_node(write_msg_path.c_str(), write_msg, sizeof(write_msg));
         retry_count++;
         if (err == -EAGAIN && retry_count <= MAX_SEND_MESSAGE_RETRIES) {
             ALOGE("%s: CEC line busy, retrying", __FUNCTION__);
@@ -400,11 +394,11 @@ static int cec_is_connected(const struct hdmi_cec_device* dev, int port_id)
     // Ignore port_id since we have only one port
     int connected = 0;
     cec_context_t* ctx = (cec_context_t*)(dev);
-    char connected_path[MAX_PATH_LENGTH];
+    std::string connected_path;
     char connected_data[MAX_SYSFS_DATA];
-    snprintf (connected_path, sizeof(connected_path),"%s/connected",
-            ctx->fb_sysfs_path);
-    ssize_t err = read_node(connected_path, connected_data);
+    connected_path = ctx->fb_sysfs_path;
+    connected_path.append("/connected");
+    ssize_t err = read_node(connected_path.c_str(), connected_data);
     connected = atoi(connected_data);
 
     ALOGD_IF(DEBUG, "%s: HDMI at port %d is - %s", __FUNCTION__, port_id,
@@ -468,34 +462,36 @@ static void cec_init_context(cec_context_t *ctx)
 
     ALOGD("%s: CEC enabled", __FUNCTION__);
 
-    err = populate_event_data(ctx, &event_data_list);
+    ctx->node_list.push_back("cec_msg_event");
+    ctx->node_list.push_back("hotplug_event");
+    ctx->node_list.push_back("exit_event");
+
+    err = populate_event_data(ctx, &ctx->event_data_list);
     if (err < 0) {
         ALOGE("Failed to populate poll parameters for monitoring HDMI CEC events. Exiting.");
+        cec_enable(ctx, false);
         return;
     }
 
-    ctx->hdmi_cec_monitor = new std::thread(event_monitor, ctx);
+    ctx->hdmi_cec_monitor = std::thread(event_monitor, ctx);
+
 }
 
 static void cec_close_context(cec_context_t* ctx __unused)
 {
     ALOGD("%s: Closing context", __FUNCTION__);
-    ctx->cec_exit_thread = true;
 
     uint64_t exit_value = 1;
     long int write_size = write(ctx->exit_fd, &exit_value, sizeof(uint64_t));
 
     if (write_size != sizeof(uint64_t)) {
-        ALOGD("Error triggering exit_fd (%d). write size = %ld, error = %s",
+        ALOGE("Error triggering exit_fd (%d). write size = %ld, error = %s",
             ctx->exit_fd, write_size, strerror(errno));
         return;
     }
 
-    if (ctx->hdmi_cec_monitor != NULL) {
-       if (ctx->hdmi_cec_monitor->joinable()) {
-          ctx->hdmi_cec_monitor->join();
-       }
-       delete ctx->hdmi_cec_monitor;
+    if (ctx->hdmi_cec_monitor.joinable()) {
+        ctx->hdmi_cec_monitor.join();
     }
 }
 
@@ -537,42 +533,39 @@ static int cec_device_open(const struct hw_module_t* module,
 }
 
 void event_monitor(cec_context_t* ctx) {
-    ALOGD("Enter %s", __FUNCTION__);
+    ALOGD("%s IN", __FUNCTION__);
     int err = -EINVAL;
 
     prctl(PR_SET_NAME, "cec_monitor", 0, 0, 0);
     setpriority(PRIO_PROCESS, 0, HAL_PRIORITY_URGENT_DISPLAY);
 
     while (!ctx->cec_exit_thread) {
-        err = -EINVAL;
-        err = poll(ctx->poll_fds.data(), (nfds_t)event_data_list.size(), -1);
+        err = poll(ctx->poll_fds.data(), (nfds_t)ctx->event_data_list.size(), -1);
         if ( err <= 0 ) {
             ALOGI("Failed to poll, Error %s", strerror(errno));
             continue;
          }
 
-         for (uint32_t event = 0; event < event_data_list.size(); event++) {
+         for (uint32_t event = 0; event < ctx->event_data_list.size(); event++) {
             pollfd &poll_fd = ctx->poll_fds[event];
 
             if (poll_fd.revents & POLLIN || poll_fd.revents & POLLPRI) {
-                event_data_list[event].event_parser(ctx, event);
+                ctx->event_data_list[event].event_parser(ctx, event);
             }
         }
     }
 
-    hdmi_cec_monitor_deinit(ctx);
-    ALOGD("Exit  %s", __FUNCTION__);
+    cec_monitor_deinit(ctx);
+    ALOGD("%s OUT", __FUNCTION__);
     return;
 }
 
 static int populate_event_data(cec_context_t* ctx, std::vector<eventData> *event_data_list) {
     int err = -EINVAL;
+    ctx->poll_fds.resize(ctx->node_list.size());
 
-    ctx->poll_fds.resize(node_list.size());
-    ctx->cec_exit_thread = false;
-
-    for (uint32_t event = 0; event < node_list.size(); event++) {
-        const char *event_name = node_list.at(event);
+    for (uint32_t event = 0; event < ctx->node_list.size(); event++) {
+        const char *event_name = ctx->node_list.at(event).c_str();
         eventData event_data;
         event_data.event_name = event_name;
         err = set_event_params(ctx, event, &event_data);
@@ -592,20 +585,19 @@ static int set_event_params(cec_context_t* ctx, uint32_t node_event, eventData *
     poll_fd.fd = -EINVAL;
 
     if (!strncmp(event_data->event_name, "cec_msg_event", strlen("cec_msg_event"))) {
-        char data[MAX_STRING_LENGTH] = {0};
         char node_path[MAX_STRING_LENGTH] = {0};
 
-        snprintf(node_path, sizeof(node_path), "%s%d/%s", FB_PATH, FB_NUM, "cec/rd_msg");
+        snprintf(node_path, sizeof(node_path), "%s%d/%s", FB_PATH, ctx->fb_num, "cec/rd_msg");
         poll_fd.fd = open(node_path, O_RDONLY);
         if (poll_fd.fd < 0) {
             ALOGE("Node open failed for display %d event %s error %s",
-                FB_NUM, "cec/rd_msg", strerror(errno));
+                ctx->fb_num, "cec/rd_msg", strerror(errno));
             return poll_fd.fd;
         }
 
         poll_fd.events |= POLLPRI | POLLERR;
         // Read once on fd to clear the data
-        pread(poll_fd.fd, data, MAX_STRING_LENGTH, 0);
+        pread(poll_fd.fd, ctx->data, MAX_STRING_LENGTH, 0);
         event_data->event_parser = &handle_cec_msg_event;
     } else if (!strncmp(event_data->event_name, "hotplug_event", strlen("hotplug_event"))) {
         if (!uevent_init(&poll_fd.fd)) {
@@ -627,19 +619,17 @@ static int set_event_params(cec_context_t* ctx, uint32_t node_event, eventData *
 }
 
 static void handle_cec_msg_event(cec_context_t* ctx, uint32_t node_event) {
-    char data[MAX_STRING_LENGTH] = {0};
-
     if ((ctx->poll_fds[node_event].revents & POLLPRI) &&
-        (pread(ctx->poll_fds[node_event].fd, data, MAX_STRING_LENGTH, 0) > 0)) {
+        (pread(ctx->poll_fds[node_event].fd, ctx->data, MAX_STRING_LENGTH, 0) > 0)) {
             ALOGD_IF(DEBUG, "Handling CEC message %s", __FUNCTION__);
-            cec_receive_message(ctx, data, 0);
+            cec_receive_message(ctx, ctx->data, 0);
     }
 
     return;
 }
 
 static void handle_hdmihotplug_event(cec_context_t* ctx, uint32_t node_event) {
-    static char uevent_data[PAGE_SIZE];
+    char uevent_data[PAGE_SIZE];
     int count = 0;
 
     if (ctx->poll_fds[node_event].revents & POLLIN) {
@@ -658,6 +648,7 @@ static void handle_hdmihotplug_event(cec_context_t* ctx, uint32_t node_event) {
 
 static void handle_exit_event(cec_context_t* ctx, uint32_t node_event) {
     ALOGD_IF(DEBUG, "Enter %s", __FUNCTION__);
+
     if (ctx->poll_fds[node_event].revents & POLLIN) {
        ctx->cec_exit_thread = true;
     }
@@ -665,9 +656,7 @@ static void handle_exit_event(cec_context_t* ctx, uint32_t node_event) {
     return;
 }
 
-static void hdmi_cec_monitor_deinit(cec_context_t* ctx) {
-    ctx->cec_exit_thread = true;
-
+static void cec_monitor_deinit(cec_context_t* ctx) {
     for (uint32_t event = 0; event < ctx->poll_fds.size(); event++) {
         close(ctx->poll_fds[event].fd);
         ctx->poll_fds[event].fd = -1;

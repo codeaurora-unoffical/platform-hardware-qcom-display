@@ -40,7 +40,7 @@
 
 namespace qhdmicec {
 
-const int MAX_PATH_LENGTH = 128;
+static const int MAX_STRING_LENGTH = 1024;
 
 struct cec_callback_t {
     // Function in HDMI service to call back on CEC messages
@@ -50,6 +50,8 @@ struct cec_callback_t {
 
 };
 
+struct eventData;
+
 struct cec_context_t {
     hdmi_cec_device_t device;    // Device for HW module
     cec_callback_t callback;     // Struct storing callback object
@@ -57,7 +59,7 @@ struct cec_context_t {
     bool arc_enabled;
     bool system_control;         // If true, HAL/driver handle CEC messages
     int fb_num;                  // Framebuffer node for HDMI
-    char fb_sysfs_path[MAX_PATH_LENGTH];
+    std::string fb_sysfs_path;
     hdmi_port_info *port_info;   // HDMI port info
 
     // Logical address is stored in an array, the index of the array is the
@@ -69,8 +71,12 @@ struct cec_context_t {
     std::vector<pollfd> poll_fds;               // poll fds for cec message monitor and exit signal
                                                 // on cec message monitor thread
     int exit_fd = -1;
-    bool cec_exit_thread;
-    std::thread *hdmi_cec_monitor = NULL;    // hdmi plugin monitor thread variable
+    bool cec_exit_thread = false;
+    std::thread hdmi_cec_monitor;               // hdmi plugin monitor thread variable
+    char data[MAX_STRING_LENGTH] = {0};
+
+    std::vector<std::string> node_list = {};
+    std::vector<eventData> event_data_list = {};
 };
 
 struct eventData {
