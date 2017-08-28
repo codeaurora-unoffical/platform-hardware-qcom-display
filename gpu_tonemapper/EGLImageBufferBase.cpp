@@ -22,33 +22,6 @@
 #include "glengine.h"
 
 //-----------------------------------------------------------------------------
-EGLImageBufferBase::~EGLImageBufferBase()
-//-----------------------------------------------------------------------------
-{
-  if (textureID != 0) {
-    GL(glDeleteTextures(1, &textureID));
-    textureID = 0;
-  }
-
-  if (renderbufferID != 0) {
-    GL(glDeleteRenderbuffers(1, &renderbufferID));
-    renderbufferID = 0;
-  }
-
-  if (framebufferID != 0) {
-    GL(glDeleteFramebuffers(1, &framebufferID));
-    framebufferID = 0;
-  }
-
-  // Delete the eglImage
-  if (eglImageID != 0)
-  {
-      eglDestroyImageKHR(eglGetCurrentDisplay(), eglImageID);
-      eglImageID = 0;
-  }
-}
-
-//-----------------------------------------------------------------------------
 int EGLImageBufferBase::getWidth()
 //-----------------------------------------------------------------------------
 {
