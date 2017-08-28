@@ -160,7 +160,38 @@ DisplayError HWEventsDRM::Init(int display_type, HWEventHandler *event_handler,
 DisplayError HWEventsDRM::Deinit() {
   exit_threads_ = true;
   Sys::pthread_cancel_(event_thread_);
+  WakeUpEventThread();
+  pthread_join(event_thread_, NULL);
+  CloseFds();
 
+  return kErrorNone;
+}
+
+DisplayError HWEventsDRM::SetEventState(HWEvent event, bool enable, void *arg) {
+  switch (event) {
+    case HWEvent::VSYNC:
+      vsync_enabled_ = enable;
+
+      if (enable) {
+        WakeUpEventThread();
+      } else {
+        //wait till pending vblank is consumed...
+        pthread_mutex_lock(&vbl_mutex_);
+        while (vbl_pending_) {
+          pthread_cond_wait(&vbl_cond_, &vbl_mutex_);
+        }
+        pthread_mutex_unlock(&vbl_mutex_);
+      }
+      break;
+    default:
+      DLOGE("Event not supported");
+      return kErrorNotSupported;
+  }
+
+  return kErrorNone;
+}
+
+void HWEventsDRM::WakeUpEventThread() {
   for (uint32_t i = 0; i < event_data_list_.size(); i++) {
     if (event_data_list_[i].event_type == HWEvent::EXIT) {
       uint64_t exit_value = 1;
@@ -169,13 +200,9 @@ DisplayError HWEventsDRM::Deinit() {
         DLOGW("Error triggering exit fd (%d). write size = %d, error = %s", poll_fds_[i].fd,
               write_size, strerror(errno));
       }
+      break;
     }
   }
-
-  pthread_join(event_thread_, NULL);
-  CloseFds();
-
-  return kErrorNone;
 }
 
 DisplayError HWEventsDRM::CloseFds() {
@@ -217,7 +244,7 @@ void *HWEventsDRM::DisplayEventHandler() {
   setpriority(PRIO_PROCESS, 0, kThreadPriorityUrgent);
 
   while (!exit_threads_) {
-    if (RegisterVSync() != kErrorNone) {
+    if (vsync_enabled_ && RegisterVSync() != kErrorNone) {
       pthread_exit(0);
       return nullptr;
     }
@@ -254,12 +281,13 @@ void *HWEventsDRM::DisplayEventHandler() {
     }
   }
 
-  pthread_exit(0);
+  //pthread_exit(0);
 
   return nullptr;
 }
 
 DisplayError HWEventsDRM::RegisterVSync() {
+  pthread_mutex_lock(&vbl_mutex_);
   drmVBlank vblank{};
   vblank.request.type = (drmVBlankSeqType)(DRM_VBLANK_RELATIVE | DRM_VBLANK_EVENT);
   vblank.request.sequence = 1;
@@ -269,8 +297,12 @@ DisplayError HWEventsDRM::RegisterVSync() {
   int error = drmWaitVBlank(poll_fds_[vsync_index_].fd, &vblank);
   if (error < 0) {
     DLOGE("drmWaitVBlank failed with err %d", errno);
+    pthread_mutex_unlock(&vbl_mutex_);
     return kErrorResources;
   }
+
+  vbl_pending_ = true;
+  pthread_mutex_unlock(&vbl_mutex_);
 
   return kErrorNone;
 }
@@ -327,14 +359,20 @@ void HWEventsDRM::VSyncHandlerCallback(int fd, unsigned int sequence, unsigned i
 
 void HWEventsDRM::HandleVBlank(char *data) {
   if (poll_fds_[vsync_index_].revents & (POLLIN | POLLPRI)) {
+    pthread_mutex_lock(&vbl_mutex_);
+
     drmEventContext event = {};
     event.version = DRM_EVENT_CONTEXT_VERSION;
     event.vblank_handler = &HWEventsDRM::VBlankHandlerCallback;
     int error = drmHandleEvent(poll_fds_[vsync_index_].fd, &event);
-
     if (error != 0) {
       DLOGE("drmHandleEvent failed: %i", error);
     }
+
+    vbl_pending_ = false;
+    pthread_cond_signal(&vbl_cond_);
+
+    pthread_mutex_unlock(&vbl_mutex_);
   }
 }
 
