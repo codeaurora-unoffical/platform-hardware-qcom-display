@@ -285,6 +285,14 @@ void HWInfoDRM::GetHWPlanesInfo(HWResourceInfo *hw_resource) {
         }
         hw_resource->num_vig_pipe++;
         break;
+      case DRMPlaneType::RGB:
+        name = "RGB";
+        pipe_caps.type = kPipeTypeRGB;
+        if (!hw_resource->num_rgb_pipe) {
+          PopulateSupportedFmts(kHWRGBPipe, pipe_obj.second, hw_resource);
+        }
+        hw_resource->num_rgb_pipe++;
+        break;
       case DRMPlaneType::CURSOR:
         name = "CURSOR";
         pipe_caps.type = kPipeTypeCursor;
@@ -321,6 +329,17 @@ void HWInfoDRM::PopulateSupportedFmts(HWSubBlockType sub_blk_type,
   if (fmts_map.find(sub_blk_type) == fmts_map.end()) {
     for (auto &fmts : info.formats_supported) {
       GetSDMFormat(fmts.first, fmts.second, &sdm_formats);
+    }
+
+     if (sub_blk_type == kHWRGBPipe ||
+        sub_blk_type == kHWVIGPipe ||
+        sub_blk_type == kHWDMAPipe ||
+        sub_blk_type == kHWCursorPipe) {
+        sdm_formats.push_back(kFormatRGBA8888Ubwc);
+        sdm_formats.push_back(kFormatRGBX8888Ubwc);
+        sdm_formats.push_back(kFormatBGR565Ubwc);
+        sdm_formats.push_back(kFormatRGBA1010102Ubwc);
+        sdm_formats.push_back(kFormatRGBX1010102Ubwc);
     }
 
     fmts_map.insert(make_pair(sub_blk_type, sdm_formats));
