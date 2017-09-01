@@ -20,17 +20,27 @@
 #include "EGLImageBufferLE.h"
 #include <map>
 #include "EGLImageWrapperLE.h"
+#include "glengine.h"
+#include "drm_master.h"
+
+using namespace drm_utils;
+
+namespace sdm {
+static struct gbm_device *gbm;
+static int fd;
+static int initialized; // keeps reference count also;
+}
 
 //-----------------------------------------------------------------------------
-EGLImageKHR EGLImageBufferLE::create_eglImage(struct gbm_buf_info *gbo_info)
+EGLImageKHR create_eglImage(struct gbm_buf_info *gbo_info)
 //-----------------------------------------------------------------------------
 {
   struct gbm_bo *bo = NULL;
   PFNEGLCREATEIMAGEKHRPROC create_image;
 
   create_image = reinterpret_cast<PFNEGLCREATEIMAGEKHRPROC> (eglGetProcAddress("eglCreateImageKHR"));
-  bo = gbm_bo_import(gbm_, GBM_BO_IMPORT_GBM_BUF_TYPE, gbo_info,
-                     GBM_BO_USE_SCANOUT|GBM_BO_USE_RENDERING);
+  bo = gbm_bo_import(sdm::gbm, GBM_BO_IMPORT_GBM_BUF_TYPE, gbo_info,
+                               GBM_BO_USE_SCANOUT|GBM_BO_USE_RENDERING);
 
   /* TODO (user): to determine if attribute for secure/ protected conmtent is to be added */
   EGLint attribs[20];
@@ -51,10 +61,7 @@ EGLImageKHR EGLImageBufferLE::create_eglImage(struct gbm_buf_info *gbo_info)
   attribs[i++] = EGL_NONE;
 
   // we no longer need the bo
-  if (bo) {
-     gbm_bo_destroy(bo);
-  }
-
+  gbm_bo_destroy(bo);
   EGLImageKHR eglImage = create_image(eglGetCurrentDisplay(), (EGLContext)EGL_NO_CONTEXT,
                                            EGL_LINUX_DMA_BUF_EXT, NULL, attribs);
 
@@ -65,22 +72,21 @@ EGLImageKHR EGLImageBufferLE::create_eglImage(struct gbm_buf_info *gbo_info)
 EGLImageBufferLE::EGLImageBufferLE(struct gbm_buf_info *gbuf_info)
 //-----------------------------------------------------------------------------
 {
-
     struct gbm_buf_info *gbo_info = gbuf_info;
 
-    DRMMaster *master = nullptr;
-    int ret = DRMMaster::GetInstance(&master);
+    if (!sdm::initialized) {
+        DRMMaster *master = nullptr;
+        int ret = DRMMaster::GetInstance(&master);
 
-    if (ret < 0) {
-        fprintf(stderr, "Failed to acquire DRMMaster instance\n");
+        if (ret < 0) {
+            fprintf(stderr, "Failed to acquire DRMMaster instance\n");
+        }
+
+        master->GetHandle(&sdm::fd);
+
+        sdm::gbm = gbm_create_device(sdm::fd);
     }
-
-    master->GetHandle(&fd);
-
-    gbm_ = gbm_create_device(fd);
-
-    if (gbm_)
-       fprintf(stderr, "EGLImageBufferLE=>sdm::gbm_ = %d\n", reinterpret_cast<intptr_t>(gbm_));
+    sdm::initialized++;
 
     this->eglImageID = create_eglImage(gbo_info);
     this->width = gbo_info->width;
@@ -91,42 +97,24 @@ EGLImageBufferLE::EGLImageBufferLE(struct gbm_buf_info *gbuf_info)
     framebufferID = 0;
 }
 
-//-----------------------------------------------------------------------------
 EGLImageBufferLE::~EGLImageBufferLE() {
-//-----------------------------------------------------------------------------
-  if (textureID != 0) {
-    GL(glDeleteTextures(1, &textureID));
-    textureID = 0;
-  }
-
-  if (renderbufferID != 0) {
-    GL(glDeleteRenderbuffers(1, &renderbufferID));
-    renderbufferID = 0;
-  }
-
-  if (framebufferID != 0) {
-    GL(glDeleteFramebuffers(1, &framebufferID));
-    framebufferID = 0;
-  }
-
-  // Delete the eglImage
-  if (eglImageID != 0)
-  {
-      eglDestroyImageKHR(eglGetCurrentDisplay(), eglImageID);
-      eglImageID = 0;
-  }
-
-  /* static variable initialized is for 2 purpose: */
-  /* 1: to help initialize by getting master fd and opening gbm device first time */
-  /* 2: On every buffer creation instance, a reference count is added to it to    */
-  /*    keep track of how many times this object has been instantiation. It is    */
-  /*    decremented in destructor. But if the object to be destroyed is with      */
-  /*    reference count = 1, then fd is set to invalid number and gbm device is   */
-  /*    destroyed */
-
-  gbm_device_destroy(gbm_);
-  gbm_ = NULL;
-  fd = -1;
+    /* static variable initialized is for 2 purpose: */
+    /* 1: to help initialize by getting master fd and opening gbm device first time */
+    /* 2: On every buffer creation instance, a reference count is added to it to    */
+    /*    keep track of how many times this object has been instantiation. It is    */
+    /*    decremented in destructor. But if the object to be destroyed is with      */
+    /*    reference count = 1, then fd is set to invalid number and gbm device is   */
+    /*    destroyed */
+    if (sdm::initialized == 1) {
+        gbm_device_destroy(sdm::gbm);
+        sdm::gbm = NULL;
+        sdm::fd = -1;
+        fprintf(stderr, "Last EGLImageBufferLE object deleted: initialized ref count = %d\n",
+                sdm::initialized);
+    }
+    sdm::initialized--;
+    fprintf(stderr, "Object EGLImageBufferLE deleted: initialized ref count = %d\n",
+            sdm::initialized);
 };
 
 static EGLImageBufferLE EGLImageBufferLE::*from(const void *src) {
