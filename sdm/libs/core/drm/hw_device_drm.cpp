@@ -668,6 +668,8 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
           } else {
             drm_atomic_intf_->Perform(DRMOps::PLANE_SET_FB_SECURE_MODE, pipe_id, SDE_DRM_FB_SEC);
           }
+        } else {
+          drm_atomic_intf_->Perform(DRMOps::PLANE_SET_FB_SECURE_MODE, pipe_id, SDE_DRM_FB_NON_SEC);
         }
 
         drm_atomic_intf_->Perform(DRMOps::PLANE_SET_ROTATION, pipe_id, rot_bit_mask);
