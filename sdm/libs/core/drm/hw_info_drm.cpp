@@ -64,9 +64,6 @@
 #define DRM_FORMAT_MOD_QCOM_TIGHT fourcc_mod_code(QCOM, 0x4)
 #endif
 
-//ToDo Need to fix compilation issues seen when enabling V4L2
-//efine ENABLE_ROTATOR
-
 #define __CLASS__ "HWInfoDRM"
 
 using drm_utils::DRMMaster;
@@ -369,7 +366,6 @@ void HWInfoDRM::GetWBInfo(HWResourceInfo *hw_resource) {
 }
 
 void HWInfoDRM::GetSDMFormat(uint32_t v4l2_format, LayerBufferFormat *sdm_format) {
-#if ENABLE_ROTATOR
   switch (v4l2_format) {
     case SDE_PIX_FMT_ARGB_8888:         *sdm_format = kFormatARGB8888;                 break;
     case SDE_PIX_FMT_RGBA_8888:         *sdm_format = kFormatRGBA8888;                 break;
@@ -414,7 +410,6 @@ void HWInfoDRM::GetSDMFormat(uint32_t v4l2_format, LayerBufferFormat *sdm_format
       case SDE_PIX_FMT_Y_CBCR_H2V2_P010_UBWC: *sdm_format = kFormatYCbCr420P010Ubwc;     break; */
     default: *sdm_format = kFormatInvalid;
   }
-#endif
 }
 
 void HWInfoDRM::GetRotatorFormatsForType(int fd, uint32_t type,

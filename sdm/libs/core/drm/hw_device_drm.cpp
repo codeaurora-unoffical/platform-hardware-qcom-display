@@ -300,8 +300,8 @@ HWDeviceDRM::HWDeviceDRM(BufferSyncHandler *buffer_sync_handler, BufferAllocator
                          HWInfoInterface *hw_info_intf)
     : hw_info_intf_(hw_info_intf), buffer_sync_handler_(buffer_sync_handler),
       registry_(buffer_allocator) {
-  device_type_ = kDeviceHDMI;
-  device_name_ = "HDMI Display";
+  device_type_ = kDevicePrimary;
+  device_name_ = "Peripheral Display";
   hw_info_intf_ = hw_info_intf;
 }
 
@@ -315,7 +315,7 @@ DisplayError HWDeviceDRM::Init() {
     drm_master->GetHandle(&dev_fd);
     DRMLibLoader::GetInstance()->FuncGetDRMManager()(dev_fd, &drm_mgr_intf_);
 
-    if (drm_mgr_intf_->RegisterDisplay(DRMDisplayType::TV, &token_)) {
+    if (drm_mgr_intf_->RegisterDisplay(DRMDisplayType::PERIPHERAL, &token_)) {
       DLOGE("RegisterDisplay failed");
       return kErrorResources;
     }
@@ -512,11 +512,6 @@ void HWDeviceDRM::GetHWPanelMaxBrightness() {
 
   hw_panel_info_.panel_max_brightness = 255;
 
-  if (device_type_ == kDeviceHDMI) {
-    DLOGI("Does not applicable for HDMI/DP devices");
-    return;
-  }
-  
   int fd = Sys::open_(kMaxBrightnessNode.c_str(), O_RDONLY);
   if (fd < 0) {
     DLOGW("Failed to open max brightness node = %s, error = %s", kMaxBrightnessNode.c_str(),

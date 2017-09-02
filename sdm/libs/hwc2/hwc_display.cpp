@@ -765,6 +765,22 @@ DisplayError HWCDisplay::VSync(const DisplayEventVSync &vsync) {
   return kErrorNone;
 }
 
+DisplayError HWCDisplay::VSync(int fd,
+                                unsigned int sequence,
+                                unsigned int tv_sec,
+                                unsigned int tv_usec,
+                                void *data) {
+  return kErrorNone;
+}
+
+DisplayError HWCDisplay::PFlip(int fd,
+                                unsigned int sequence,
+                                unsigned int tv_sec,
+                                unsigned int tv_usec,
+                                void *data) {
+  return kErrorNone;
+}
+
 DisplayError HWCDisplay::Refresh() {
   return kErrorNotSupported;
 }

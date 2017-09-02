@@ -217,6 +217,16 @@ class HWCDisplay : public DisplayEventHandler {
 
   // DisplayEventHandler methods
   virtual DisplayError VSync(const DisplayEventVSync &vsync);
+  virtual DisplayError VSync(int fd,
+                                unsigned int sequence,
+                                unsigned int tv_sec,
+                                unsigned int tv_usec,
+                                void *data);
+  virtual DisplayError PFlip(int fd,
+                                unsigned int sequence,
+                                unsigned int tv_sec,
+                                unsigned int tv_usec,
+                                void *data);
   virtual DisplayError Refresh();
   virtual DisplayError CECMessage(char *message);
   virtual void DumpOutputBuffer(const BufferInfo &buffer_info, void *base, int fence);
