@@ -30,6 +30,7 @@ class EGLImageBuffer : public EGLImageBufferBase{
  public:
   EGLImageBuffer(android::sp<android::GraphicBuffer>);
   static EGLImageBuffer *from(const private_handle_t *src);
+  ~EGLImageBuffer();
 };
 
 #endif  //__TONEMAPPER_EGLIMAGE_BUFFER_H__

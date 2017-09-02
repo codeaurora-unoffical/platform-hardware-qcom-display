@@ -22,16 +22,23 @@
 
 #include "engine.h"
 #include "EGLImageBufferBase.h"
+#include "drm_master.h"
 #include <gbm.h>
 #include <gbm_priv.h>
+#include "glengine.h"
 
-
+using namespace drm_utils;
 
 class EGLImageBufferLE : public EGLImageBufferBase{
+
  public:
     EGLImageBufferLE(struct gbm_buf_info *gbo_info);
     ~EGLImageBufferLE();
+    EGLImageKHR create_eglImage(struct gbm_buf_info *gbo_info);
     static EGLImageBufferLE *from(const void *src);
+
+    struct gbm_device *gbm_;
+    int fd;
 };
 
 #endif  //__TONEMAPPER_EGLIMAGE_BUFFER_LE_H__
