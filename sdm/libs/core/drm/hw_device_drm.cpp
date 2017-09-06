@@ -564,6 +564,8 @@ DisplayError HWDeviceDRM::GetConfigIndex(char *mode, uint32_t *index) {
 
 DisplayError HWDeviceDRM::PowerOn() {
   DTRACE_SCOPED();
+//ToDo: enable this code once commit error is fixed
+#if 0
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 1);
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, DRMPowerMode::ON);
   int ret = drm_atomic_intf_->Commit(false /* synchronous */);
@@ -571,10 +573,13 @@ DisplayError HWDeviceDRM::PowerOn() {
     DLOGE("%s failed with error %d", __FUNCTION__, ret);
     return kErrorHardware;
   }
+#endif
   return kErrorNone;
 }
 
 DisplayError HWDeviceDRM::PowerOff() {
+//ToDo: enable this code once commit error is fixed
+#if 0
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, DRMPowerMode::OFF);
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 0);
   int ret = drm_atomic_intf_->Commit(false /* synchronous */);
@@ -582,6 +587,7 @@ DisplayError HWDeviceDRM::PowerOff() {
     DLOGE("%s failed with error %d", __FUNCTION__, ret);
     return kErrorHardware;
   }
+#endif
   return kErrorNone;
 }
 
