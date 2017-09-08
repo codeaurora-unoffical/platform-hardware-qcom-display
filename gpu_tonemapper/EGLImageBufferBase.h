@@ -43,7 +43,7 @@ class EGLImageBufferBase {
 
  public:
   EGLImageBufferBase() {};
-  ~EGLImageBufferBase();
+  ~EGLImageBufferBase() {};
   virtual int getWidth();
   virtual int getHeight();
   virtual unsigned int getTexture();

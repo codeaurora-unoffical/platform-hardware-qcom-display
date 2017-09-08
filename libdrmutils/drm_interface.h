@@ -203,6 +203,12 @@ enum struct DRMOps {
    *      drm_msm_ext_panel_hdr_metadata - hdr_metadata
    */
   CONNECTOR_SET_HDR_PROP,
+  /*
+   * Op: Sets power mode for connector.
+   * Arg: uint32_t - Connector ID
+   *      uint32_t - Power Mode
+   */
+  CONNECTOR_SET_POWER_MODE,
 };
 
 enum struct DRMRotation {
@@ -216,6 +222,13 @@ enum struct DRMBlendType {
   OPAQUE = 1,
   PREMULTIPLIED = 2,
   COVERAGE = 3,
+};
+
+enum struct DRMPowerMode {
+  ON,
+  DOZE,
+  DOZE_SUSPEND,
+  OFF,
 };
 
 enum struct DRMSrcConfig {
@@ -309,7 +322,7 @@ struct DRMConnectorInfo {
   drmModeModeInfo *modes;
   DRMTopology topology;
   drm_msm_ext_panel_hdr_properties hdr_prop;
-  drm_msm_ext_panel_hdr_metadata hdr_metadata;
+  drm_msm_ext_panel_hdr_ctrl hdr_ctrl;
   std::string panel_name;
   DRMPanelMode panel_mode;
   bool is_primary;
