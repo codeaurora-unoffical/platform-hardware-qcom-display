@@ -33,17 +33,17 @@
 
 namespace sdm {
 
-DisplayVirtual::DisplayVirtual(DisplayEventHandler *event_handler, HWInfoInterface *hw_info_intf,
+DisplayVirtual::DisplayVirtual(DisplayOrder order, DisplayEventHandler *event_handler, HWInfoInterface *hw_info_intf,
                                BufferSyncHandler *buffer_sync_handler,
                                BufferAllocator *buffer_allocator, CompManager *comp_manager)
-  : DisplayBase(kVirtual, event_handler, kDeviceVirtual, buffer_sync_handler, buffer_allocator,
+  : DisplayBase(order, kVirtual, event_handler, kDeviceVirtual, buffer_sync_handler, buffer_allocator,
                 comp_manager, hw_info_intf) {
 }
 
 DisplayError DisplayVirtual::Init() {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
 
-  DisplayError error = HWInterface::Create(kVirtual, hw_info_intf_, buffer_sync_handler_,
+  DisplayError error = HWInterface::Create(display_order_, kVirtual, hw_info_intf_, buffer_sync_handler_,
                                            buffer_allocator_, &hw_intf_);
   if (error != kErrorNone) {
     return error;
@@ -112,7 +112,7 @@ DisplayError DisplayVirtual::SetActiveConfig(DisplayConfigVariableInfo *variable
     comp_manager_->UnregisterDisplay(display_comp_ctx_);
   }
 
-  error = comp_manager_->RegisterDisplay(display_type_, display_attributes, hw_panel_info_,
+  error = comp_manager_->RegisterDisplay(display_order_, display_type_, display_attributes, hw_panel_info_,
                                          mixer_attributes, fb_config_, &display_comp_ctx_);
   if (error != kErrorNone) {
     return error;

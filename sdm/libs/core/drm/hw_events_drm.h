@@ -46,7 +46,7 @@ using std::vector;
 
 class HWEventsDRM : public HWEventsInterface {
  public:
-  virtual DisplayError Init(int display_type, HWEventHandler *event_handler,
+  virtual DisplayError Init(DisplayOrder display_order, int display_type, HWEventHandler *event_handler,
                             const vector<HWEvent> &event_list);
   virtual DisplayError Deinit();
   virtual DisplayError SetEventState(HWEvent event, bool enable, void *aux = nullptr);
@@ -94,6 +94,7 @@ class HWEventsDRM : public HWEventsInterface {
   vector<HWEventData> event_data_list_{};
   vector<pollfd> poll_fds_{};
   pthread_t event_thread_{};
+  DisplayOrder display_order_;
   std::string event_thread_name_ = "SDM_EventThread";
   bool exit_threads_ = false;
   uint32_t vsync_index_ = 0;

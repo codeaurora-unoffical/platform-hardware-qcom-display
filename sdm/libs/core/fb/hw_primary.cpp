@@ -75,8 +75,9 @@ using std::string;
 using std::to_string;
 using std::fstream;
 
-HWPrimary::HWPrimary(BufferSyncHandler *buffer_sync_handler, HWInfoInterface *hw_info_intf)
+HWPrimary::HWPrimary(DisplayOrder order, BufferSyncHandler *buffer_sync_handler, HWInfoInterface *hw_info_intf)
   : HWDevice(buffer_sync_handler) {
+  HWDevice::display_order_ = order;
   HWDevice::device_type_ = kDevicePrimary;
   HWDevice::device_name_ = "Primary Display Device";
   HWDevice::hw_info_intf_ = hw_info_intf;

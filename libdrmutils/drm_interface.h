@@ -242,6 +242,13 @@ enum struct DRMDisplayType {
   VIRTUAL,
 };
 
+enum DRMDisplayOrder {
+  kDRMPrimary = 0,
+  kDRMSecondary = 1,
+  kDRMTertiary = 2,
+  kDRMMaxOrder = 3,
+};
+
 struct DRMRect {
   uint32_t left;    // Left-most pixel coordinate.
   uint32_t top;     // Top-most pixel coordinate.
@@ -325,7 +332,7 @@ struct DRMConnectorInfo {
   drm_msm_ext_panel_hdr_metadata hdr_metadata;
   std::string panel_name;
   DRMPanelMode panel_mode;
-  bool is_primary;
+  DRMDisplayOrder display_order;
   // Valid only if DRMPanelMode is VIDEO
   bool dynamic_fps;
   // FourCC format enum and modifier
@@ -446,6 +453,19 @@ class DRMManagerInterface {
   virtual void GetConnectorInfo(uint32_t conn_id, DRMConnectorInfo *info) = 0;
 
   /*
+   * Will provide all the information of a selected connector.
+   * [input]: Use display order to obtain connector inforrmation
+   * [output]: DRMConnectorInfo: Resource Info for the given order
+   */
+  virtual int GetConnectorInfoByOrder(DRMDisplayOrder order, DRMConnectorInfo *info) = 0;
+
+  /*
+   * Return all available connectors.
+   * [output]: the count of connectors
+   */
+  virtual uint32_t GetConnectorCount() = 0;
+
+  /*
    * Will query post propcessing feature info of a CRTC.
    * [output]: DRMPPFeatureInfo: CRTC post processing feature info
    */
@@ -459,11 +479,12 @@ class DRMManagerInterface {
    * use this token to represent the display for any Perform operations if
    * needed.
    *
+   * [input]: disp_order - Primary / Secondary / Tertiary
    * [input]: disp_type - Peripheral / TV / Virtual
    * [output]: DRMDisplayToken - CRTC and Connector id's for the display
    * [return]: 0 on success, a negative error value otherwise
    */
-  virtual int RegisterDisplay(DRMDisplayType disp_type, DRMDisplayToken *tok) = 0;
+  virtual int RegisterDisplay(DRMDisplayOrder disp_order, DRMDisplayType disp_type, DRMDisplayToken *tok) = 0;
 
   /* Client should invoke this interface on display disconnect.
    * [input]: DRMDisplayToken - identifier for the display.

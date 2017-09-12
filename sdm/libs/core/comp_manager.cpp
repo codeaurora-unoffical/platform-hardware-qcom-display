@@ -83,7 +83,8 @@ DisplayError CompManager::Deinit() {
   return kErrorNone;
 }
 
-DisplayError CompManager::RegisterDisplay(DisplayType type,
+DisplayError CompManager::RegisterDisplay(DisplayOrder order,
+                                          DisplayType type,
                                           const HWDisplayAttributes &display_attributes,
                                           const HWPanelInfo &hw_panel_info,
                                           const HWMixerAttributes &mixer_attributes,
@@ -99,7 +100,7 @@ DisplayError CompManager::RegisterDisplay(DisplayType type,
   }
 
   Strategy *&strategy = display_comp_ctx->strategy;
-  strategy = new Strategy(extension_intf_, buffer_allocator_, type, hw_res_info_, hw_panel_info,
+  strategy = new Strategy(extension_intf_, buffer_allocator_, order, type, hw_res_info_, hw_panel_info,
                           mixer_attributes, display_attributes, fb_config);
   if (!strategy) {
     DLOGE("Unable to create strategy");
@@ -114,7 +115,7 @@ DisplayError CompManager::RegisterDisplay(DisplayType type,
     return error;
   }
 
-  error = resource_intf_->RegisterDisplay(type, display_attributes, hw_panel_info, mixer_attributes,
+  error = resource_intf_->RegisterDisplay(order, type, display_attributes, hw_panel_info, mixer_attributes,
                                           &display_comp_ctx->display_resource_ctx);
   if (error != kErrorNone) {
     strategy->Deinit();
@@ -124,9 +125,10 @@ DisplayError CompManager::RegisterDisplay(DisplayType type,
     return error;
   }
 
-  registered_displays_[type] = 1;
+  registered_displays_[order] = 1;
   display_comp_ctx->is_primary_panel = hw_panel_info.is_primary_panel;
   display_comp_ctx->display_type = type;
+  display_comp_ctx->display_order = order;
   *display_ctx = display_comp_ctx;
   // New non-primary display device has been added, so move the composition mode to safe mode until
   // resources for the added display is configured properly.
@@ -137,8 +139,8 @@ DisplayError CompManager::RegisterDisplay(DisplayType type,
 
   display_comp_ctx->scaled_composition = NeedsScaledComposition(fb_config, mixer_attributes);
   DLOGV_IF(kTagCompManager, "registered display bit mask 0x%x, configured display bit mask 0x%x, " \
-           "display type %d", registered_displays_.to_ulong(), configured_displays_.to_ulong(),
-           display_comp_ctx->display_type);
+           "display order %d display type %d", registered_displays_.to_ulong(), configured_displays_.to_ulong(),
+           display_comp_ctx->display_order, display_comp_ctx->display_type);
 
   return kErrorNone;
 }
@@ -159,16 +161,17 @@ DisplayError CompManager::UnregisterDisplay(Handle display_ctx) {
   strategy->Deinit();
   delete strategy;
 
-  registered_displays_[display_comp_ctx->display_type] = 0;
-  configured_displays_[display_comp_ctx->display_type] = 0;
+  registered_displays_[display_comp_ctx->display_order] = 0;
+  configured_displays_[display_comp_ctx->display_order] = 0;
+
 
   if (display_comp_ctx->display_type == kHDMI) {
     max_layers_ = kMaxSDELayers;
   }
 
   DLOGV_IF(kTagCompManager, "registered display bit mask 0x%x, configured display bit mask 0x%x, " \
-           "display type %d", registered_displays_.to_ulong(), configured_displays_.to_ulong(),
-           display_comp_ctx->display_type);
+           "display order %d display type %d", registered_displays_.to_ulong(), configured_displays_.to_ulong(),
+           display_comp_ctx->display_order, display_comp_ctx->display_type);
 
   delete display_comp_ctx;
   display_comp_ctx = NULL;
@@ -321,7 +324,7 @@ DisplayError CompManager::Prepare(Handle display_ctx, HWLayers *hw_layers) {
   }
 
   if (error != kErrorNone) {
-    DLOGE("Composition strategies exhausted for display = %d", display_comp_ctx->display_type);
+    DLOGE("Composition strategies exhausted for display = %d, order = %d", display_comp_ctx->display_type, display_comp_ctx->display_order);
   }
 
   resource_intf_->Stop(display_resource_ctx);
@@ -367,7 +370,7 @@ DisplayError CompManager::ReConfigure(Handle display_ctx, HWLayers *hw_layers) {
   error = resource_intf_->Prepare(display_resource_ctx, hw_layers);
 
   if (error != kErrorNone) {
-    DLOGE("Reconfigure failed for display = %d", display_comp_ctx->display_type);
+    DLOGE("Reconfigure failed for display = %d, order = %d", display_comp_ctx->display_type, display_comp_ctx->display_order);
   }
 
   resource_intf_->Stop(display_resource_ctx);
@@ -384,7 +387,7 @@ DisplayError CompManager::PostCommit(Handle display_ctx, HWLayers *hw_layers) {
   DisplayError error = kErrorNone;
   DisplayCompositionContext *display_comp_ctx =
                              reinterpret_cast<DisplayCompositionContext *>(display_ctx);
-  configured_displays_[display_comp_ctx->display_type] = 1;
+  configured_displays_[display_comp_ctx->display_order] = 1;
   if (configured_displays_ == registered_displays_) {
     safe_mode_ = false;
   }
@@ -397,8 +400,8 @@ DisplayError CompManager::PostCommit(Handle display_ctx, HWLayers *hw_layers) {
   display_comp_ctx->idle_fallback = false;
 
   DLOGV_IF(kTagCompManager, "registered display bit mask 0x%x, configured display bit mask 0x%x, " \
-           "display type %d", registered_displays_, configured_displays_,
-           display_comp_ctx->display_type);
+           "display order %d display type %d", registered_displays_, configured_displays_,
+           display_comp_ctx->display_order, display_comp_ctx->display_type);
 
   return kErrorNone;
 }
@@ -577,13 +580,13 @@ DisplayError CompManager::ControlDpps(bool enable) {
 }
 
 bool CompManager::SetDisplayState(Handle display_ctx,
-                                  DisplayState state, DisplayType display_type) {
-  display_state_[display_type] = state;
+                                  DisplayState state, DisplayOrder display_order, DisplayType display_type) {
+  display_state_[display_order] = state;
 
   switch (state) {
   case kStateOff:
     Purge(display_ctx);
-    configured_displays_.reset(display_type);
+    configured_displays_.reset(display_order);
     DLOGV_IF(kTagCompManager, "configured_displays_ = 0x%x", configured_displays_);
     break;
 

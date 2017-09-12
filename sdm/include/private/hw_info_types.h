@@ -51,8 +51,9 @@ enum HWDeviceType {
 };
 
 enum HWBlockType {
-  kHWPrimary,
-  kHWHDMI,
+  kHWFirst,
+  kHWSecondary,
+  kHWTertiary,
   kHWWriteback0,
   kHWWriteback1,
   kHWWriteback2,

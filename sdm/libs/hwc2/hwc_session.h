@@ -45,6 +45,9 @@ class HWCSession : hwc2_device_t, public IDisplayConfig, public qClient::BnQClie
   };
 
   explicit HWCSession(const hw_module_t *module);
+  uint32_t GetDisplayCount(void);
+  int GetDisplayInfos(void);
+  DisplayOrder GetDisplayOrder(uint32_t display_id);
   int Init();
   int Deinit();
   HWC2::Error CreateVirtualDisplayObject(uint32_t width, uint32_t height, int32_t *format);
@@ -185,9 +188,13 @@ class HWCSession : hwc2_device_t, public IDisplayConfig, public qClient::BnQClie
   android::status_t SetMixerResolution(const android::Parcel *input_parcel);
   android::status_t SetColorModeOverride(const android::Parcel *input_parcel);
 
+  void Refresh(hwc2_display_t display);
+  void HotPlug(hwc2_display_t display, HWC2::Connection state);
+
   static Locker locker_;
   CoreInterface *core_intf_ = NULL;
   HWCDisplay *hwc_display_[HWC_NUM_DISPLAY_TYPES] = {NULL};
+  HWDisplayInterfaceInfo hw_disp_info_[kOrderMax] = {};
   HWCCallbacks callbacks_;
   pthread_t uevent_thread_;
   bool uevent_thread_exit_ = false;
@@ -203,6 +210,7 @@ class HWCSession : hwc2_device_t, public IDisplayConfig, public qClient::BnQClie
   int bw_mode_release_fd_ = -1;
   qService::QService *qservice_ = NULL;
   HWCSocketHandler socket_handler_;
+  Locker callbacks_lock_;
 };
 
 }  // namespace sdm

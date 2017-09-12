@@ -35,7 +35,7 @@ class HWVirtualInterface;
 
 class DisplayVirtual : public DisplayBase {
  public:
-  DisplayVirtual(DisplayEventHandler *event_handler, HWInfoInterface *hw_info_intf,
+  DisplayVirtual(DisplayOrder order, DisplayEventHandler *event_handler, HWInfoInterface *hw_info_intf,
                  BufferSyncHandler *buffer_sync_handler, BufferAllocator *buffer_allocator,
                  CompManager *comp_manager);
   virtual DisplayError Init();

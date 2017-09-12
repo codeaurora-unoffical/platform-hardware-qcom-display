@@ -134,7 +134,7 @@ DisplayError ResourceDefault::Deinit() {
   return kErrorNone;
 }
 
-DisplayError ResourceDefault::RegisterDisplay(DisplayType type,
+DisplayError ResourceDefault::RegisterDisplay(DisplayOrder order, DisplayType type,
                                               const HWDisplayAttributes &display_attributes,
                                               const HWPanelInfo &hw_panel_info,
                                               const HWMixerAttributes &mixer_attributes,
@@ -142,16 +142,22 @@ DisplayError ResourceDefault::RegisterDisplay(DisplayType type,
   DisplayError error = kErrorNone;
 
   HWBlockType hw_block_id = kHWBlockMax;
-  switch (type) {
-  case kPrimary:
-    if (!hw_block_ctx_[kHWPrimary].is_in_use) {
-      hw_block_id = kHWPrimary;
+  switch (order) {
+  case kFirst:
+    if (!hw_block_ctx_[kHWFirst].is_in_use) {
+      hw_block_id = kHWFirst;
     }
     break;
 
-  case kHDMI:
-    if (!hw_block_ctx_[kHWHDMI].is_in_use) {
-      hw_block_id = kHWHDMI;
+  case kSecondary:
+    if (!hw_block_ctx_[kHWSecondary].is_in_use) {
+      hw_block_id = kHWSecondary;
+    }
+    break;
+
+  case kTertiary:
+    if (!hw_block_ctx_[kHWTertiary].is_in_use) {
+      hw_block_id = kHWTertiary;
     }
     break;
 
@@ -344,7 +350,7 @@ DisplayError ResourceDefault::PostCommit(Handle display_ctx, HWLayers *hw_layers
   DLOGV_IF(kTagResources, "Resource for hw_block = %d, frame_count = %d", hw_block_id, frame_count);
 
   // handoff pipes which are used by splash screen
-  if ((frame_count == 0) && (hw_block_id == kHWPrimary)) {
+  if ((frame_count == 0) && (hw_block_id == kHWFirst)) {
     for (uint32_t i = 0; i < num_pipe_; i++) {
       if (src_pipes_[i].hw_block_id == hw_block_id && src_pipes_[i].owner == kPipeOwnerKernelMode) {
         src_pipes_[i].owner = kPipeOwnerUserMode;

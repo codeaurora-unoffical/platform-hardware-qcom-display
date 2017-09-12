@@ -94,6 +94,7 @@ using sde_drm::DRMSrcConfig;
 using sde_drm::DRMOps;
 using sde_drm::DRMTopology;
 using sde_drm::DRMPowerMode;
+using sde_drm::DRMDisplayOrder;
 
 namespace sdm {
 
@@ -215,6 +216,26 @@ static void GetDRMFormat(LayerBufferFormat format, uint32_t *drm_format,
   }
 }
 
+static DRMDisplayOrder GetDRMDisplayOrder(DisplayOrder order) {
+  DRMDisplayOrder drm_disp_order = DRMDisplayOrder::kDRMMaxOrder;
+
+  switch (order) {
+    case kFirst:
+      drm_disp_order = DRMDisplayOrder::kDRMPrimary;
+      break;
+    case kSecondary:
+      drm_disp_order = DRMDisplayOrder::kDRMSecondary;
+      break;
+    case kTertiary:
+      drm_disp_order = DRMDisplayOrder::kDRMTertiary;
+      break;
+    default:
+      DLOGW("Unsupported order %d", order);
+      break;
+  }
+  return drm_disp_order;
+}
+
 void HWDeviceDRM::Registry::RegisterCurrent(HWLayers *hw_layers) {
   DRMMaster *master = nullptr;
   DRMMaster::GetInstance(&master);
@@ -296,12 +317,13 @@ uint32_t HWDeviceDRM::Registry::GetFbId(int fd) {
   return (it == hashmap_[current_index_].end()) ? 0 : it->second;
 }
 
-HWDeviceDRM::HWDeviceDRM(BufferSyncHandler *buffer_sync_handler, BufferAllocator *buffer_allocator,
+HWDeviceDRM::HWDeviceDRM(DisplayOrder order, BufferSyncHandler *buffer_sync_handler, BufferAllocator *buffer_allocator,
                          HWInfoInterface *hw_info_intf)
     : hw_info_intf_(hw_info_intf), buffer_sync_handler_(buffer_sync_handler),
       registry_(buffer_allocator) {
+  display_order_ = order;
   device_type_ = kDevicePrimary;
-  device_name_ = "Peripheral Display";
+  device_name_ = "primary Display";
   hw_info_intf_ = hw_info_intf;
 }
 
@@ -311,11 +333,12 @@ DisplayError HWDeviceDRM::Init() {
   if (!default_mode_) {
     DRMMaster *drm_master = {};
     int dev_fd = -1;
+    DRMDisplayOrder drm_disp_order = GetDRMDisplayOrder(display_order_);
     DRMMaster::GetInstance(&drm_master);
     drm_master->GetHandle(&dev_fd);
     DRMLibLoader::GetInstance()->FuncGetDRMManager()(dev_fd, &drm_mgr_intf_);
 
-    if (drm_mgr_intf_->RegisterDisplay(DRMDisplayType::PERIPHERAL, &token_)) {
+    if (drm_mgr_intf_->RegisterDisplay(drm_disp_order, DRMDisplayType::PERIPHERAL, &token_)) {
       DLOGE("RegisterDisplay failed");
       return kErrorResources;
     }
@@ -441,7 +464,7 @@ void HWDeviceDRM::PopulateHWPanelInfo() {
   hw_panel_info_.dynamic_fps = connector_info_.dynamic_fps;
   hw_panel_info_.min_fps = 60;
   hw_panel_info_.max_fps = 60;
-  hw_panel_info_.is_primary_panel = connector_info_.is_primary;
+  hw_panel_info_.is_primary_panel = (connector_info_.display_order == DRMDisplayOrder::kDRMPrimary);
   hw_panel_info_.is_pluggable = 0;
 
   if (!default_mode_) {

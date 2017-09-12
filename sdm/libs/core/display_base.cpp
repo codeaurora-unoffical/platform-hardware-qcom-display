@@ -39,11 +39,11 @@
 namespace sdm {
 
 // TODO(user): Have a single structure handle carries all the interface pointers and variables.
-DisplayBase::DisplayBase(DisplayType display_type, DisplayEventHandler *event_handler,
+DisplayBase::DisplayBase(DisplayOrder order, DisplayType display_type, DisplayEventHandler *event_handler,
                          HWDeviceType hw_device_type, BufferSyncHandler *buffer_sync_handler,
                          BufferAllocator *buffer_allocator, CompManager *comp_manager,
                          HWInfoInterface *hw_info_intf)
-  : display_type_(display_type), event_handler_(event_handler), hw_device_type_(hw_device_type),
+  : display_order_(order), display_type_(display_type), event_handler_(event_handler), hw_device_type_(hw_device_type),
     buffer_sync_handler_(buffer_sync_handler), buffer_allocator_(buffer_allocator),
     comp_manager_(comp_manager), hw_info_intf_(hw_info_intf) {
 }
@@ -83,7 +83,7 @@ DisplayError DisplayBase::Init() {
     goto CleanupOnError;
   }
 
-  error = comp_manager_->RegisterDisplay(display_type_, display_attributes_, hw_panel_info_,
+  error = comp_manager_->RegisterDisplay(display_order_, display_type_, display_attributes_, hw_panel_info_,
                                          mixer_attributes_, fb_config_, &display_comp_ctx_);
   if (error != kErrorNone) {
     goto CleanupOnError;
@@ -416,7 +416,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state) {
   DisplayError error = kErrorNone;
   bool active = false;
 
-  DLOGI("Set state = %d, display %d", state, display_type_);
+  DLOGI("Set state = %d, display %d order %d", state, display_type_, display_order_);
 
   if (state == state_) {
     DLOGI("Same state transition is requested.");
@@ -472,7 +472,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state) {
   if (error == kErrorNone) {
     active_ = active;
     state_ = state;
-    comp_manager_->SetDisplayState(display_comp_ctx_, state, display_type_);
+    comp_manager_->SetDisplayState(display_comp_ctx_, state, display_order_, display_type_);
   }
 
   return error;

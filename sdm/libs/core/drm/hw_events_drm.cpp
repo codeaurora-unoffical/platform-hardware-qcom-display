@@ -138,11 +138,12 @@ void HWEventsDRM::PopulateHWEventData(const vector<HWEvent> &event_list) {
   InitializePollFd();
 }
 
-DisplayError HWEventsDRM::Init(int display_type, HWEventHandler *event_handler,
+DisplayError HWEventsDRM::Init(DisplayOrder display_order, int display_type, HWEventHandler *event_handler,
                                const vector<HWEvent> &event_list) {
   if (!event_handler)
     return kErrorParameters;
 
+  display_order_ = display_order;
   event_handler_ = event_handler;
   poll_fds_.resize(event_list.size());
   event_thread_name_ += " - " + std::to_string(display_type);

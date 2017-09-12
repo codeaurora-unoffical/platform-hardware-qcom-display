@@ -47,13 +47,13 @@ namespace sdm {
 
 int HWCDisplayPrimary::Create(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
                               HWCCallbacks *callbacks, qService::QService *qservice,
-                              HWCDisplay **hwc_display) {
+                              DisplayOrder display_order, HWCDisplay **hwc_display) {
   int status = 0;
   uint32_t primary_width = 0;
   uint32_t primary_height = 0;
 
   HWCDisplay *hwc_display_primary =
-      new HWCDisplayPrimary(core_intf, buffer_allocator, callbacks, qservice);
+      new HWCDisplayPrimary(core_intf, buffer_allocator, callbacks, qservice, display_order);
   status = hwc_display_primary->Init();
   if (status) {
     delete hwc_display_primary;
@@ -86,8 +86,8 @@ void HWCDisplayPrimary::Destroy(HWCDisplay *hwc_display) {
 }
 
 HWCDisplayPrimary::HWCDisplayPrimary(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
-                                     HWCCallbacks *callbacks, qService::QService *qservice)
-    : HWCDisplay(core_intf, callbacks, kPrimary, HWC_DISPLAY_PRIMARY, true, qservice,
+                                  HWCCallbacks *callbacks, qService::QService *qservice, DisplayOrder display_order)
+    : HWCDisplay(core_intf, callbacks, kPrimary, display_order, true, qservice,
                  DISPLAY_CLASS_PRIMARY, buffer_allocator),
       buffer_allocator_(buffer_allocator),
       cpu_hint_(NULL) {

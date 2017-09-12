@@ -39,10 +39,10 @@ class HWCDisplayExternal : public HWCDisplay {
   static int Create(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
                     HWCCallbacks *callbacks, uint32_t primary_width,
                     uint32_t primary_height, qService::QService *qservice, bool use_primary_res,
-                    HWCDisplay **hwc_display);
+                    DisplayOrder display_order, HWCDisplay **hwc_display);
   static int Create(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
                     HWCCallbacks *callbacks, qService::QService *qservice,
-                    HWCDisplay **hwc_display);
+                    DisplayOrder display_order, HWCDisplay **hwc_display);
   static void Destroy(HWCDisplay *hwc_display);
   virtual HWC2::Error Validate(uint32_t *out_num_types, uint32_t *out_num_requests);
   virtual HWC2::Error Present(int32_t *out_retire_fence);
@@ -50,7 +50,7 @@ class HWCDisplayExternal : public HWCDisplay {
 
  private:
   HWCDisplayExternal(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
-                     HWCCallbacks *callbacks, qService::QService *qservice);
+                     HWCCallbacks *callbacks, qService::QService *qservice, DisplayOrder display_order);
   void ApplyScanAdjustment(hwc_rect_t *display_frame);
   static void GetDownscaleResolution(uint32_t primary_width, uint32_t primary_height,
                                      uint32_t *virtual_width, uint32_t *virtual_height);

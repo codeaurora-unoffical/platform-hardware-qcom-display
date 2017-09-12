@@ -46,7 +46,7 @@ using std::lock_guard;
 
 class DisplayBase : public DisplayInterface, DumpImpl {
  public:
-  DisplayBase(DisplayType display_type, DisplayEventHandler *event_handler,
+  DisplayBase(DisplayOrder order, DisplayType display_type, DisplayEventHandler *event_handler,
               HWDeviceType hw_device_type, BufferSyncHandler *buffer_sync_handler,
               BufferAllocator *buffer_allocator, CompManager *comp_manager,
               HWInfoInterface *hw_info_intf);
@@ -135,6 +135,7 @@ class DisplayBase : public DisplayInterface, DumpImpl {
   DisplayError SetColorModeInternal(const std::string &color_mode);
 
   recursive_mutex recursive_mutex_;
+  DisplayOrder display_order_;
   DisplayType display_type_;
   DisplayEventHandler *event_handler_ = NULL;
   HWDeviceType hw_device_type_;

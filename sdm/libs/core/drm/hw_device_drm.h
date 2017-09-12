@@ -49,7 +49,7 @@ class HWInfoInterface;
 
 class HWDeviceDRM : public HWInterface {
  public:
-  explicit HWDeviceDRM(BufferSyncHandler *buffer_sync_handler, BufferAllocator *buffer_allocator,
+  explicit HWDeviceDRM(DisplayOrder order, BufferSyncHandler *buffer_sync_handler, BufferAllocator *buffer_allocator,
                        HWInfoInterface *hw_info_intf);
   virtual ~HWDeviceDRM() {}
   virtual DisplayError Init();
@@ -150,6 +150,7 @@ class HWDeviceDRM : public HWInterface {
   HWPanelInfo hw_panel_info_ = {};
   HWInfoInterface *hw_info_intf_ = {};
   BufferSyncHandler *buffer_sync_handler_ = {};
+  DisplayOrder display_order_ = {};
   HWDeviceType device_type_ = {};
   const char *device_name_ = {};
   bool synchronous_commit_ = false;

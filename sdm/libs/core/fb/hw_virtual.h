@@ -31,7 +31,7 @@ namespace sdm {
 
 class HWVirtual : public HWDevice {
  public:
-  HWVirtual(BufferSyncHandler *buffer_sync_handler, HWInfoInterface *hw_info_intf);
+  HWVirtual(DisplayOrder order, BufferSyncHandler *buffer_sync_handler, HWInfoInterface *hw_info_intf);
   virtual DisplayError SetVSyncState(bool enable) { return kErrorNotSupported; }
   virtual DisplayError SetMixerAttributes(const HWMixerAttributes &mixer_attributes) {
     return kErrorNotSupported;

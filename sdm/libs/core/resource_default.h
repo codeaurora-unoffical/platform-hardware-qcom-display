@@ -39,7 +39,7 @@ class ResourceDefault : public ResourceInterface {
   static DisplayError CreateResourceDefault(const HWResourceInfo &hw_resource_info,
                                             ResourceInterface **resource_intf);
   static DisplayError DestroyResourceDefault(ResourceInterface *resource_intf);
-  virtual DisplayError RegisterDisplay(DisplayType type,
+  virtual DisplayError RegisterDisplay(DisplayOrder order, DisplayType type,
                                        const HWDisplayAttributes &display_attributes,
                                        const HWPanelInfo &hw_panel_info,
                                        const HWMixerAttributes &mixer_attributes,

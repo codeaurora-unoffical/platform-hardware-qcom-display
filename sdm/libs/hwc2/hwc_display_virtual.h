@@ -40,7 +40,7 @@ class HWCDisplayVirtual : public HWCDisplay {
  public:
   static int Create(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
                     HWCCallbacks *callbacks, uint32_t width,
-                    uint32_t height, int32_t *format, HWCDisplay **hwc_display);
+                    uint32_t height, int32_t *format, DisplayOrder display_order, HWCDisplay **hwc_display);
   static void Destroy(HWCDisplay *hwc_display);
   virtual int Init();
   virtual int Deinit();
@@ -51,7 +51,7 @@ class HWCDisplayVirtual : public HWCDisplay {
 
  private:
   HWCDisplayVirtual(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
-                    HWCCallbacks *callbacks);
+                    HWCCallbacks *callbacks, DisplayOrder display_order);
   int SetConfig(uint32_t width, uint32_t height);
 
   bool dump_output_layer_ = false;

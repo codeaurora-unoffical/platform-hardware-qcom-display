@@ -51,5 +51,9 @@ else
     LOCAL_SRC_FILES += hwc_buffer_allocator.cpp
 endif
 
+ifeq ($(TARGET_USES_THREEDISPLAYS), true)
+    LOCAL_CFLAGS += -DENABLE_THREE_DISPLAYS
+endif
+
 include $(BUILD_SHARED_LIBRARY)
 endif

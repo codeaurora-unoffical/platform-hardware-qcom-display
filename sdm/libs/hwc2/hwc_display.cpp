@@ -252,7 +252,7 @@ void HWCColorMode::Dump(std::ostringstream* os) {
 }
 
 HWCDisplay::HWCDisplay(CoreInterface *core_intf, HWCCallbacks *callbacks, DisplayType type,
-                       hwc2_display_t id, bool needs_blit, qService::QService *qservice,
+                       DisplayOrder id, bool needs_blit, qService::QService *qservice,
                        DisplayClass display_class, BufferAllocator *buffer_allocator)
     : core_intf_(core_intf),
       callbacks_(callbacks),
@@ -265,7 +265,7 @@ HWCDisplay::HWCDisplay(CoreInterface *core_intf, HWCCallbacks *callbacks, Displa
 }
 
 int HWCDisplay::Init() {
-  DisplayError error = core_intf_->CreateDisplay(type_, this, &display_intf_);
+  DisplayError error = core_intf_->CreateDisplay(id_, type_, this, &display_intf_);
   if (error != kErrorNone) {
     DLOGE("Display create failed. Error = %d display_type %d event_handler %p disp_intf %p", error,
           type_, this, &display_intf_);

@@ -36,7 +36,7 @@ using std::vector;
 
 class HWHDMIDRM : public HWDeviceDRM {
  public:
-  explicit HWHDMIDRM(BufferSyncHandler *buffer_sync_handler, BufferAllocator *buffer_allocator,
+  explicit HWHDMIDRM(DisplayOrder order, BufferSyncHandler *buffer_sync_handler, BufferAllocator *buffer_allocator,
                      HWInfoInterface *hw_info_intf);
 
  protected:

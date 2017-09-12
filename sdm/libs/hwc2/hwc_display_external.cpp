@@ -41,21 +41,21 @@ namespace sdm {
 
 int HWCDisplayExternal::Create(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
                                HWCCallbacks *callbacks, qService::QService *qservice,
-                               HWCDisplay **hwc_display) {
-  return Create(core_intf, buffer_allocator, callbacks, 0, 0, qservice, false, hwc_display);
+                               DisplayOrder display_order, HWCDisplay **hwc_display) {
+  return Create(core_intf, buffer_allocator, callbacks, 0, 0, qservice, false, display_order, hwc_display);
 }
 
 int HWCDisplayExternal::Create(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
                                HWCCallbacks *callbacks,
                                uint32_t primary_width, uint32_t primary_height,
                                qService::QService *qservice, bool use_primary_res,
-                               HWCDisplay **hwc_display) {
+                               DisplayOrder display_order, HWCDisplay **hwc_display) {
   uint32_t external_width = 0;
   uint32_t external_height = 0;
   DisplayError error = kErrorNone;
 
   HWCDisplay *hwc_display_external = new HWCDisplayExternal(core_intf, buffer_allocator, callbacks,
-                                                            qservice);
+                                                            qservice, display_order);
   int status = hwc_display_external->Init();
   if (status) {
     delete hwc_display_external;
@@ -101,8 +101,9 @@ void HWCDisplayExternal::Destroy(HWCDisplay *hwc_display) {
 HWCDisplayExternal::HWCDisplayExternal(CoreInterface *core_intf,
                                        HWCBufferAllocator *buffer_allocator,
                                        HWCCallbacks *callbacks,
-                                       qService::QService *qservice)
-    : HWCDisplay(core_intf, callbacks, kHDMI, HWC_DISPLAY_EXTERNAL, false, qservice,
+                                       qService::QService *qservice,
+                                       DisplayOrder display_order)
+    : HWCDisplay(core_intf, callbacks, kHDMI, display_order, false, qservice,
                  DISPLAY_CLASS_EXTERNAL, buffer_allocator) {
 }
 

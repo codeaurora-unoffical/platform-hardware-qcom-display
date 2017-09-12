@@ -35,7 +35,7 @@ namespace sdm {
 
 class HWPrimary : public HWDevice {
  public:
-  HWPrimary(BufferSyncHandler *buffer_sync_handler, HWInfoInterface *hw_info_intf);
+  HWPrimary(DisplayOrder order, BufferSyncHandler *buffer_sync_handler, HWInfoInterface *hw_info_intf);
 
  protected:
   virtual DisplayError Init();

@@ -37,7 +37,7 @@ using std::vector;
 
 class HWHDMI : public HWDevice {
  public:
-  HWHDMI(BufferSyncHandler *buffer_sync_handler, HWInfoInterface *hw_info_intf);
+  HWHDMI(DisplayOrder order, BufferSyncHandler *buffer_sync_handler, HWInfoInterface *hw_info_intf);
 
  protected:
   enum HWFramerateUpdate {

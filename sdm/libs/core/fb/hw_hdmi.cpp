@@ -192,8 +192,9 @@ static bool MapHDMIDisplayTiming(const msm_hdmi_mode_timing_info *mode,
   return true;
 }
 
-HWHDMI::HWHDMI(BufferSyncHandler *buffer_sync_handler,  HWInfoInterface *hw_info_intf)
+HWHDMI::HWHDMI(DisplayOrder order, BufferSyncHandler *buffer_sync_handler,  HWInfoInterface *hw_info_intf)
   : HWDevice(buffer_sync_handler), hw_scan_info_(), active_config_index_(0) {
+  HWDevice::display_order_ = order;
   HWDevice::device_type_ = kDeviceHDMI;
   HWDevice::device_name_ = "HDMI Display Device";
   HWDevice::hw_info_intf_ = hw_info_intf;

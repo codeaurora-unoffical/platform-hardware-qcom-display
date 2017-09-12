@@ -43,7 +43,7 @@ class CompManager : public DumpImpl {
                     BufferAllocator *buffer_allocator, BufferSyncHandler *buffer_sync_handler,
                     SocketHandler *socket_handler);
   DisplayError Deinit();
-  DisplayError RegisterDisplay(DisplayType type, const HWDisplayAttributes &display_attributes,
+  DisplayError RegisterDisplay(DisplayOrder order, DisplayType type, const HWDisplayAttributes &display_attributes,
                                const HWPanelInfo &hw_panel_info,
                                const HWMixerAttributes &mixer_attributes,
                                const DisplayConfigVariableInfo &fb_config, Handle *display_ctx);
@@ -68,7 +68,7 @@ class CompManager : public DumpImpl {
   DisplayError ValidateScaling(const LayerRect &crop, const LayerRect &dst, bool rotate90);
   DisplayError ValidateCursorPosition(Handle display_ctx, HWLayers *hw_layers, int x, int y);
   bool SupportLayerAsCursor(Handle display_ctx, HWLayers *hw_layers);
-  bool SetDisplayState(Handle display_ctx, DisplayState state, DisplayType display_type);
+  bool SetDisplayState(Handle display_ctx, DisplayState state, DisplayOrder order, DisplayType display_type);
   DisplayError SetMaxBandwidthMode(HWBwModes mode);
   DisplayError GetScaleLutConfig(HWScaleLutInfo *lut_info);
   DisplayError SetDetailEnhancerData(Handle display_ctx, const DisplayDetailEnhancerData &de_data);
@@ -90,6 +90,7 @@ class CompManager : public DumpImpl {
     StrategyConstraints constraints;
     Handle display_resource_ctx = NULL;
     DisplayType display_type = kPrimary;
+    DisplayOrder display_order = kFirst;
     uint32_t max_strategies = 0;
     uint32_t remaining_strategies = 0;
     bool idle_fallback = false;
@@ -104,9 +105,9 @@ class CompManager : public DumpImpl {
 
   Locker locker_;
   ResourceInterface *resource_intf_ = NULL;
-  std::bitset<kDisplayMax> registered_displays_;  // Bit mask of registered displays
-  std::bitset<kDisplayMax> configured_displays_;  // Bit mask of sucessfully configured displays
-  uint32_t display_state_[kDisplayMax] = {};
+  std::bitset<kOrderMax> registered_displays_;  // Bit mask of registered displays
+  std::bitset<kOrderMax> configured_displays_;  // Bit mask of sucessfully configured displays
+  uint32_t display_state_[kOrderMax] = {};
   bool safe_mode_ = false;              // Flag to notify all displays to be in resource crunch
                                         // mode, where strategy manager chooses the best strategy
                                         // that uses optimal number of pipes for each display

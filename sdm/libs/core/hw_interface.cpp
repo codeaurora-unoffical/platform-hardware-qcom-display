@@ -44,7 +44,7 @@
 
 namespace sdm {
 
-DisplayError HWInterface::Create(DisplayType type, HWInfoInterface *hw_info_intf,
+DisplayError HWInterface::Create(DisplayOrder order, DisplayType type, HWInfoInterface *hw_info_intf,
                                  BufferSyncHandler *buffer_sync_handler,
                                  BufferAllocator *buffer_allocator, HWInterface **intf) {
   DisplayError error = kErrorNone;
@@ -54,23 +54,25 @@ DisplayError HWInterface::Create(DisplayType type, HWInfoInterface *hw_info_intf
   switch (type) {
     case kPrimary:
       if (driver_type == DriverType::FB) {
-        hw = new HWPrimary(buffer_sync_handler, hw_info_intf);
+        hw = new HWPrimary(order, buffer_sync_handler, hw_info_intf);
       } else {
 #ifdef COMPILE_DRM
-        hw = new HWDeviceDRM(buffer_sync_handler, buffer_allocator, hw_info_intf);
+        hw = new HWDeviceDRM(order, buffer_sync_handler, buffer_allocator, hw_info_intf);
 #endif
       }
       break;
     case kHDMI:
       if (driver_type == DriverType::FB) {
-        hw = new HWHDMI(buffer_sync_handler, hw_info_intf);
+        hw = new HWHDMI(order, buffer_sync_handler, hw_info_intf);
       } else {
-        return kErrorNotSupported;
+#ifdef COMPILE_DRM
+        hw = new HWHDMIDRM(order, buffer_sync_handler, buffer_allocator, hw_info_intf);
+#endif
       }
       break;
     case kVirtual:
       if (driver_type == DriverType::FB) {
-        hw = new HWVirtual(buffer_sync_handler, hw_info_intf);
+        hw = new HWVirtual(order, buffer_sync_handler, hw_info_intf);
       } else {
         return kErrorNotSupported;
       }

@@ -213,7 +213,7 @@ class HWCDisplay : public DisplayEventHandler {
   // Maximum number of layers supported by display manager.
   static const uint32_t kMaxLayerCount = 32;
 
-  HWCDisplay(CoreInterface *core_intf, HWCCallbacks *callbacks, DisplayType type, hwc2_display_t id,
+  HWCDisplay(CoreInterface *core_intf, HWCCallbacks *callbacks, DisplayType type, DisplayOrder id,
              bool needs_blit, qService::QService *qservice, DisplayClass display_class,
              BufferAllocator *buffer_allocator);
 
@@ -258,7 +258,7 @@ class HWCDisplay : public DisplayEventHandler {
   HWCCallbacks *callbacks_  = nullptr;
   HWCBufferAllocator *buffer_allocator_ = NULL;
   DisplayType type_;
-  hwc2_display_t id_;
+  DisplayOrder id_;
   bool needs_blit_ = false;
   DisplayInterface *display_intf_ = NULL;
   LayerStack layer_stack_;

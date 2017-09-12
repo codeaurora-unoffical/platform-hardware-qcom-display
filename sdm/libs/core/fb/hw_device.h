@@ -148,6 +148,7 @@ class HWDevice : public HWInterface {
   int device_fd_;
   int stored_retire_fence = -1;
   HWDeviceType device_type_;
+  DisplayOrder display_order_;
   mdp_layer_commit mdp_disp_commit_;
   mdp_input_layer mdp_in_layers_[kMaxSDELayers * 2];   // split panel (left + right)
   HWScale *hw_scale_ = NULL;

@@ -60,15 +60,36 @@ using sde_drm::DRMConnectorInfo;
 using sde_drm::DRMPPFeatureInfo;
 using sde_drm::DRMOps;
 using sde_drm::DRMTopology;
+using sde_drm::DRMDisplayOrder;
 
 namespace sdm {
 
-HWHDMIDRM::HWHDMIDRM(BufferSyncHandler *buffer_sync_handler, BufferAllocator *buffer_allocator,
+HWHDMIDRM::HWHDMIDRM(DisplayOrder order, BufferSyncHandler *buffer_sync_handler, BufferAllocator *buffer_allocator,
                      HWInfoInterface *hw_info_intf)
-  : HWDeviceDRM(buffer_sync_handler, buffer_allocator, hw_info_intf),
+  : HWDeviceDRM(order, buffer_sync_handler, buffer_allocator, hw_info_intf),
   active_config_index_(0) {
   HWDeviceDRM::device_type_ = kDeviceHDMI;
   HWDeviceDRM::device_name_ = "HDMI Display Device";
+}
+
+static DRMDisplayOrder GetDRMDisplayOrder(DisplayOrder order) {
+  DRMDisplayOrder drm_disp_order = DRMDisplayOrder::kDRMMaxOrder;
+
+  switch (order) {
+    case kFirst:
+      drm_disp_order = DRMDisplayOrder::kDRMPrimary;
+      break;
+    case kSecondary:
+      drm_disp_order = DRMDisplayOrder::kDRMSecondary;
+      break;
+    case kTertiary:
+      drm_disp_order = DRMDisplayOrder::kDRMTertiary;
+      break;
+    default:
+      DLOGW("Unsupported order %d", order);
+      break;
+  }
+  return drm_disp_order;
 }
 
 // TODO(user) : split function in base class and avoid code duplicacy
@@ -81,10 +102,11 @@ DisplayError HWHDMIDRM::Init() {
   if (!default_mode_) {
     DRMMaster *drm_master = {};
     int dev_fd = -1;
+    DRMDisplayOrder drm_disp_order = GetDRMDisplayOrder(display_order_);
     DRMMaster::GetInstance(&drm_master);
     drm_master->GetHandle(&dev_fd);
     DRMLibLoader::GetInstance()->FuncGetDRMManager()(dev_fd, &drm_mgr_intf_);
-    if (drm_mgr_intf_->RegisterDisplay(DRMDisplayType::TV, &token_)) {
+    if (drm_mgr_intf_->RegisterDisplay(drm_disp_order, DRMDisplayType::TV, &token_)) {
       DLOGE("RegisterDisplay failed");
       return kErrorResources;
     }

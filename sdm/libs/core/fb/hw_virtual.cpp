@@ -34,8 +34,9 @@
 
 namespace sdm {
 
-HWVirtual::HWVirtual(BufferSyncHandler *buffer_sync_handler, HWInfoInterface *hw_info_intf)
+HWVirtual::HWVirtual(DisplayOrder order, BufferSyncHandler *buffer_sync_handler, HWInfoInterface *hw_info_intf)
   : HWDevice(buffer_sync_handler) {
+  HWDevice::display_order_ = order;
   HWDevice::device_type_ = kDeviceVirtual;
   HWDevice::device_name_ = "Virtual Display Device";
   HWDevice::hw_info_intf_ = hw_info_intf;

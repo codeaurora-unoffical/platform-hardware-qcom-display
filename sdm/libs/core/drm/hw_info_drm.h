@@ -47,6 +47,8 @@ class HWInfoDRM: public HWInfoInterface {
   virtual ~HWInfoDRM();
   virtual DisplayError GetHWResourceInfo(HWResourceInfo *hw_resource);
   virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info);
+  virtual DisplayError GetDisplayCount(uint32_t *count);
+  virtual DisplayError GetDisplayInterfaceTypeByOrder(HWDisplayInterfaceInfo *hw_disp_info_array);
 
  private:
   DisplayError GetHWRotatorInfo(HWResourceInfo *hw_resource);
