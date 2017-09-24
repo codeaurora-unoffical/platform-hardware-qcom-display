@@ -130,7 +130,17 @@ void* engine_initialize()
 }
 
 //-----------------------------------------------------------------------------
-// Shutdown.
+// Shutdown - EGL Terminate
+void engine_egl_terminate(void* context)
+//-----------------------------------------------------------------------------
+{
+  EngineContext* engineContext = (EngineContext*)context;
+  EGL(eglTerminate(engineContext->eglDisplay));
+  engineContext->eglDisplay = EGL_NO_DISPLAY;
+}
+
+//-----------------------------------------------------------------------------
+// Shutdown -destroy surface and context
 void engine_shutdown(void* context)
 //-----------------------------------------------------------------------------
 {
@@ -138,8 +148,6 @@ void engine_shutdown(void* context)
   EGL(eglMakeCurrent(engineContext->eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT));
   EGL(eglDestroySurface(engineContext->eglDisplay, engineContext->eglSurface));
   EGL(eglDestroyContext(engineContext->eglDisplay, engineContext->eglContext));
-  EGL(eglTerminate(engineContext->eglDisplay));
-  engineContext->eglDisplay = EGL_NO_DISPLAY;
   engineContext->eglContext = EGL_NO_CONTEXT;
   engineContext->eglSurface = EGL_NO_SURFACE;
 }
