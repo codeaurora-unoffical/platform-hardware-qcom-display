@@ -198,6 +198,11 @@ enum struct DRMOps {
    */
   CONNECTOR_UPDATE_DISPLAY_PLL,
   /*
+   * Op: Gets HDCP protocol version
+   * Arg: uint32_t - hdcp version
+   */
+  CONNECTOR_GET_HDCP_VERSION,
+  /*
    * Op: Sets connector hdr metadata
    * Arg: uint32_t - Connector ID
    *      drm_msm_ext_panel_hdr_metadata - hdr_metadata
@@ -318,6 +323,7 @@ struct DRMConnectorInfo {
   uint32_t mmWidth;
   uint32_t mmHeight;
   uint32_t type;
+  uint32_t hdcp_version;
   uint32_t num_modes;
   drmModeModeInfo *modes;
   DRMTopology topology;
