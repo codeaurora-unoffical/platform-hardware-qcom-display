@@ -1073,7 +1073,7 @@ android::status_t HWCSession::HandleGetDisplayAttributesForConfig(const android:
   int error = android::BAD_VALUE;
   DisplayConfigVariableInfo display_attributes;
 
-  if (dpy > HWC_NUM_PHYSICAL_DISPLAY_TYPES) {
+  if (dpy < HWC_DISPLAY_PRIMARY || dpy >= HWC_NUM_DISPLAY_TYPES || config < 0) {
     return android::BAD_VALUE;
   }
 
@@ -1221,6 +1221,11 @@ android::status_t HWCSession::SetColorModeOverride(const android::Parcel *input_
   auto display = static_cast<hwc2_display_t >(input_parcel->readInt32());
   auto mode = static_cast<android_color_mode_t>(input_parcel->readInt32());
   auto device = static_cast<hwc2_device_t *>(this);
+
+  if (display >= HWC_NUM_DISPLAY_TYPES) {
+    return -EINVAL;
+  }
+
   auto err = CallDisplayFunction(device, display, &HWCDisplay::SetColorMode, mode);
   if (err != HWC2_ERROR_NONE)
     return -EINVAL;
@@ -1577,7 +1582,7 @@ android::status_t HWCSession::GetVisibleDisplayRect(const android::Parcel *input
 
   int dpy = input_parcel->readInt32();
 
-  if (dpy < HWC_DISPLAY_PRIMARY || dpy > HWC_NUM_PHYSICAL_DISPLAY_TYPES) {
+  if (dpy < HWC_DISPLAY_PRIMARY || dpy >= HWC_NUM_DISPLAY_TYPES) {
     return android::BAD_VALUE;
   }
 
