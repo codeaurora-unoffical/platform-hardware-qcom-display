@@ -27,7 +27,7 @@
 using namespace drm_utils;
 
 //-----------------------------------------------------------------------------
-EGLImageKHR EGLImageBufferLE::create_eglImage(struct gbm_buf_info *gbo_info)
+EGLImageKHR EGLImageBufferLE::create_eglImage(struct gbm_buf_info *gbo_info, void *userdata)
 //-----------------------------------------------------------------------------
 {
   struct wl_resource resource;
@@ -41,7 +41,12 @@ EGLImageKHR EGLImageBufferLE::create_eglImage(struct gbm_buf_info *gbo_info)
   //We need to pass wl_resource to create egl image to support TP10_UBWC and NV12 formats in
   // Forward tone mapper
   if(gbo_info->format == GBM_FORMAT_YCbCr_420_TP10_UBWC || gbo_info->format == GBM_FORMAT_NV12) {
-
+   if (userdata != NULL)
+    memcpy(&resource, userdata, sizeof(wl_resource));
+   else {
+    fprintf(stderr, "create_eglImage: Invalid wl_resource\n");
+    return NULL;
+   }
    attribs[0] = EGL_WAYLAND_PLANE_WL;
    attribs[1] = 0;
    attribs[2] = EGL_NONE;
@@ -54,6 +59,10 @@ EGLImageKHR EGLImageBufferLE::create_eglImage(struct gbm_buf_info *gbo_info)
 
     eglImage = create_image(eglGetCurrentDisplay(), (EGLContext)EGL_NO_CONTEXT,
                                       EGL_WAYLAND_BUFFER_WL, buffer, attribs);
+   }
+   else {
+    fprintf(stderr, "create_eglImage: Failed at gbm_perform = %d\n", gbm_ret);
+    return NULL;
    }
   }
   else {
@@ -88,7 +97,7 @@ EGLImageKHR EGLImageBufferLE::create_eglImage(struct gbm_buf_info *gbo_info)
 }
 
 //-----------------------------------------------------------------------------
-EGLImageBufferLE::EGLImageBufferLE(struct gbm_buf_info *gbuf_info)
+EGLImageBufferLE::EGLImageBufferLE(struct gbm_buf_info *gbuf_info, void *userdata)
 //-----------------------------------------------------------------------------
 {
 
@@ -105,7 +114,7 @@ EGLImageBufferLE::EGLImageBufferLE(struct gbm_buf_info *gbuf_info)
 
     gbm_ = gbm_create_device(fd);
 
-    this->eglImageID = create_eglImage(gbo_info);
+    this->eglImageID = create_eglImage(gbo_info, userdata);
     this->width = gbo_info->width;
     this->height = gbo_info->height;
 
