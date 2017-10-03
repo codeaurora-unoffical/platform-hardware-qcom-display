@@ -98,7 +98,7 @@ DisplayError HWEventsDRM::SetEventParser() {
   for (auto &event_data : event_data_list_) {
     switch (event_data.event_type) {
       case HWEvent::VSYNC:
-        event_data.event_parser = &HWEventsDRM::HandleVBlank;
+        event_data.event_parser = &HWEventsDRM::HandleVSync;
         break;
       case HWEvent::IDLE_NOTIFY:
         event_data.event_parser = &HWEventsDRM::HandleIdleTimeout;
