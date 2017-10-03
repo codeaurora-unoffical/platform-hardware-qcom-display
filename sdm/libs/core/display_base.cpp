@@ -392,8 +392,8 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   fixed_info->hdr_eotf = hw_panel_info_.hdr_eotf;
   fixed_info->hdr_metadata_type_one = hw_panel_info_.hdr_metadata_type_one;
 
-  fixed_info->hdcp_version = hw_resource_info.hdcp_version;
-  fixed_info->hdcp_interface_type = hw_resource_info.hdcp_interface_type;
+  fixed_info->hdcp_version = hw_panel_info_.hdcp_version;
+  fixed_info->hdcp_interface_type = hw_panel_info_.hdcp_interface_type;
 
   return kErrorNone;
 }

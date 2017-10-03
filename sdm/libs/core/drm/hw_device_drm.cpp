@@ -450,6 +450,7 @@ void HWDeviceDRM::PopulateHWPanelInfo() {
 
   GetHWDisplayPortAndMode();
   GetHWPanelMaxBrightness();
+  GetHWDisplayHdcpProtocol();
 
   DLOGI("%s, Panel Interface = %s, Panel Mode = %s, Is Primary = %d", device_name_,
         interface_str_.c_str(), hw_panel_info_.mode == kModeVideo ? "Video" : "Command",
@@ -463,6 +464,8 @@ void HWDeviceDRM::PopulateHWPanelInfo() {
   DLOGI("FPS: min = %d, max =%d", hw_panel_info_.min_fps, hw_panel_info_.max_fps);
   DLOGI("Left Split = %d, Right Split = %d", hw_panel_info_.split_info.left_split,
         hw_panel_info_.split_info.right_split);
+  DLOGI("HDCP: version = %d, interface = %d", hw_panel_info_.hdcp_version,
+        hw_panel_info_.hdcp_interface_type);
 }
 
 void HWDeviceDRM::GetHWDisplayPortAndMode() {
@@ -532,6 +535,12 @@ void HWDeviceDRM::GetHWPanelMaxBrightness() {
   }
 
   Sys::close_(fd);
+}
+
+void HWDeviceDRM::GetHWDisplayHdcpProtocol() {
+  hw_panel_info_.hdcp_interface_type = connector_info_.type;
+  hw_panel_info_.hdcp_version = connector_info_.hdcp_version;
+  return;
 }
 
 DisplayError HWDeviceDRM::GetActiveConfig(uint32_t *active_config) {
