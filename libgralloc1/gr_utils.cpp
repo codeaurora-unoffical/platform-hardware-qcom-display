@@ -473,11 +473,13 @@ bool IsUBwcEnabled(int format, gralloc1_producer_usage_t prod_usage,
   // support the format. OR if a non-OpenGL client like Rotator, sets UBWC
   // usage flag and MDP supports the format.
   if ((prod_usage & GRALLOC1_PRODUCER_USAGE_PRIVATE_ALLOC_UBWC) && IsUBwcSupported(format)) {
-    bool enable = true;
+    bool enable = false;
     // Query GPU for UBWC only if buffer is intended to be used by GPU.
     if ((cons_usage & GRALLOC1_CONSUMER_USAGE_GPU_TEXTURE) ||
         (prod_usage & GRALLOC1_PRODUCER_USAGE_GPU_RENDER_TARGET)) {
-      enable = AdrenoMemInfo::GetInstance()->IsUBWCSupportedByGPU(format);
+      if (AdrenoMemInfo::GetInstance()) {
+        enable = AdrenoMemInfo::GetInstance()->IsUBWCSupportedByGPU(format);
+      }
     }
 
     // Allow UBWC, only if CPU usage flags are not set
@@ -643,8 +645,10 @@ void GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
   int tile = ubwc_enabled;
 
   if (IsUncompressedRGBFormat(format)) {
-    AdrenoMemInfo::GetInstance()->AlignUnCompressedRGB(width, height, format, tile, alignedw,
-                                                       alignedh);
+    if (AdrenoMemInfo::GetInstance()) {
+      AdrenoMemInfo::GetInstance()->AlignUnCompressedRGB(width, height, format, tile, alignedw,
+                                                         alignedh);
+    }
     return;
   }
 
@@ -654,7 +658,9 @@ void GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
   }
 
   if (IsCompressedRGBFormat(format)) {
-    AdrenoMemInfo::GetInstance()->AlignCompressedRGB(width, height, format, alignedw, alignedh);
+    if (AdrenoMemInfo::GetInstance()) {
+      AdrenoMemInfo::GetInstance()->AlignCompressedRGB(width, height, format, alignedw, alignedh);
+    }
     return;
   }
 
@@ -666,6 +672,9 @@ void GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
   switch (format) {
     case HAL_PIXEL_FORMAT_YCrCb_420_SP:
     case HAL_PIXEL_FORMAT_YCbCr_420_SP:
+      if (AdrenoMemInfo::GetInstance() == nullptr) {
+        return;
+      }
       alignment = AdrenoMemInfo::GetInstance()->GetGpuPixelAlignment();
       aligned_w = ALIGN(width, alignment);
       break;
