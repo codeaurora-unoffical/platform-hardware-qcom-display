@@ -177,6 +177,8 @@ struct HWResourceInfo {
   uint32_t extra_fudge_factor = 0;
   uint32_t amortizable_threshold = 0;
   uint32_t system_overhead_lines = 0;
+  uint32_t hdcp_version = 0;
+  uint32_t hdcp_interface_type = 0;
   bool has_bwc = false;
   bool has_ubwc = false;
   bool has_decimation = false;
