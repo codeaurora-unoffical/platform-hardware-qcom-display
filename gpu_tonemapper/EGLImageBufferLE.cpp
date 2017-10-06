@@ -124,8 +124,11 @@ EGLImageBufferLE::~EGLImageBufferLE() {
   /*    reference count = 1, then fd is set to invalid number and gbm device is   */
   /*    destroyed */
 
-  gbm_device_destroy(gbm_);
-  gbm_ = NULL;
+  //TODO: Need to resolve the handling of multi instantiation of gbm device.
+  //currently commenting below lines to temporarily resolve the crash in end of HDR
+  // playback while using Tone mapper feature.
+  //gbm_device_destroy(gbm_);
+  //gbm_ = NULL;
   fd = -1;
 };
 
