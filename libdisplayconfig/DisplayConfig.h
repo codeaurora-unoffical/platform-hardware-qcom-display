@@ -40,6 +40,7 @@ namespace display {
 enum {
     DISPLAY_PRIMARY = 0,
     DISPLAY_EXTERNAL,
+    DISPLAY_TERTIARY,
     DISPLAY_VIRTUAL,
 };
 

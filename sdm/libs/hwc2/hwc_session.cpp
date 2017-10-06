@@ -391,7 +391,7 @@ void HWCSession::Dump(hwc2_device_t *device, uint32_t *out_size, char *out_buffe
     char sdm_dump[4096];
     DumpInterface::GetDump(sdm_dump, 4096);  // TODO(user): Fix this workaround
     std::string s("");
-    for (int id = HWC_DISPLAY_PRIMARY; id <= HWC_DISPLAY_VIRTUAL; id++) {
+    for (int id = HWC_DISPLAY_PRIMARY; id <= HWC_NUM_DISPLAY_TYPES; id++) {
       if (hwc_session->hwc_display_[id]) {
         s += hwc_session->hwc_display_[id]->Dump();
       }
@@ -1036,7 +1036,7 @@ android::status_t HWCSession::HandleGetDisplayAttributesForConfig(const android:
   int error = android::BAD_VALUE;
   DisplayConfigVariableInfo display_attributes;
 
-  if (dpy > HWC_DISPLAY_VIRTUAL) {
+  if (dpy > HWC_NUM_PHYSICAL_DISPLAY_TYPES) {
     return android::BAD_VALUE;
   }
 
@@ -1540,7 +1540,7 @@ android::status_t HWCSession::GetVisibleDisplayRect(const android::Parcel *input
 
   int dpy = input_parcel->readInt32();
 
-  if (dpy < HWC_DISPLAY_PRIMARY || dpy > HWC_DISPLAY_VIRTUAL) {
+  if (dpy < HWC_DISPLAY_PRIMARY || dpy > HWC_NUM_PHYSICAL_DISPLAY_TYPES) {
     return android::BAD_VALUE;
   }
 
