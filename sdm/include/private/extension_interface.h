@@ -52,7 +52,7 @@ typedef DisplayError (*DestroyExtensionInterface)(ExtensionInterface *interface)
 
 class ExtensionInterface {
  public:
-  virtual DisplayError CreatePartialUpdate(DisplayOrder order, DisplayType type, const HWResourceInfo &hw_resource_info,
+  virtual DisplayError CreatePartialUpdate(DisplayOrder order, const HWResourceInfo &hw_resource_info,
                                            const HWPanelInfo &hw_panel_info,
                                            const HWMixerAttributes &mixer_attributes,
                                            const HWDisplayAttributes &display_attributes,
@@ -60,7 +60,7 @@ class ExtensionInterface {
                                            PartialUpdateInterface **interface) = 0;
   virtual DisplayError DestroyPartialUpdate(PartialUpdateInterface *interface) = 0;
 
-  virtual DisplayError CreateStrategyExtn(DisplayOrder order, DisplayType type, BufferAllocator *buffer_allocator,
+  virtual DisplayError CreateStrategyExtn(DisplayOrder order, BufferAllocator *buffer_allocator,
                                           const HWResourceInfo &hw_resource_info,
                                           const HWPanelInfo &hw_panel_info,
                                           const HWMixerAttributes &mixer_attributes,

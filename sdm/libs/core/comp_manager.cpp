@@ -100,7 +100,7 @@ DisplayError CompManager::RegisterDisplay(DisplayOrder order,
   }
 
   Strategy *&strategy = display_comp_ctx->strategy;
-  strategy = new Strategy(extension_intf_, buffer_allocator_, order, type, hw_res_info_, hw_panel_info,
+  strategy = new Strategy(extension_intf_, buffer_allocator_, order, hw_res_info_, hw_panel_info,
                           mixer_attributes, display_attributes, fb_config);
   if (!strategy) {
     DLOGE("Unable to create strategy");
@@ -163,7 +163,6 @@ DisplayError CompManager::UnregisterDisplay(Handle display_ctx) {
 
   registered_displays_[display_comp_ctx->display_order] = 0;
   configured_displays_[display_comp_ctx->display_order] = 0;
-
 
   if (display_comp_ctx->display_type == kHDMI) {
     max_layers_ = kMaxSDELayers;

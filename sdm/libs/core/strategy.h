@@ -34,7 +34,7 @@ namespace sdm {
 class Strategy {
  public:
   Strategy(ExtensionInterface *extension_intf, BufferAllocator *buffer_allocator,
-           DisplayOrder order, DisplayType type,
+           DisplayOrder order,
            const HWResourceInfo &hw_resource_info, const HWPanelInfo &hw_panel_info,
            const HWMixerAttributes &mixer_attributes, const HWDisplayAttributes &display_attributes,
            const DisplayConfigVariableInfo &fb_config);
@@ -61,7 +61,6 @@ class Strategy {
   StrategyInterface *strategy_intf_ = NULL;
   PartialUpdateInterface *partial_update_intf_ = NULL;
   DisplayOrder display_order_;
-  DisplayType display_type_;
   HWResourceInfo hw_resource_info_;
   HWPanelInfo hw_panel_info_;
   HWLayersInfo *hw_layers_info_ = NULL;
