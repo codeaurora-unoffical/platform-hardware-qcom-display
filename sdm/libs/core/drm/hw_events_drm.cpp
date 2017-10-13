@@ -160,19 +160,35 @@ DisplayError HWEventsDRM::Init(DisplayOrder display_order, int display_type, Dis
 
   PopulateHWEventData(event_list);
 
-  if (pthread_create(&event_thread_, NULL, &DisplayEventThread, this) < 0) {
-    DLOGE("Failed to start %s, error = %s", event_thread_name_.c_str());
-    return kErrorResources;
+  // For multiple display case, don't launch multiple threads to handle event together,
+  // otherwise only one thread can get chance to handle vblank event after polling and
+  // other threads will get stuck on drmHandleVBlank. The result is the vblank callback
+  // function will not be executed sometimes since the RegisterVSync will not be called
+  // while the whole thread gets stuck. So if any repainting which is triggered by vblank
+  // callback function, the repainting is not smooth sometime.
+  // One proposal is creating a single thread to handle drm event, then once corresponding
+  // event callback function is called, call RegisterVSync again. If so, we only need to
+  // call RegisterVSync to register the first vblank event for each display.
+  RegisterVSync();
+
+  // Only create the thread for the first display.
+  if (display_order == kFirst) {
+    if (pthread_create(&event_thread_, NULL, &DisplayEventThread, this) < 0) {
+      DLOGE("Failed to start %s, error = %s", event_thread_name_.c_str());
+      return kErrorResources;
+    }
   }
 
   return kErrorNone;
 }
 
 DisplayError HWEventsDRM::Deinit() {
-  exit_threads_ = true;
-  Sys::pthread_cancel_(event_thread_);
-  WakeUpEventThread();
-  pthread_join(event_thread_, NULL);
+  if (display_order_ == kFirst) {
+    exit_threads_ = true;
+    Sys::pthread_cancel_(event_thread_);
+    WakeUpEventThread();
+    pthread_join(event_thread_, NULL);
+  }
   CloseFds();
 
   return kErrorNone;
@@ -255,11 +271,6 @@ void *HWEventsDRM::DisplayEventHandler() {
   setpriority(PRIO_PROCESS, 0, kThreadPriorityUrgent);
 
   while (!exit_threads_) {
-    if (vsync_enabled_ && RegisterVSync() != kErrorNone) {
-      pthread_exit(0);
-      return nullptr;
-    }
-
     int error = Sys::poll_(poll_fds_.data(), UINT32(poll_fds_.size()), -1);
     if (error <= 0) {
       DLOGW("poll failed. error = %s", strerror(errno));
@@ -298,7 +309,10 @@ void *HWEventsDRM::DisplayEventHandler() {
 }
 
 DisplayError HWEventsDRM::RegisterVSync() {
-  pthread_mutex_lock(&vbl_mutex_);
+  if (!vsync_enabled_) {
+    return kErrorNone;
+  }
+
   drmVBlank vblank{};
 
   if (display_order_ > kSecondary)
@@ -317,12 +331,10 @@ DisplayError HWEventsDRM::RegisterVSync() {
   int error = drmWaitVBlank(poll_fds_[vsync_index_].fd, &vblank);
   if (error < 0) {
     DLOGE("drmWaitVBlank failed with err %d", errno);
-    pthread_mutex_unlock(&vbl_mutex_);
     return kErrorResources;
   }
 
   vbl_pending_ = true;
-  pthread_mutex_unlock(&vbl_mutex_);
 
   return kErrorNone;
 }
@@ -374,6 +386,7 @@ void HWEventsDRM::HandleVSync(char *data) {
 void HWEventsDRM::VSyncHandlerCallback(int fd, unsigned int sequence, unsigned int tv_sec,
                                        unsigned int tv_usec, void *data) {
   int64_t timestamp = (int64_t)(tv_sec)*1000000000 + (int64_t)(tv_usec)*1000;
+  reinterpret_cast<HWEventsDRM *>(data)->RegisterVSync();
   reinterpret_cast<HWEventsDRM *>(data)->event_handler_->VSync(timestamp);
 }
 
@@ -402,6 +415,7 @@ void HWEventsDRM::HandlePageFlip(char *data) {
 
 void HWEventsDRM::VBlankHandlerCallback(int fd, unsigned int sequence, unsigned int tv_sec,
                                        unsigned int tv_usec, void *data) {
+  reinterpret_cast<HWEventsDRM *>(data)->RegisterVSync();
   reinterpret_cast<HWEventsDRM *>(data)->event_handler_->VSync(fd, sequence, tv_sec, tv_usec, data);
 }
 
