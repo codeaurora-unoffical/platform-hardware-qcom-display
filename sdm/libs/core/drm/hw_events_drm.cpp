@@ -290,7 +290,16 @@ void *HWEventsDRM::DisplayEventHandler() {
 DisplayError HWEventsDRM::RegisterVSync() {
   pthread_mutex_lock(&vbl_mutex_);
   drmVBlank vblank{};
-  vblank.request.type = (drmVBlankSeqType)(DRM_VBLANK_RELATIVE | DRM_VBLANK_EVENT);
+
+  if (display_order_ > kSecondary)
+    vblank.request.type = (drmVBlankSeqType)(DRM_VBLANK_RELATIVE | DRM_VBLANK_EVENT |
+                           ((display_order_ << DRM_VBLANK_HIGH_CRTC_SHIFT) & DRM_VBLANK_HIGH_CRTC_MASK));
+  else if (display_order_ > kFirst)
+    vblank.request.type = (drmVBlankSeqType)(DRM_VBLANK_RELATIVE | DRM_VBLANK_EVENT |
+                           DRM_VBLANK_SECONDARY);
+  else
+    vblank.request.type = (drmVBlankSeqType)(DRM_VBLANK_RELATIVE | DRM_VBLANK_EVENT);
+
   vblank.request.sequence = 1;
   // DRM hack to pass in context to unused field signal. Driver will write this to the node being
   // polled on, and will be read as part of drm event handling and sent to handler
