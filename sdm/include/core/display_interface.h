@@ -67,6 +67,18 @@ enum DisplayOrder {
   kOrderMax,
 };
 
+/*! @brief This enum represents the sync event type which is handled by event callback
+     handler.
+
+  @sa CoreInterface::CreateDisplay
+*/
+enum DisplaySyncEventType {
+  kVSyncTimeStamp,         //!< Android use.
+  kVBlankEvent,            //!< Weston use.
+  kPageFlipEvent,          //!< Weston use(Recommended).
+  kEventMax,
+};
+
 /*! @brief This enum represents states of a display device.
 
   @sa DisplayInterface::GetDisplayState

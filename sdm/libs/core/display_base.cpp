@@ -39,11 +39,11 @@
 namespace sdm {
 
 // TODO(user): Have a single structure handle carries all the interface pointers and variables.
-DisplayBase::DisplayBase(DisplayOrder order, DisplayType display_type, DisplayEventHandler *event_handler,
+DisplayBase::DisplayBase(DisplayOrder order, DisplayType display_type, DisplaySyncEventType sync_event_type, DisplayEventHandler *event_handler,
                          HWDeviceType hw_device_type, BufferSyncHandler *buffer_sync_handler,
                          BufferAllocator *buffer_allocator, CompManager *comp_manager,
                          HWInfoInterface *hw_info_intf)
-  : display_order_(order), display_type_(display_type), event_handler_(event_handler), hw_device_type_(hw_device_type),
+  : display_order_(order), display_type_(display_type), sync_event_type_(sync_event_type), event_handler_(event_handler), hw_device_type_(hw_device_type),
     buffer_sync_handler_(buffer_sync_handler), buffer_allocator_(buffer_allocator),
     comp_manager_(comp_manager), hw_info_intf_(hw_info_intf) {
 }

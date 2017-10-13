@@ -112,7 +112,7 @@ DisplayError CoreImpl::Deinit() {
   return kErrorNone;
 }
 
-DisplayError CoreImpl::CreateDisplay(DisplayOrder order, DisplayType type, DisplayEventHandler *event_handler,
+DisplayError CoreImpl::CreateDisplay(DisplayOrder order, DisplayType type, DisplaySyncEventType sync_event_type, DisplayEventHandler *event_handler,
                                      DisplayInterface **intf) {
   SCOPE_LOCK(locker_);
 
@@ -124,15 +124,15 @@ DisplayError CoreImpl::CreateDisplay(DisplayOrder order, DisplayType type, Displ
 
   switch (type) {
   case kPrimary:
-    display_base = new DisplayPrimary(order, event_handler, hw_info_intf_, buffer_sync_handler_,
+    display_base = new DisplayPrimary(order, sync_event_type, event_handler, hw_info_intf_, buffer_sync_handler_,
                                       buffer_allocator_, &comp_mgr_);
     break;
   case kHDMI:
-    display_base = new DisplayHDMI(order, event_handler, hw_info_intf_, buffer_sync_handler_,
+    display_base = new DisplayHDMI(order, sync_event_type, event_handler, hw_info_intf_, buffer_sync_handler_,
                                    buffer_allocator_, &comp_mgr_);
     break;
   case kVirtual:
-    display_base = new DisplayVirtual(order, event_handler, hw_info_intf_, buffer_sync_handler_,
+    display_base = new DisplayVirtual(order, sync_event_type, event_handler, hw_info_intf_, buffer_sync_handler_,
                                       buffer_allocator_, &comp_mgr_);
     break;
   default:

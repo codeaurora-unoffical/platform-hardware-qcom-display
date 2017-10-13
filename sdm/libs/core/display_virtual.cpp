@@ -33,10 +33,10 @@
 
 namespace sdm {
 
-DisplayVirtual::DisplayVirtual(DisplayOrder order, DisplayEventHandler *event_handler, HWInfoInterface *hw_info_intf,
+DisplayVirtual::DisplayVirtual(DisplayOrder order, DisplaySyncEventType sync_event_type, DisplayEventHandler *event_handler, HWInfoInterface *hw_info_intf,
                                BufferSyncHandler *buffer_sync_handler,
                                BufferAllocator *buffer_allocator, CompManager *comp_manager)
-  : DisplayBase(order, kVirtual, event_handler, kDeviceVirtual, buffer_sync_handler, buffer_allocator,
+  : DisplayBase(order, kVirtual, sync_event_type, event_handler, kDeviceVirtual, buffer_sync_handler, buffer_allocator,
                 comp_manager, hw_info_intf) {
 }
 

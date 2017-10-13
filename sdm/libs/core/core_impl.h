@@ -53,7 +53,7 @@ class CoreImpl : public CoreInterface {
   virtual DisplayError Deinit();
 
   // Methods from core interface
-  virtual DisplayError CreateDisplay(DisplayOrder order, DisplayType type, DisplayEventHandler *event_handler,
+  virtual DisplayError CreateDisplay(DisplayOrder order, DisplayType type, DisplaySyncEventType sync_event_type, DisplayEventHandler *event_handler,
                                      DisplayInterface **intf);
   virtual DisplayError DestroyDisplay(DisplayInterface *intf);
   virtual DisplayError SetMaxBandwidthMode(HWBwModes mode);

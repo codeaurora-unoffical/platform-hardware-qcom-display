@@ -179,6 +179,7 @@ class CoreInterface {
 
     @param[in] order \link DisplayType \endlink
     @param[in] type \link DisplayType \endlink
+    @param[in] sync_event_type \link DisplaySyncEventType \endlink
     @param[in] event_handler \link DisplayEventHandler \endlink
     @param[out] interface \link DisplayInterface \endlink
 
@@ -186,7 +187,7 @@ class CoreInterface {
 
     @sa DestroyDisplay
   */
-  virtual DisplayError CreateDisplay(DisplayOrder order, DisplayType type, DisplayEventHandler *event_handler,
+  virtual DisplayError CreateDisplay(DisplayOrder order, DisplayType type, DisplaySyncEventType sync_event_type, DisplayEventHandler *event_handler,
                                      DisplayInterface **interface) = 0;
 
   /*! @brief Method to destroy a display device.
