@@ -353,7 +353,7 @@ DisplayError HWDeviceDRM::Init() {
       drm_atomic_intf_->Perform(DRMOps::CRTC_SET_MODE, token_.crtc_id,
                                 &connector_info_.modes[current_mode_index_]);
       drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 1);
-      if (drm_atomic_intf_->Commit(true /* synchronous */)) {
+      if (drm_atomic_intf_->Commit(true /* synchronous */, false /* retain_planes*/)) {
         DRM_LOGI("Setting up CRTC %d, Connector %d for %s failed", token_.crtc_id,
           token_.conn_id, device_name_);
         return kErrorResources;
@@ -411,7 +411,6 @@ DisplayError HWDeviceDRM::PopulateDisplayAttributes(uint32_t index) {
   uint32_t mm_width = 0;
   uint32_t mm_height = 0;
   DRMTopology topology = DRMTopology::SINGLE_LM;
-  bool dual_display = false;
 
   if (default_mode_) {
     DRMResMgr *res_mgr = nullptr;
@@ -451,14 +450,11 @@ DisplayError HWDeviceDRM::PopulateDisplayAttributes(uint32_t index) {
   display_attributes_[index].v_back_porch = mode.vtotal - mode.vsync_end;
   display_attributes_[index].v_total = mode.vtotal;
   display_attributes_[index].h_total = mode.htotal;
-  uint32_t h_blanking = mode.htotal - mode.hdisplay;
   display_attributes_[index].is_device_split =
       (topology == DRMTopology::DUAL_LM || topology == DRMTopology::DUAL_LM_MERGE ||
        topology == DRMTopology::DUAL_LM_MERGE_DSC || topology == DRMTopology::DUAL_LM_DSC ||
        topology == DRMTopology::DUAL_LM_DSCMERGE);
-  dual_display = (topology == DRMTopology::DUAL_LM || topology == DRMTopology::DUAL_LM_DSC ||
-       topology == DRMTopology::PPSPLIT);
-  display_attributes_[index].h_total += dual_display ? h_blanking : 0;
+  display_attributes_[index].clock_khz = mode.clock;
 
   // If driver doesn't return panel width/height information, default to 320 dpi
   if (INT(mm_width) <= 0 || INT(mm_height) <= 0) {
@@ -469,15 +465,17 @@ DisplayError HWDeviceDRM::PopulateDisplayAttributes(uint32_t index) {
 
   display_attributes_[index].x_dpi = (FLOAT(mode.hdisplay) * 25.4f) / FLOAT(mm_width);
   display_attributes_[index].y_dpi = (FLOAT(mode.vdisplay) * 25.4f) / FLOAT(mm_height);
+  SetTopology(topology, &display_attributes_[index].topology);
 
   DLOGI("Display attributes[%d]: WxH: %dx%d, DPI: %fx%f, FPS: %d, LM_SPLIT: %d, V_BACK_PORCH: %d," \
-        " V_FRONT_PORCH: %d, V_PULSE_WIDTH: %d, V_TOTAL: %d, H_TOTAL: %d, TOPOLOGY: %d", index,
-        display_attributes_[index].x_pixels, display_attributes_[index].y_pixels,
+        " V_FRONT_PORCH: %d, V_PULSE_WIDTH: %d, V_TOTAL: %d, H_TOTAL: %d, CLK: %dKHZ, TOPOLOGY: %d",
+        index, display_attributes_[index].x_pixels, display_attributes_[index].y_pixels,
         display_attributes_[index].x_dpi, display_attributes_[index].y_dpi,
         display_attributes_[index].fps, display_attributes_[index].is_device_split,
         display_attributes_[index].v_back_porch, display_attributes_[index].v_front_porch,
         display_attributes_[index].v_pulse_width, display_attributes_[index].v_total,
-        display_attributes_[index].h_total, topology);
+        display_attributes_[index].h_total, display_attributes_[index].clock_khz,
+        display_attributes_[index].topology);
 
   return kErrorNone;
 }
@@ -671,7 +669,7 @@ DisplayError HWDeviceDRM::PowerOn() {
 
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 1);
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, DRMPowerMode::ON);
-  int ret = drm_atomic_intf_->Commit(true /* synchronous */);
+  int ret = drm_atomic_intf_->Commit(true /* synchronous */, true /* retain_planes */);
   if (ret) {
     DLOGE("Failed with error: %d", ret);
     return kErrorHardware;
@@ -680,6 +678,7 @@ DisplayError HWDeviceDRM::PowerOn() {
 }
 
 DisplayError HWDeviceDRM::PowerOff() {
+  DTRACE_SCOPED();
   if (!drm_atomic_intf_) {
     DLOGE("DRM Atomic Interface is null!");
     return kErrorUndefined;
@@ -687,7 +686,7 @@ DisplayError HWDeviceDRM::PowerOff() {
 
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, DRMPowerMode::OFF);
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 0);
-  int ret = drm_atomic_intf_->Commit(true /* synchronous */);
+  int ret = drm_atomic_intf_->Commit(true /* synchronous */, false /* retain_planes */);
   if (ret) {
     DLOGE("Failed with error: %d", ret);
     return kErrorHardware;
@@ -696,9 +695,10 @@ DisplayError HWDeviceDRM::PowerOff() {
 }
 
 DisplayError HWDeviceDRM::Doze() {
+  DTRACE_SCOPED();
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 1);
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, DRMPowerMode::DOZE);
-  int ret = drm_atomic_intf_->Commit(false /* synchronous */);
+  int ret = drm_atomic_intf_->Commit(true /* synchronous */, true /* retain_planes */);
   if (ret) {
     DLOGE("Failed with error: %d", ret);
     return kErrorHardware;
@@ -708,8 +708,16 @@ DisplayError HWDeviceDRM::Doze() {
 }
 
 DisplayError HWDeviceDRM::DozeSuspend() {
+  DTRACE_SCOPED();
+  drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 1);
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id,
                             DRMPowerMode::DOZE_SUSPEND);
+  int ret = drm_atomic_intf_->Commit(true /* synchronous */, true /* retain_planes */);
+  if (ret) {
+    DLOGE("Failed with error: %d", ret);
+    return kErrorHardware;
+  }
+
   return kErrorNone;
 }
 
@@ -766,6 +774,7 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
     HWRotatorSession *hw_rotator_session = &hw_layers->config[i].hw_rotator_session;
 
     if (hw_layers->config[i].use_solidfill_stage) {
+      hw_layers->config[i].hw_solidfill_stage.solid_fill_info = layer.solid_fill_info;
       AddSolidfillStage(hw_layers->config[i].hw_solidfill_stage, layer.plane_alpha);
       continue;
     }
@@ -867,7 +876,19 @@ void HWDeviceDRM::AddSolidfillStage(const HWSolidfillStage &sf, uint32_t plane_a
   solidfill.is_exclusion_rect  = sf.is_exclusion_rect;
   solidfill.plane_alpha = plane_alpha;
   solidfill.z_order = sf.z_order;
-  solidfill.color = sf.color;
+  if (!sf.solid_fill_info.bit_depth) {
+    solidfill.color_bit_depth = 8;
+    solidfill.alpha = (0xff000000 & sf.color) >> 24;
+    solidfill.red = (0xff0000 & sf.color) >> 16;
+    solidfill.green = (0xff00 & sf.color) >> 8;
+    solidfill.blue = 0xff & sf.color;
+  } else {
+    solidfill.color_bit_depth = sf.solid_fill_info.bit_depth;
+    solidfill.alpha = sf.solid_fill_info.alpha;
+    solidfill.red = sf.solid_fill_info.red;
+    solidfill.green = sf.solid_fill_info.green;
+    solidfill.blue = sf.solid_fill_info.blue;
+  }
   solid_fills_.push_back(solidfill);
   DLOGI_IF(kTagDriverConfig, "Add a solidfill stage at z_order:%d argb_color:%x plane_alpha:%x",
            solidfill.z_order, solidfill.color, solidfill.plane_alpha);
@@ -965,7 +986,7 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
   DTRACE_SCOPED();
   SetupAtomic(hw_layers, false /* validate */);
 
-  int ret = drm_atomic_intf_->Commit(false /* synchronous */);
+  int ret = drm_atomic_intf_->Commit(false /* synchronous */, false /* retain_planes*/);
   if (ret) {
     DLOGE("%s failed with error %d crtc %d", __FUNCTION__, ret, token_.crtc_id);
     return kErrorHardware;
@@ -997,7 +1018,8 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
 }
 
 DisplayError HWDeviceDRM::Flush() {
-  int ret = drm_atomic_intf_->Commit(false /* synchronous */);
+  DTRACE_SCOPED();
+  int ret = drm_atomic_intf_->Commit(false /* synchronous */, false /* retain_planes*/);
   if (ret) {
     DLOGE("failed with error %d", ret);
     return kErrorHardware;
@@ -1359,10 +1381,10 @@ void HWDeviceDRM::SetSecureConfig(const LayerBuffer &input_buffer, DRMSecureMode
       // Secure and non-secure planes can be attached to this CRTC.
       *fb_secure_mode = DRMSecureMode::SECURE_DIR_TRANSLATION;
     } else if (input_buffer.flags.secure_display) {
-      // IOMMU configuration for this framebuffer mode is non-secure domain & requires
+      // IOMMU configuration for this framebuffer mode is secure domain & requires
       // only stage II translation, when this buffer is accessed by Display H/W.
       // Only secure planes can be attached to this CRTC.
-      *fb_secure_mode = DRMSecureMode::NON_SECURE_DIR_TRANSLATION;
+      *fb_secure_mode = DRMSecureMode::SECURE_DIR_TRANSLATION;
       *security_level = DRMSecurityLevel::SECURE_ONLY;
     } else {
       // IOMMU configuration for this framebuffer mode is secure domain & requires both
@@ -1379,6 +1401,20 @@ void HWDeviceDRM::UpdatePanelSplitInfo() {
   if (display_attributes_[index].is_device_split) {
     hw_panel_info_.split_info.left_split = hw_panel_info_.split_info.right_split =
         display_attributes_[index].x_pixels / 2;
+  }
+}
+
+void HWDeviceDRM::SetTopology(sde_drm::DRMTopology drm_topology, HWTopology *hw_topology) {
+  switch (drm_topology) {
+    case DRMTopology::SINGLE_LM:          *hw_topology = kSingleLM;        break;
+    case DRMTopology::SINGLE_LM_DSC:      *hw_topology = kSingleLMDSC;     break;
+    case DRMTopology::DUAL_LM:            *hw_topology = kDualLM;          break;
+    case DRMTopology::DUAL_LM_DSC:        *hw_topology = kDualLMDSC;       break;
+    case DRMTopology::DUAL_LM_MERGE:      *hw_topology = kDualLMMerge;     break;
+    case DRMTopology::DUAL_LM_MERGE_DSC:  *hw_topology = kDualLMMergeDSC;  break;
+    case DRMTopology::DUAL_LM_DSCMERGE:   *hw_topology = kDualLMDSCMerge;  break;
+    case DRMTopology::PPSPLIT:            *hw_topology = kPPSplit;         break;
+    default:                              *hw_topology = kUnknown;         break;
   }
 }
 

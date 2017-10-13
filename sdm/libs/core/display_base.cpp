@@ -262,6 +262,15 @@ DisplayError DisplayBase::Prepare(LayerStack *layer_stack) {
 
   comp_manager_->PostPrepare(display_comp_ctx_, &hw_layers_);
 
+  if (error != kErrorNone) {
+    return error;
+  }
+
+  error = ValidateHDR(layer_stack);
+  if (error != kErrorNone) {
+    DLOGW("ValidateHDR failed");
+  }
+
   return error;
 }
 
@@ -298,10 +307,9 @@ DisplayError DisplayBase::Commit(LayerStack *layer_stack) {
 
   CommitLayerParams(layer_stack);
 
-  if (comp_manager_->Commit(display_comp_ctx_, &hw_layers_)) {
-    if (error != kErrorNone) {
-      return error;
-    }
+  error = comp_manager_->Commit(display_comp_ctx_, &hw_layers_);
+  if (error != kErrorNone) {
+    return error;
   }
 
   // check if feature list cache is dirty and pending.
@@ -781,7 +789,7 @@ DisplayError DisplayBase::SetColorMode(const std::string &color_mode) {
     return error;
   }
 
-  if (hdr_playback_mode_) {
+  if (hdr_playback_) {
     // HDR playback on, If incoming mode is SDR mode,
     // cache the mode and apply it after HDR playback stop.
     if (dynamic_range_type == kHdrType) {
@@ -1396,6 +1404,36 @@ DisplayError DisplayBase::InitializeColorModes() {
   return kErrorNone;
 }
 
+DisplayError DisplayBase::SetHDRMode(bool set) {
+  DisplayError error = kErrorNone;
+  std::string color_mode = "";
+
+  if (color_mgr_ && !disable_hdr_lut_gen_) {
+    // Do not apply HDR Mode when hdr lut generation is disabled
+    if (set) {
+      color_mode = "hal_hdr";
+      if (IsSupportColorModeAttribute(current_color_mode_)) {
+        bool found_hdr = false;
+        error = GetHdrColorMode(&color_mode, &found_hdr);
+        if (!found_hdr) {
+          color_mode = "hal_hdr";
+        }
+      }
+    } else {
+      // HDR playback off - set prev mode
+      color_mode = current_color_mode_;
+    }
+    DLOGI("Setting color mode = %s", color_mode.c_str());
+    error = SetColorModeInternal(color_mode);
+  }
+
+  // DPPS and HDR features are mutually exclusive
+  comp_manager_->ControlDpps(!set);
+  hdr_mode_ = set;
+
+  return error;
+}
+
 DisplayError DisplayBase::HandleHDR(LayerStack *layer_stack) {
   DisplayError error = kErrorNone;
 
@@ -1406,42 +1444,142 @@ DisplayError DisplayBase::HandleHDR(LayerStack *layer_stack) {
 
   if (!layer_stack->flags.hdr_present) {
     //  HDR playback off - set prev mode
-    if (hdr_playback_mode_) {
-      hdr_playback_mode_ = false;
-      if (color_mgr_ && !disable_hdr_lut_gen_) {
-        // Do not apply HDR Mode when hdr lut generation is disabled
-        DLOGI("Setting color mode = %s", current_color_mode_.c_str());
-        // HDR playback off - set prev mode
-        error = SetColorModeInternal(current_color_mode_);
+    if (hdr_playback_) {
+      hdr_playback_ = false;
+      if (hdr_mode_) {
+        error = SetHDRMode(false);
       }
-      comp_manager_->ControlDpps(true);  // Enable Dpps
     }
   } else {
     // hdr is present
-    if (!hdr_playback_mode_ && !layer_stack->flags.animating) {
+    if (!hdr_playback_ && !layer_stack->flags.animating) {
       // hdr is starting
-      hdr_playback_mode_ = true;
-      if (color_mgr_ && !disable_hdr_lut_gen_) {
-        std::string hdr_color_mode;
-        if (IsSupportColorModeAttribute(current_color_mode_)) {
-          bool found_hdr = false;
-          error = GetHdrColorMode(&hdr_color_mode, &found_hdr);
-          // try to set "hal-hdr" mode if did not found that
-          // the dynamic range of mode is hdr
-          if (!found_hdr) {
-            hdr_color_mode = "hal_hdr";
-          }
-        } else {
-          hdr_color_mode = "hal_hdr";
-        }
-        DLOGI("Setting color mode = %s", hdr_color_mode.c_str());
-        error = SetColorModeInternal(hdr_color_mode);
+      hdr_playback_ = true;
+      error = SetHDRMode(true);
+      if (error != kErrorNone) {
+        DLOGW("Failed to set HDR mode");
       }
-      comp_manager_->ControlDpps(false);  // Disable Dpps
+    } else if (hdr_playback_ && !hdr_mode_) {
+      error = SetHDRMode(true);
+      if (error != kErrorNone) {
+        DLOGW("Failed to set HDR mode");
+      }
     }
   }
 
   return error;
+}
+
+DisplayError DisplayBase::ValidateHDR(LayerStack *layer_stack) {
+  DisplayError error = kErrorNone;
+
+  if (display_type_ != kPrimary) {
+    // Handling is needed for only primary displays
+    return kErrorNone;
+  }
+
+  if (hdr_playback_) {
+    // HDR color mode is set when hdr layer is present in layer_stack.
+    // If client flags HDR layer as skipped, then blending happens
+    // in SDR color space. Hence, need to restore the SDR color mode.
+    if (layer_stack->blend_cs != ColorPrimaries_BT2020) {
+      error = SetHDRMode(false);
+      if (error != kErrorNone) {
+        DLOGW("Failed to restore SDR mode");
+      }
+    }
+  }
+
+  return kErrorNone;
+}
+
+DisplayError DisplayBase::GetClientTargetSupport(uint32_t width, uint32_t height,
+                                                 LayerBufferFormat format,
+                                                 const ColorMetaData &color_metadata) {
+  DisplayError error = kErrorNone;
+
+  if (format != kFormatRGBA8888 && format != kFormatRGBA1010102) {
+    DLOGW("Unsupported format = %d", format);
+    error = kErrorNotSupported;
+  } else if (ValidateScaling(width, height) != kErrorNone) {
+    DLOGW("Unsupported width = %d height = %d", width, height);
+    error = kErrorNotSupported;
+  } else {
+    error = ValidateDataspace(color_metadata);
+    if (error != kErrorNone) {
+      return error;
+    }
+
+    // Check for BT2020 support
+    if (color_metadata.colorPrimaries == ColorPrimaries_BT2020) {
+      DLOGW("Unsupported dataspace");
+      error = kErrorNotSupported;
+    }
+  }
+
+  return error;
+}
+
+DisplayError DisplayBase::ValidateScaling(uint32_t width, uint32_t height) {
+  uint32_t display_width = display_attributes_.x_pixels;
+  uint32_t display_height = display_attributes_.y_pixels;
+
+  HWResourceInfo hw_resource_info = HWResourceInfo();
+  hw_info_intf_->GetHWResourceInfo(&hw_resource_info);
+  float max_scale_down = FLOAT(hw_resource_info.max_scale_down);
+  float max_scale_up = FLOAT(hw_resource_info.max_scale_up);
+
+  float scale_x = FLOAT(width / display_width);
+  float scale_y = FLOAT(height / display_height);
+
+  if (scale_x > max_scale_down || scale_y > max_scale_down) {
+    return kErrorNotSupported;
+  }
+
+  if (UINT32(scale_x) < 1 && scale_x > 0.0f) {
+    if ((1.0f / scale_x) > max_scale_up) {
+      return kErrorNotSupported;
+    }
+  }
+
+  if (UINT32(scale_y) < 1 && scale_y > 0.0f) {
+    if ((1.0f / scale_y) > max_scale_up) {
+      return kErrorNotSupported;
+    }
+  }
+
+  return kErrorNone;
+}
+
+DisplayError DisplayBase::ValidateDataspace(const ColorMetaData &color_metadata) {
+  // Handle transfer
+  switch (color_metadata.transfer) {
+    case Transfer_sRGB:
+    case Transfer_SMPTE_170M:
+    case Transfer_SMPTE_ST2084:
+    case Transfer_HLG:
+    case Transfer_Linear:
+    case Transfer_Gamma2_2:
+      break;
+    default:
+      DLOGW("Unsupported Transfer Request = %d", color_metadata.transfer);
+      return kErrorNotSupported;
+  }
+
+  // Handle colorPrimaries
+  switch (color_metadata.colorPrimaries) {
+    case ColorPrimaries_BT709_5:
+    case ColorPrimaries_BT601_6_525:
+    case ColorPrimaries_BT601_6_625:
+    case ColorPrimaries_DCIP3:
+    case ColorPrimaries_BT2020:
+      break;
+    default:
+      DLOGW("Unsupported Color Primary = %d", color_metadata.colorPrimaries);
+      return kErrorNotSupported;
+  }
+
+  return kErrorNone;
 }
 
 }  // namespace sdm

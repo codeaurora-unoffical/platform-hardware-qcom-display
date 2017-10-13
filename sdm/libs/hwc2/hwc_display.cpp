@@ -40,6 +40,7 @@
 #include "hwc_display.h"
 #include "hwc_debugger.h"
 #include "hwc_tonemapper.h"
+#include "hwc_session.h"
 
 #ifndef USE_GRALLOC1
 #include <gr.h>
@@ -461,6 +462,7 @@ void HWCDisplay::BuildLayerStack() {
   display_rect_ = LayerRect();
   metadata_refresh_rate_ = 0;
   auto working_primaries = ColorPrimaries_BT709_5;
+  bool secure_display_active = false;
 
   // Add one layer for fb target
   // TODO(user): Add blit target layers
@@ -517,6 +519,10 @@ void HWCDisplay::BuildLayerStack() {
 
     if (layer->flags.skip) {
       layer_stack_.flags.skip_present = true;
+    }
+
+    if (layer->input_buffer.flags.secure_display) {
+      secure_display_active = true;
     }
 
     if (hwc_layer->GetClientRequestedCompositionType() == HWC2::Composition::Cursor) {
@@ -589,7 +595,17 @@ void HWCDisplay::BuildLayerStack() {
   // TODO(user): Set correctly when SDM supports geometry_changes as bitmask
   layer_stack_.flags.geometry_changed = UINT32(geometry_changes_ > 0);
   // Append client target to the layer stack
-  layer_stack_.layers.push_back(client_target_->GetSDMLayer());
+  Layer *sdm_client_target = client_target_->GetSDMLayer();
+  layer_stack_.layers.push_back(sdm_client_target);
+  // fall back frame composition to GPU when client target is 10bit
+  // TODO(user): clarify the behaviour from Client(SF) and SDM Extn -
+  // when handling 10bit FBT, as it would affect blending
+  if (Is10BitFormat(sdm_client_target->input_buffer.format)) {
+    // Must fall back to client composition
+    MarkLayersForClientComposition();
+  }
+  // set secure display
+  SetSecureDisplay(secure_display_active);
 }
 
 void HWCDisplay::BuildSolidFillStack() {
@@ -720,15 +736,18 @@ HWC2::Error HWCDisplay::SetPowerMode(HWC2::PowerMode mode) {
 
 HWC2::Error HWCDisplay::GetClientTargetSupport(uint32_t width, uint32_t height, int32_t format,
                                                int32_t dataspace) {
-  DisplayConfigVariableInfo variable_config;
-  display_intf_->GetFrameBufferConfig(&variable_config);
-  // TODO(user): Support scaled configurations, other formats and other dataspaces
-  if (format != HAL_PIXEL_FORMAT_RGBA_8888 || dataspace != HAL_DATASPACE_UNKNOWN ||
-      width != variable_config.x_pixels || height != variable_config.y_pixels) {
+  ColorMetaData color_metadata = {};
+  LayerBufferFormat sdm_format = GetSDMFormat(format, 0);
+  GetColorPrimary(dataspace, &(color_metadata.colorPrimaries));
+  GetTransfer(dataspace, &(color_metadata.transfer));
+  GetRange(dataspace, &(color_metadata.range));
+
+  if (display_intf_->GetClientTargetSupport(width, height, sdm_format,
+                                            color_metadata) != kErrorNone) {
     return HWC2::Error::Unsupported;
-  } else {
-    return HWC2::Error::None;
   }
+
+  return HWC2::Error::None;
 }
 
 HWC2::Error HWCDisplay::GetColorModes(uint32_t *out_num_modes, android_color_mode_t *out_modes) {
@@ -868,7 +887,13 @@ HWC2::Error HWCDisplay::SetClientTarget(buffer_handle_t target, int32_t acquire_
 
   client_target_->SetLayerBuffer(target, acquire_fence);
   client_target_->SetLayerSurfaceDamage(damage);
-  client_target_->SetLayerDataspace(dataspace);
+  if (client_target_->GetLayerDataspace() != dataspace) {
+    client_target_->SetLayerDataspace(dataspace);
+    Layer *sdm_layer = client_target_->GetSDMLayer();
+    // Data space would be validated at GetClientTargetSupport, so just use here.
+    sdm::GetSDMColorSpace(dataspace, &sdm_layer->input_buffer.color_metadata);
+  }
+
   return HWC2::Error::None;
 }
 
@@ -925,6 +950,8 @@ DisplayError HWCDisplay::HandleEvent(DisplayEvent event) {
   switch (event) {
     case kIdleTimeout:
     case kThermalEvent:
+    case kIdlePowerCollapse:
+      HWCSession::WaitForSequence(id_);
       validated_.reset();
       break;
     default:
@@ -986,6 +1013,7 @@ HWC2::Error HWCDisplay::PrepareLayerStack(uint32_t *out_num_types, uint32_t *out
     }
     hwc_layer->ResetValidation();
   }
+  client_target_->ResetValidation();
   *out_num_types = UINT32(layer_changes_.size());
   *out_num_requests = UINT32(layer_requests_.size());
   skip_validate_ = false;
@@ -1193,6 +1221,7 @@ HWC2::Error HWCDisplay::PostCommitLayerStack(int32_t *out_retire_fence) {
     close(client_target_release_fence);
     client_target_release_fence = -1;
   }
+  client_target_->ResetGeometryChanges();
 
   for (auto hwc_layer : layer_set_) {
     hwc_layer->ResetGeometryChanges();
@@ -1204,15 +1233,19 @@ HWC2::Error HWCDisplay::PostCommitLayerStack(int32_t *out_retire_fence) {
       // release fences and discard fences from driver
       if (swap_interval_zero_ || layer->flags.single_buffer) {
         close(layer_buffer->release_fence_fd);
-        layer_buffer->release_fence_fd = -1;
       } else if (layer->composition != kCompositionGPU) {
         hwc_layer->PushReleaseFence(layer_buffer->release_fence_fd);
-        layer_buffer->release_fence_fd = -1;
       } else {
         hwc_layer->PushReleaseFence(-1);
       }
+    } else {
+      // In case of flush, we don't return an error to f/w, so it will get a release fence out of
+      // the hwc_layer's release fence queue. We should push a -1 to preserve release fence
+      // circulation semantics.
+      hwc_layer->PushReleaseFence(-1);
     }
 
+    layer_buffer->release_fence_fd = -1;
     if (layer_buffer->acquire_fence_fd >= 0) {
       close(layer_buffer->acquire_fence_fd);
       layer_buffer->acquire_fence_fd = -1;
@@ -1749,17 +1782,17 @@ void HWCDisplay::SolidFillPrepare() {
     layer_buffer->acquire_fence_fd = -1;
     layer_buffer->release_fence_fd = -1;
 
-    LayerRect rect;
-    rect.top = 0; rect.left = 0;
-    rect.right = primary_width;
-    rect.bottom = primary_height;
-
     solid_fill_layer_->composition = kCompositionGPU;
-    solid_fill_layer_->src_rect = rect;
-    solid_fill_layer_->dst_rect = rect;
+    solid_fill_layer_->src_rect = solid_fill_rect_;
+    solid_fill_layer_->dst_rect = solid_fill_rect_;
 
     solid_fill_layer_->blending = kBlendingPremultiplied;
-    solid_fill_layer_->solid_fill_color = solid_fill_color_;
+    solid_fill_layer_->solid_fill_color = 0;
+    solid_fill_layer_->solid_fill_info.bit_depth = solid_fill_color_.bit_depth;
+    solid_fill_layer_->solid_fill_info.red = solid_fill_color_.red;
+    solid_fill_layer_->solid_fill_info.blue = solid_fill_color_.blue;
+    solid_fill_layer_->solid_fill_info.green = solid_fill_color_.green;
+    solid_fill_layer_->solid_fill_info.alpha = solid_fill_color_.alpha;
     solid_fill_layer_->frame_rate = 60;
     solid_fill_layer_->visible_regions.push_back(solid_fill_layer_->dst_rect);
     solid_fill_layer_->flags.updating = 1;
@@ -1808,7 +1841,12 @@ int HWCDisplay::GetVisibleDisplayRect(hwc_rect_t *visible_rect) {
 }
 
 void HWCDisplay::SetSecureDisplay(bool secure_display_active) {
-  secure_display_active_ = secure_display_active;
+  if (secure_display_active_ != secure_display_active) {
+    DLOGI("SecureDisplay state changed from %d to %d Needs Flush!!", secure_display_active_,
+          secure_display_active);
+    secure_display_active_ = secure_display_active;
+    skip_prepare_ = true;
+  }
   return;
 }
 
@@ -1831,7 +1869,7 @@ int HWCDisplay::GetDisplayAttributesForConfig(int config,
   return display_intf_->GetConfig(UINT32(config), display_attributes) == kErrorNone ? 0 : -1;
 }
 
-bool HWCDisplay::SingleLayerUpdating(void) {
+uint32_t HWCDisplay::GetUpdatingLayersCount(void) {
   uint32_t updating_count = 0;
 
   for (uint i = 0; i < layer_stack_.layers.size(); i++) {
@@ -1841,7 +1879,7 @@ bool HWCDisplay::SingleLayerUpdating(void) {
     }
   }
 
-  return (updating_count == 1);
+  return updating_count;
 }
 
 bool HWCDisplay::IsLayerUpdating(const Layer *layer) {
@@ -1937,6 +1975,10 @@ std::string HWCDisplay::Dump() {
 bool HWCDisplay::CanSkipValidate() {
   // Layer Stack checks
   if (layer_stack_.flags.hdr_present && (tone_mapper_ && tone_mapper_->IsActive())) {
+    return false;
+  }
+
+  if (client_target_->NeedsValidation()) {
     return false;
   }
 
