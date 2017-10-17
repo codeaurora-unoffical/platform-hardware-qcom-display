@@ -76,7 +76,6 @@ using drm_utils::DRMLibLoader;
 using sde_drm::GetDRMManager;
 using sde_drm::DRMPlanesInfo;
 using sde_drm::DRMCrtcInfo;
-using sde_drm::DRMConnectorInfo;
 using sde_drm::DRMPlaneType;
 
 using std::vector;
@@ -148,11 +147,6 @@ DisplayError HWInfoDRM::GetDynamicBWLimits(HWResourceInfo *hw_resource) {
 
 DisplayError HWInfoDRM::GetHWResourceInfo(HWResourceInfo *hw_resource) {
   if (hw_resource_) {
-    DRMConnectorInfo connector_info = {0};
-    drm_mgr_intf_->GetConnectorInfo(0 /* system_info */, &connector_info);
-    hw_resource_->hdcp_version = connector_info.hdcp_version;
-    hw_resource_->hdcp_interface_type = connector_info.type;
-
     *hw_resource = *hw_resource_;
     return kErrorNone;
   }
@@ -258,11 +252,7 @@ DisplayError HWInfoDRM::GetHWResourceInfo(HWResourceInfo *hw_resource) {
 
 void HWInfoDRM::GetSystemInfo(HWResourceInfo *hw_resource) {
   DRMCrtcInfo info;
-  DRMConnectorInfo connector_info = {0};
   drm_mgr_intf_->GetCrtcInfo(0 /* system_info */, &info);
-  drm_mgr_intf_->GetConnectorInfo(0 /* system_info */, &connector_info);
-  hw_resource->hdcp_version = connector_info.hdcp_version;
-  hw_resource->hdcp_interface_type = connector_info.type;
   hw_resource->has_hdr = true;
   hw_resource->is_src_split = info.has_src_split;
   hw_resource->has_qseed3 = (info.qseed_version == sde_drm::QSEEDVersion::V3);

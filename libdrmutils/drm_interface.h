@@ -324,8 +324,7 @@ struct DRMConnectorInfo {
   uint32_t mmHeight;
   uint32_t type;
   uint32_t hdcp_version;
-  uint32_t num_modes;
-  drmModeModeInfo *modes;
+  std::vector<drmModeModeInfo> modes;
   DRMTopology topology;
   drm_msm_ext_panel_hdr_properties hdr_prop;
   drm_msm_ext_panel_hdr_ctrl hdr_ctrl;
