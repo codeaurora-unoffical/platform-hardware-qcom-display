@@ -237,9 +237,6 @@ HWC2::Error HWCDisplayPrimary::Present(int32_t *out_retire_fence) {
     }
   }
 
-  if (status != HWC2::Error::NotValidated) {
-    CloseAcquireFds();
-  }
   return status;
 }
 

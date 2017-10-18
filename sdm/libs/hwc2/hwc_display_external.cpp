@@ -136,9 +136,6 @@ HWC2::Error HWCDisplayExternal::Present(int32_t *out_retire_fence) {
       status = HWCDisplay::PostCommitLayerStack(out_retire_fence);
     }
   }
-  if (status != HWC2::Error::NotValidated) {
-    CloseAcquireFds();
-  }
   return status;
 }
 

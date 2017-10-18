@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -1750,22 +1750,6 @@ DisplayClass HWCDisplay::GetDisplayClass() {
   return display_class_;
 }
 
-void HWCDisplay::CloseAcquireFds() {
-  for (auto hwc_layer : layer_set_) {
-    auto layer = hwc_layer->GetSDMLayer();
-    if (layer->input_buffer.acquire_fence_fd >= 0) {
-      close(layer->input_buffer.acquire_fence_fd);
-      layer->input_buffer.acquire_fence_fd = -1;
-    }
-  }
-  int32_t &client_target_acquire_fence =
-      client_target_->GetSDMLayer()->input_buffer.acquire_fence_fd;
-  if (client_target_acquire_fence >= 0) {
-    close(client_target_acquire_fence);
-    client_target_acquire_fence = -1;
-  }
-}
-
 HWC2::Error HWCDisplay::SetLayerCscData(hwc2_layer_t layer_id,
                                         const int64_t *out_csc_coeff,
                                         uint32_t len_of_out_csc_coeff,
@@ -1795,7 +1779,6 @@ HWC2::Error HWCDisplay::SidebandStreamPresent(int32_t *out_retire_fence) {
     DLOGW("sideband stream present error %d", error);
   }
 
-  CloseAcquireFds();
   return status;
 }
 
