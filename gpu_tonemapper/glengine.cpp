@@ -18,9 +18,12 @@
  */
 #include "glengine.h"
 #include "engine.h"
+#include <sys/time.h>
+
+bool perf_time_profiler = false; /* DEBUG (user): enable this flag to calculate time */
 
 /* TODO: Replacing ALOGE, ALOGI with fprintf to keep logs platform agnostic */
-/* TODO: Will need to replace for generic implementation for logging.       */ 
+/* TODO: Will need to replace for generic implementation for logging.       */
 
 void checkGlError(const char *, int);
 void checkEglError(const char *, int);
@@ -130,7 +133,17 @@ void* engine_initialize()
 }
 
 //-----------------------------------------------------------------------------
-// Shutdown.
+// Shutdown - EGL Terminate
+void engine_egl_terminate(void* context)
+//-----------------------------------------------------------------------------
+{
+  EngineContext* engineContext = (EngineContext*)context;
+  EGL(eglTerminate(engineContext->eglDisplay));
+  engineContext->eglDisplay = EGL_NO_DISPLAY;
+}
+
+//-----------------------------------------------------------------------------
+// Shutdown -destroy surface and context
 void engine_shutdown(void* context)
 //-----------------------------------------------------------------------------
 {
@@ -138,8 +151,6 @@ void engine_shutdown(void* context)
   EGL(eglMakeCurrent(engineContext->eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT));
   EGL(eglDestroySurface(engineContext->eglDisplay, engineContext->eglSurface));
   EGL(eglDestroyContext(engineContext->eglDisplay, engineContext->eglContext));
-  EGL(eglTerminate(engineContext->eglDisplay));
-  engineContext->eglDisplay = EGL_NO_DISPLAY;
   engineContext->eglContext = EGL_NO_CONTEXT;
   engineContext->eglSurface = EGL_NO_SURFACE;
 }
@@ -335,13 +346,23 @@ int engine_blit(int srcFenceFd)
 //-----------------------------------------------------------------------------
 {
   int fd = -1;
+  struct timeval blit_start, blit_end;
   WaitOnNativeFence(srcFenceFd);
   float fullscreen_vertices[]{0.0f, 2.0f, 0.0f, 0.0f, 2.0f, 0.0f};
   GL(glEnableVertexAttribArray(0));
   GL(glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, fullscreen_vertices));
   GL(glDrawArrays(GL_TRIANGLES, 0, 3));
   fd = CreateNativeFence();
-  GL(glFlush());
+  if (perf_time_profiler)
+   gettimeofday(&blit_start, NULL);
+  //Currently, Fence method is not supported in LE.
+  //Replace glFlush with glFinish to have synchronous call.
+  GL(glFinish());
+  if (perf_time_profiler) {
+   gettimeofday(&blit_end, NULL);
+   fprintf(stderr, "\n blit_time: %0.9fms\n", (float)(blit_end.tv_sec*1000 +
+     blit_end.tv_usec/1000 - blit_start.tv_sec*1000 - blit_start.tv_usec/1000) );
+  }
   return fd;
 }
 
