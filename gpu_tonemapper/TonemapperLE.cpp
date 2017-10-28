@@ -124,7 +124,7 @@ Tonemapper *Tonemapper::build(int type, void *colorMap, int colorMapSize, void *
 }
 
 //-----------------------------------------------------------------------------
-int Tonemapper::blit(void *dst, void *src, int srcFenceFd, void *userdata)
+int Tonemapper::blit(void *dst, void *src, int srcFenceFd, void *userdata, void *userdata2)
 //-----------------------------------------------------------------------------
 {
   void* caller_context = engine_backup();
@@ -132,8 +132,8 @@ int Tonemapper::blit(void *dst, void *src, int srcFenceFd, void *userdata)
   engine_bind(engineContext);
 
   // create eglimages if required
-  EGLImageBufferLE *dst_buffer = eglImageWrapperLE->wrap(dst, userdata);
-  EGLImageBufferLE *src_buffer = eglImageWrapperLE->wrap(src, userdata);
+  EGLImageBufferLE *dst_buffer = eglImageWrapperLE->wrap(dst, userdata, userdata2);
+  EGLImageBufferLE *src_buffer = eglImageWrapperLE->wrap(src, userdata, userdata2);
 
   // bind the program
   engine_setProgram(programID);
