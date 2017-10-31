@@ -373,6 +373,8 @@ DisplayError HWEventsDRM::RequestPageFlip(uint32_t crtc_id,
 
 void HWEventsDRM::HandleVSync(char *data) {
   if (poll_fds_[vsync_index_].revents & (POLLIN | POLLPRI)) {
+    pthread_mutex_lock(&vbl_mutex_);
+
     drmEventContext event = {};
     event.version = DRM_EVENT_CONTEXT_VERSION;
     event.vblank_handler = &HWEventsDRM::VSyncHandlerCallback;
@@ -380,6 +382,11 @@ void HWEventsDRM::HandleVSync(char *data) {
     if (error != 0) {
       DLOGE("drmHandleEvent failed: %i", error);
     }
+
+    vbl_pending_ = false;
+    pthread_cond_signal(&vbl_cond_);
+
+    pthread_mutex_unlock(&vbl_mutex_);
   }
 }
 
