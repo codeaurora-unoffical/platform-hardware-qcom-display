@@ -361,7 +361,8 @@ DisplayError HWDeviceDRM::Deinit() {
 
 void HWDeviceDRM::InitializeConfigs() {
   // TODO(user): Update modes
-  current_mode_ = connector_info_.modes[0];
+  if (connector_info_.modes.size() > 0)
+     current_mode_ = connector_info_.modes[0];
 }
 
 DisplayError HWDeviceDRM::PopulateDisplayAttributes() {

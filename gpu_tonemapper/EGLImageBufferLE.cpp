@@ -97,7 +97,7 @@ EGLImageKHR EGLImageBufferLE::create_eglImage(struct gbm_buf_info *gbo_info, voi
 }
 
 //-----------------------------------------------------------------------------
-EGLImageBufferLE::EGLImageBufferLE(struct gbm_buf_info *gbuf_info, void *userdata)
+EGLImageBufferLE::EGLImageBufferLE(struct gbm_buf_info *gbuf_info, void *userdata, void *userdata2)
 //-----------------------------------------------------------------------------
 {
 
@@ -112,7 +112,7 @@ EGLImageBufferLE::EGLImageBufferLE(struct gbm_buf_info *gbuf_info, void *userdat
 
     master->GetHandle(&fd);
 
-    gbm_ = gbm_create_device(fd);
+    gbm_ = (gbm_device*) userdata2;
 
     this->eglImageID = create_eglImage(gbo_info, userdata);
     this->width = gbo_info->width;
@@ -156,11 +156,6 @@ EGLImageBufferLE::~EGLImageBufferLE() {
   /*    reference count = 1, then fd is set to invalid number and gbm device is   */
   /*    destroyed */
 
-  //TODO: Need to resolve the handling of multi instantiation of gbm device.
-  //currently commenting below lines to temporarily resolve the crash in end of HDR
-  // playback while using Tone mapper feature.
-  //gbm_device_destroy(gbm_);
-  //gbm_ = NULL;
   fd = -1;
 };
 

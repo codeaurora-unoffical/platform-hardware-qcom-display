@@ -29,7 +29,7 @@ class EGLImageWrapperLE {
     public:
         EGLImageWrapperLE();
         ~EGLImageWrapperLE();
-        EGLImageBufferLE* wrap(void *buf_info, void *userdata);
+        EGLImageBufferLE* wrap(void *buf_info, void *userdata, void *userdata2);
         void destroy();
 };
 
