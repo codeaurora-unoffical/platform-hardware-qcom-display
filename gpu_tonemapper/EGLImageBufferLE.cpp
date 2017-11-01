@@ -32,6 +32,7 @@ EGLImageKHR EGLImageBufferLE::create_eglImage(struct gbm_buf_info *gbo_info, voi
 {
   struct wl_resource resource;
   unsigned int gbm_ret;
+  unsigned int secure_status = 0;
   EGLImageKHR eglImage;
   PFNEGLCREATEIMAGEKHRPROC create_image;
   create_image = reinterpret_cast<PFNEGLCREATEIMAGEKHRPROC>
@@ -72,6 +73,7 @@ EGLImageKHR EGLImageBufferLE::create_eglImage(struct gbm_buf_info *gbo_info, voi
    bo = gbm_bo_import(gbm_, GBM_BO_IMPORT_GBM_BUF_TYPE, gbo_info,
                         GBM_BO_USE_SCANOUT|GBM_BO_USE_RENDERING);
 
+   gbm_perform(GBM_PERFORM_GET_SECURE_BUFFER_STATUS, bo, &secure_status);
    attribs[i++] = EGL_WIDTH;
    attribs[i++] = gbm_bo_get_width(bo);
    attribs[i++] = EGL_HEIGHT;
@@ -84,6 +86,8 @@ EGLImageKHR EGLImageBufferLE::create_eglImage(struct gbm_buf_info *gbo_info, voi
    attribs[i++] = 0;
    attribs[i++] = EGL_DMA_BUF_PLANE0_PITCH_EXT;
    attribs[i++] = gbm_bo_get_stride(bo);
+   attribs[i++] = EGL_PROTECTED_CONTENT_EXT;
+   attribs[i++] = secure_status;
    attribs[i++] = EGL_NONE;
   // we no longer need the bo
    if (bo) {
