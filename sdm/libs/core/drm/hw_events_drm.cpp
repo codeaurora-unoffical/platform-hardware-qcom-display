@@ -169,7 +169,8 @@ DisplayError HWEventsDRM::Init(DisplayOrder display_order, int display_type, Dis
   // One proposal is creating a single thread to handle drm event, then once corresponding
   // event callback function is called, call RegisterVSync again. If so, we only need to
   // call RegisterVSync to register the first vblank event for each display.
-  RegisterVSync();
+  if (sync_event_type_ != kPageFlipEvent)
+    RegisterVSync();
 
   // Only create the thread for the first display.
   if (display_order == kFirst) {
@@ -417,7 +418,19 @@ void HWEventsDRM::HandleVBlank(char *data) {
 }
 
 void HWEventsDRM::HandlePageFlip(char *data) {
-  //TODO
+  if (poll_fds_[vsync_index_].revents & (POLLIN | POLLPRI)) {
+    pthread_mutex_lock(&vbl_mutex_);
+
+    drmEventContext event = {};
+    event.version = DRM_EVENT_CONTEXT_VERSION;
+    event.page_flip_handler = &HWEventsDRM::PFlipHandlerCallback;
+    int error = drmHandleEvent(poll_fds_[vsync_index_].fd, &event);
+    if (error != 0) {
+      DLOGE("drmHandleEvent failed: %i", error);
+    }
+
+    pthread_mutex_unlock(&vbl_mutex_);
+  }
 }
 
 void HWEventsDRM::VBlankHandlerCallback(int fd, unsigned int sequence, unsigned int tv_sec,
