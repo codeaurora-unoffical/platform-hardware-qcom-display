@@ -153,6 +153,17 @@ DisplayError HWEventsDRM::Init(int display_type, HWEventHandler *event_handler,
     DLOGE("Failed to start %s, error = %s", event_thread_name_.c_str());
     return kErrorResources;
   }
+  // For multiple display case, don't launch multiple threads to handle event together,
+  // otherwise only one thread can get chance to handle vblank event after polling and
+  // other threads will get stuck on drmHandleVBlank. The result is the vblank callback
+  // function will not be executed sometimes since the RegisterVSync will not be called
+  // while the whole thread gets stuck. So if any repainting which is triggered by vblank
+  // callback function, the repainting is not smooth sometime.
+  // One proposal is creating a single thread to handle drm event, then once corresponding
+  // event callback function is called, call RegisterVSync again. If so, we only need to
+  // call RegisterVSync to register the first vblank event for each display.
+  if (sync_event_type_ != kPageFlipEvent)
+    RegisterVSync();
 
   return kErrorNone;
 }
@@ -364,6 +375,25 @@ void HWEventsDRM::HandleVBlank(char *data) {
     drmEventContext event = {};
     event.version = DRM_EVENT_CONTEXT_VERSION;
     event.vblank_handler = &HWEventsDRM::VBlankHandlerCallback;
+    int error = drmHandleEvent(poll_fds_[vsync_index_].fd, &event);
+    if (error != 0) {
+      DLOGE("drmHandleEvent failed: %i", error);
+    }
+
+    vbl_pending_ = false;
+    pthread_cond_signal(&vbl_cond_);
+
+    pthread_mutex_unlock(&vbl_mutex_);
+  }
+}
+
+void HWEventsDRM::HandlePageFlip(char *data) {
+  if (poll_fds_[vsync_index_].revents & (POLLIN | POLLPRI)) {
+    pthread_mutex_lock(&vbl_mutex_);
+
+    drmEventContext event = {};
+    event.version = DRM_EVENT_CONTEXT_VERSION;
+    event.page_flip_handler = &HWEventsDRM::PFlipHandlerCallback;
     int error = drmHandleEvent(poll_fds_[vsync_index_].fd, &event);
     if (error != 0) {
       DLOGE("drmHandleEvent failed: %i", error);

@@ -795,7 +795,7 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
   DTRACE_SCOPED();
   SetupAtomic(hw_layers, false /* validate */);
 
-  int ret = drm_atomic_intf_->Commit(false /* synchronous */);
+  int ret = drm_atomic_intf_->Commit(false /* synchronous */, pflip_user_data_);
   if (ret) {
     DLOGE("%s failed with error %d", __FUNCTION__, ret);
     return kErrorHardware;
@@ -918,6 +918,11 @@ DisplayError HWDeviceDRM::SetPPFeatures(PPFeaturesConfig *feature_list) {
 
 DisplayError HWDeviceDRM::SetVSyncState(bool enable) {
   return kErrorNotSupported;
+}
+
+void HWDeviceDRM::SetPageFlipState(bool enable, void *user_data) {
+  enable_pflip_event_ = enable;
+  pflip_user_data_ = user_data;
 }
 
 void HWDeviceDRM::SetIdleTimeoutMs(uint32_t timeout_ms) {}

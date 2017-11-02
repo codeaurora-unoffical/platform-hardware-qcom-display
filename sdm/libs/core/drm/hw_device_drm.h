@@ -77,6 +77,7 @@ class HWDeviceDRM : public HWInterface {
   virtual DisplayError SetPPFeatures(PPFeaturesConfig *feature_list);
   // This API is no longer supported, expectation is to call the correct API on HWEvents
   virtual DisplayError SetVSyncState(bool enable);
+  virtual void SetPageFlipState(bool enable, void *user_data);
   virtual void SetIdleTimeoutMs(uint32_t timeout_ms);
   virtual DisplayError SetDisplayMode(const HWDisplayMode hw_display_mode);
   virtual DisplayError SetRefreshRate(uint32_t refresh_rate);
@@ -155,6 +156,8 @@ class HWDeviceDRM : public HWInterface {
   HWDeviceType device_type_ = {};
   const char *device_name_ = {};
   bool synchronous_commit_ = false;
+  bool enable_pflip_event_ = false;
+  void *pflip_user_data_ = {};
   HWDisplayAttributes display_attributes_ = {};
   HWMixerAttributes mixer_attributes_ = {};
   sde_drm::DRMManagerInterface *drm_mgr_intf_ = {};

@@ -1181,6 +1181,9 @@ DisplayError HWDevice::SetVSyncState(bool enable) {
   return kErrorNone;
 }
 
+void HWDevice::SetPageFlipState(bool enable, void *user_data) {
+}
+
 void HWDevice::SetIdleTimeoutMs(uint32_t timeout_ms) {
 }
 
