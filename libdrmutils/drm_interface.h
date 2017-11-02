@@ -419,9 +419,12 @@ class DRMAtomicReqInterface {
    * Commit the params set via Perform(). Also resets the properties after commit. Needs to be
    * called every frame.
    * [input]: synchronous: Determines if the call should block until a h/w flip
+   * [input]: user_data: A pointer of data structure which will be passed to each commit.
+   *          Now only drmModeAtomicCommit use it.
    * [return]: Error code if the API fails, 0 on success.
    */
-  virtual int Commit(bool synchronous) = 0;
+  virtual int Commit(bool synchronous, void *user_data = NULL) = 0;
+
   /*
    * Validate the params set via Perform().
    * [return]: Error code if the API fails, 0 on success.
