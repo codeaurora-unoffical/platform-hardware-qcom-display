@@ -130,6 +130,10 @@ int HWCSession::Init() {
     return -EINVAL;
   }
 
+  for (uint32_t i = HWC_DISPLAY_PRIMARY; i < HWC_NUM_DISPLAY_TYPES; i++) {
+    hwc_display_[i] = NULL;
+  }
+
   display_count = GetDisplayCount();
   if (!display_count) {
       DLOGE("fail to get display from SDM! count=%d \n", display_count);
@@ -172,7 +176,6 @@ int HWCSession::Init() {
 //if ENABLE_THREE_DISPLAYS is not enabled, still we will be creating
 //displays but will not send notification to SurfaceFlinger
   for (uint32_t i = kSecondary; i < display_count; i++) {
-    hwc_display_[i] = NULL;
 
     DisplayOrder display_order = GetDisplayOrder(i);
 
@@ -235,7 +238,13 @@ int HWCSession::Deinit() {
   }
 
   for(uint32_t i = kFirst; i < display_count; i ++) {
-     if (hwc_display_[i] != NULL) {
+     if (hwc_display_[i] != NULL && hw_disp_info_[i].type == kHDMI) {
+         HWCDisplayExternal::Destroy(hwc_display_[i]);
+         hwc_display_[i] = NULL;
+     } else if (hwc_display_[i] != NULL && hw_disp_info_[i].type == kVirtual) {
+         HWCDisplayVirtual::Destroy(hwc_display_[i]);
+         hwc_display_[i] = NULL;
+     } else if (hwc_display_[i] != NULL) {
          HWCDisplayPrimary::Destroy(hwc_display_[i]);
          hwc_display_[i] = NULL;
      }
@@ -383,7 +392,7 @@ void HWCSession::Dump(hwc2_device_t *device, uint32_t *out_size, char *out_buffe
     return;
   }
   auto *hwc_session = static_cast<HWCSession *>(device);
-  const size_t max_dump_size = 8192;
+  const size_t max_dump_size = 16384; //assume we have 3 displays and 1 virtual
 
   if (out_buffer == nullptr) {
     *out_size = max_dump_size;
@@ -391,7 +400,7 @@ void HWCSession::Dump(hwc2_device_t *device, uint32_t *out_size, char *out_buffe
     char sdm_dump[4096];
     DumpInterface::GetDump(sdm_dump, 4096);  // TODO(user): Fix this workaround
     std::string s("");
-    for (int id = HWC_DISPLAY_PRIMARY; id <= HWC_NUM_DISPLAY_TYPES; id++) {
+    for (int id = HWC_DISPLAY_PRIMARY; id < HWC_NUM_DISPLAY_TYPES; id++) {
       if (hwc_session->hwc_display_[id]) {
         s += hwc_session->hwc_display_[id]->Dump();
       }
