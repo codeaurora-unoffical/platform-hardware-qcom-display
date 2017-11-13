@@ -65,6 +65,7 @@ class HWInfoDRM: public HWInfoInterface {
   void PopulateSupportedFmts(HWSubBlockType sub_blk_type, const sde_drm::DRMPlaneTypeInfo  &info,
                              HWResourceInfo *hw_resource);
   void PopulatePipeCaps(const sde_drm::DRMPlaneTypeInfo &info, HWResourceInfo *hw_resource);
+  void PopulateConnectorName();
 
 
   sde_drm::DRMManagerInterface *drm_mgr_intf_ = {};
@@ -73,6 +74,7 @@ class HWInfoDRM: public HWInfoInterface {
   // TODO(user): Read Mdss version from the driver
   static const int kHWMdssVersion5 = 500;  // MDSS_V5
   static const int kMaxStringLength = 1024;
+  std::map<uint32_t, const char *> connector_name_map_;
   static HWResourceInfo *hw_resource_;
 };
 

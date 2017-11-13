@@ -325,6 +325,7 @@ struct DRMConnectorInfo {
   uint32_t mmWidth;
   uint32_t mmHeight;
   uint32_t type;
+  uint32_t type_id; // Match connector_type_id in drmModeConnector
   uint32_t num_modes;
   drmModeModeInfo *modes;
   DRMTopology topology;

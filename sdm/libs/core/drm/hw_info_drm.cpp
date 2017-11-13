@@ -118,6 +118,7 @@ HWInfoDRM::HWInfoDRM() {
     }
     drm_master->GetHandle(&dev_fd);
     DRMLibLoader::GetInstance()->FuncGetDRMManager()(dev_fd, &drm_mgr_intf_);
+    PopulateConnectorName();
   }
 }
 
@@ -128,6 +129,7 @@ HWInfoDRM::~HWInfoDRM() {
   if (drm_mgr_intf_) {
     DRMLibLoader::GetInstance()->FuncDestroyDRMManager()();
     drm_mgr_intf_ = nullptr;
+    connector_name_map_.clear();
   }
 
   DRMLibLoader::Destroy();
@@ -343,6 +345,18 @@ void HWInfoDRM::PopulateSupportedFmts(HWSubBlockType sub_blk_type,
 
     fmts_map.insert(make_pair(sub_blk_type, sdm_formats));
   }
+}
+
+void HWInfoDRM::PopulateConnectorName() {
+  connector_name_map_.insert(std::make_pair(DRM_MODE_CONNECTOR_VGA, "VGA"));
+  connector_name_map_.insert(std::make_pair(DRM_MODE_CONNECTOR_LVDS, "LVDS"));
+  connector_name_map_.insert(std::make_pair(DRM_MODE_CONNECTOR_DisplayPort, "DP"));
+  connector_name_map_.insert(std::make_pair(DRM_MODE_CONNECTOR_HDMIA, "HDMI-A"));
+  connector_name_map_.insert(std::make_pair(DRM_MODE_CONNECTOR_HDMIB, "HDMI-B"));
+  connector_name_map_.insert(std::make_pair(DRM_MODE_CONNECTOR_TV, "TV"));
+  connector_name_map_.insert(std::make_pair(DRM_MODE_CONNECTOR_eDP, "eDP"));
+  connector_name_map_.insert(std::make_pair(DRM_MODE_CONNECTOR_VIRTUAL, "Virtual"));
+  connector_name_map_.insert(std::make_pair(DRM_MODE_CONNECTOR_DSI, "DSI"));
 }
 
 void HWInfoDRM::GetWBInfo(HWResourceInfo *hw_resource) {
@@ -624,6 +638,8 @@ DisplayError HWInfoDRM::GetDisplayInterfaceTypeByOrder(HWDisplayInterfaceInfo *h
                                                                       DRMDisplayOrder::kDRMTertiary };
   uint32_t conn_count = drm_mgr_intf_->GetConnectorCount();
   sde_drm::DRMConnectorInfo info;
+  std::map<uint32_t, const char*>::iterator it;
+  const char *type_name = nullptr;
   uint32_t i, j;
   uint32_t index = 0, order_index = 0;
 
@@ -651,6 +667,19 @@ DisplayError HWInfoDRM::GetDisplayInterfaceTypeByOrder(HWDisplayInterfaceInfo *h
       hw_disp_info_array[index].type = kPrimary;
       hw_disp_info_array[index].is_connected = true;
     }
+
+    // get connector name
+    for(it = connector_name_map_.begin(); it != connector_name_map_.end() ; it++) {
+        if ((*it).first == info.type) {
+            type_name = (*it).second;
+            break;
+        }
+    }
+    if (type_name == nullptr) {
+        DLOGE("connector type %d can't be found in connector_name_map_", info.type);
+        type_name = "Unknown";
+    }
+    snprintf(hw_disp_info_array[index].name, sizeof hw_disp_info_array[index].name, "%s-%d", type_name, info.type_id);
 
     DisplayOrder order = kOrderMax;
     switch (supported_orders[order_index]) {
