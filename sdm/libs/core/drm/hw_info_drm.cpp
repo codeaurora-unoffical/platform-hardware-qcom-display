@@ -308,6 +308,7 @@ void HWInfoDRM::GetHWPlanesInfo(HWResourceInfo *hw_resource) {
     }
     pipe_caps.id = pipe_obj.first;
     pipe_caps.master_pipe_id = pipe_obj.second.master_plane_id;
+    pipe_caps.hw_block_mask = pipe_obj.second.hw_block_mask;
     DLOGI("Adding %s Pipe : Id %d", name.c_str(), pipe_obj.first);
     hw_resource->hw_pipes.push_back(std::move(pipe_caps));
   }

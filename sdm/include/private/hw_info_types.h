@@ -122,6 +122,7 @@ struct HWPipeCaps {
   uint32_t id = 0;
   uint32_t master_pipe_id = 0;
   uint32_t max_rects = 1;
+  uint32_t hw_block_mask = 1;
 };
 
 struct HWRotatorInfo {
