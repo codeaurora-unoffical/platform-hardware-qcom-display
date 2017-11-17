@@ -89,16 +89,16 @@ enum HWBwModes {
   kBwModeMax,      //!< Limiter for maximum available bandwidth modes.
 };
 
-
 /*! @brief Information on hardware for the display
 
-  @details This structure returns the display type of the display on the device
+  @details This structure returns display information on the device
   (internal display or HDMI etc) and whether it is currently connected,
 
 */
 struct HWDisplayInterfaceInfo {
   DisplayOrder order;
   DisplayType type;
+  char name[30];
   bool is_connected;
 };
 

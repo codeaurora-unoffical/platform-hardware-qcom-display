@@ -325,6 +325,7 @@ struct DRMConnectorInfo {
   uint32_t mmWidth;
   uint32_t mmHeight;
   uint32_t type;
+  uint32_t type_id; // Match connector_type_id in drmModeConnector
   uint32_t num_modes;
   drmModeModeInfo *modes;
   DRMTopology topology;
@@ -403,9 +404,11 @@ class DRMAtomicReqInterface {
    * Commit the params set via Perform(). Also resets the properties after commit. Needs to be
    * called every frame.
    * [input]: synchronous: Determines if the call should block until a h/w flip
+   * [input]: user_data: A pointer of data structure which will be passed to each commit.
+   *          Now only drmModeAtomicCommit use it.
    * [return]: Error code if the API fails, 0 on success.
    */
-  virtual int Commit(bool synchronous) = 0;
+  virtual int Commit(bool synchronous, void *user_data) = 0;
   /*
    * Validate the params set via Perform().
    * [return]: Error code if the API fails, 0 on success.
