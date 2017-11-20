@@ -198,18 +198,19 @@ DisplayError HWEventsDRM::Deinit() {
 DisplayError HWEventsDRM::SetEventState(HWEvent event, bool enable, void *arg) {
   switch (event) {
     case HWEvent::VSYNC:
+      pthread_mutex_lock(&vbl_mutex_);
       vsync_enabled_ = enable;
-
       if (enable) {
-        WakeUpEventThread();
+        if(!vbl_pending_) {
+          RegisterVSync();
+        }
       } else {
         //wait till pending vblank is consumed...
-        pthread_mutex_lock(&vbl_mutex_);
         while (vbl_pending_) {
           pthread_cond_wait(&vbl_cond_, &vbl_mutex_);
         }
-        pthread_mutex_unlock(&vbl_mutex_);
       }
+      pthread_mutex_unlock(&vbl_mutex_);
       break;
     default:
       DLOGE("Event not supported");
@@ -374,8 +375,6 @@ DisplayError HWEventsDRM::RequestPageFlip(uint32_t crtc_id,
 
 void HWEventsDRM::HandleVSync(char *data) {
   if (poll_fds_[vsync_index_].revents & (POLLIN | POLLPRI)) {
-    pthread_mutex_lock(&vbl_mutex_);
-
     drmEventContext event = {};
     event.version = DRM_EVENT_CONTEXT_VERSION;
     event.vblank_handler = &HWEventsDRM::VSyncHandlerCallback;
@@ -383,25 +382,25 @@ void HWEventsDRM::HandleVSync(char *data) {
     if (error != 0) {
       DLOGE("drmHandleEvent failed: %i", error);
     }
-
-    vbl_pending_ = false;
-    pthread_cond_signal(&vbl_cond_);
-
-    pthread_mutex_unlock(&vbl_mutex_);
   }
 }
 
 void HWEventsDRM::VSyncHandlerCallback(int fd, unsigned int sequence, unsigned int tv_sec,
                                        unsigned int tv_usec, void *data) {
   int64_t timestamp = (int64_t)(tv_sec)*1000000000 + (int64_t)(tv_usec)*1000;
-  reinterpret_cast<HWEventsDRM *>(data)->RegisterVSync();
-  reinterpret_cast<HWEventsDRM *>(data)->event_handler_->VSync(timestamp);
+  HWEventsDRM *pThis = reinterpret_cast<HWEventsDRM *>(data);
+  pthread_mutex_lock(&pThis->vbl_mutex_);
+  pThis->vbl_pending_ = false;
+  pThis->RegisterVSync();
+  pThis->event_handler_->VSync(timestamp);
+  if(!pThis->vbl_pending_) {
+    pthread_cond_signal(&pThis->vbl_cond_);
+  }
+  pthread_mutex_unlock(&pThis->vbl_mutex_);
 }
 
 void HWEventsDRM::HandleVBlank(char *data) {
   if (poll_fds_[vsync_index_].revents & (POLLIN | POLLPRI)) {
-    pthread_mutex_lock(&vbl_mutex_);
-
     drmEventContext event = {};
     event.version = DRM_EVENT_CONTEXT_VERSION;
     event.vblank_handler = &HWEventsDRM::VBlankHandlerCallback;
@@ -409,18 +408,11 @@ void HWEventsDRM::HandleVBlank(char *data) {
     if (error != 0) {
       DLOGE("drmHandleEvent failed: %i", error);
     }
-
-    vbl_pending_ = false;
-    pthread_cond_signal(&vbl_cond_);
-
-    pthread_mutex_unlock(&vbl_mutex_);
   }
 }
 
 void HWEventsDRM::HandlePageFlip(char *data) {
   if (poll_fds_[vsync_index_].revents & (POLLIN | POLLPRI)) {
-    pthread_mutex_lock(&vbl_mutex_);
-
     drmEventContext event = {};
     event.version = DRM_EVENT_CONTEXT_VERSION;
     event.page_flip_handler = &HWEventsDRM::PFlipHandlerCallback;
@@ -428,20 +420,28 @@ void HWEventsDRM::HandlePageFlip(char *data) {
     if (error != 0) {
       DLOGE("drmHandleEvent failed: %i", error);
     }
-
-    pthread_mutex_unlock(&vbl_mutex_);
   }
 }
 
 void HWEventsDRM::VBlankHandlerCallback(int fd, unsigned int sequence, unsigned int tv_sec,
                                        unsigned int tv_usec, void *data) {
-  reinterpret_cast<HWEventsDRM *>(data)->RegisterVSync();
-  reinterpret_cast<HWEventsDRM *>(data)->event_handler_->VSync(fd, sequence, tv_sec, tv_usec, data);
+  HWEventsDRM *pThis = reinterpret_cast<HWEventsDRM *>(data);
+  pthread_mutex_lock(&pThis->vbl_mutex_);
+  pThis->vbl_pending_ = false;
+  pThis->RegisterVSync();
+  pThis->event_handler_->VSync(fd, sequence, tv_sec, tv_usec, data);
+  if(!pThis->vbl_pending_) {
+    pthread_cond_signal(&pThis->vbl_cond_);
+  }
+  pthread_mutex_unlock(&pThis->vbl_mutex_);
 }
 
 void HWEventsDRM::PFlipHandlerCallback(int fd, unsigned int sequence, unsigned int tv_sec,
                                        unsigned int tv_usec, void *data) {
-  reinterpret_cast<HWEventsDRM *>(data)->event_handler_->PFlip(fd, sequence, tv_sec, tv_usec, data);
+  HWEventsDRM *pThis = reinterpret_cast<HWEventsDRM *>(data);
+  pthread_mutex_lock(&pThis->vbl_mutex_);
+  pThis->event_handler_->PFlip(fd, sequence, tv_sec, tv_usec, data);
+  pthread_mutex_unlock(&pThis->vbl_mutex_);
 }
 
 void HWEventsDRM::HandleIdleTimeout(char *data) {
