@@ -14,6 +14,10 @@ LOCAL_HEADER_LIBRARIES        := display_headers
 LOCAL_CFLAGS                  := -Wno-missing-field-initializers -Wno-unused-parameter \
                                  -std=c++11 -fcolor-diagnostics\
                                  -DLOG_TAG=\"SDM\" $(common_flags)
+
+ifeq ($(TARGET_EXCLUDES_DISPLAY_PP), true)
+LOCAL_CFLAGS                  += -DEXCLUDE_DISPLAY_PP
+endif
 LOCAL_CLANG                   := true
 
 LOCAL_SHARED_LIBRARIES        := libsdmcore libqservice libbinder libhardware libhardware_legacy \
