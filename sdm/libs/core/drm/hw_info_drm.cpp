@@ -290,6 +290,7 @@ void HWInfoDRM::GetHWPlanesInfo(HWResourceInfo *hw_resource) {
         name = "RGB";
         pipe_caps.type = kPipeTypeRGB;
         if (!hw_resource->num_rgb_pipe) {
+          PopulatePipeCaps(pipe_obj.second, hw_resource);
           PopulateSupportedFmts(kHWRGBPipe, pipe_obj.second, hw_resource);
         }
         hw_resource->num_rgb_pipe++;
