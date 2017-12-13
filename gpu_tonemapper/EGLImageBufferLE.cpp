@@ -39,6 +39,13 @@ EGLImageKHR EGLImageBufferLE::create_eglImage(struct gbm_buf_info *gbo_info, voi
                                   (eglGetProcAddress("eglCreateImageKHR"));
 
   EGLint attribs[20];
+  struct gbm_bo *bo = NULL;
+  int i=0;
+
+  bo = gbm_bo_import(gbm_, GBM_BO_IMPORT_GBM_BUF_TYPE, gbo_info,
+                        GBM_BO_USE_SCANOUT|GBM_BO_USE_RENDERING);
+
+  gbm_perform(GBM_PERFORM_GET_SECURE_BUFFER_STATUS, bo, &secure_status);
   //We need to pass wl_resource to create egl image to support TP10_UBWC and NV12 formats in
   // Forward tone mapper
   if(gbo_info->format == GBM_FORMAT_YCbCr_420_TP10_UBWC || gbo_info->format == GBM_FORMAT_NV12) {
@@ -48,9 +55,11 @@ EGLImageKHR EGLImageBufferLE::create_eglImage(struct gbm_buf_info *gbo_info, voi
     fprintf(stderr, "create_eglImage: Invalid wl_resource\n");
     return NULL;
    }
-   attribs[0] = EGL_WAYLAND_PLANE_WL;
-   attribs[1] = 0;
-   attribs[2] = EGL_NONE;
+   attribs[i++] = EGL_WAYLAND_PLANE_WL;
+   attribs[i++] = 0;
+   attribs[i++] = EGL_PROTECTED_CONTENT_EXT;
+   attribs[i++] = secure_status;
+   attribs[i++] = EGL_NONE;
    //TODO: we need to get the wl_resource handle from SdmDisplay::PrepareNormalLayerGeometry
    //to create egl image
    gbm_ret = gbm_perform(GBM_PERFORM_GET_WL_RESOURCE_FROM_GBM_BUF_INFO, gbo_info, &resource);
@@ -67,13 +76,6 @@ EGLImageKHR EGLImageBufferLE::create_eglImage(struct gbm_buf_info *gbo_info, voi
    }
   }
   else {
-   struct gbm_bo *bo = NULL;
-   int i=0;
-
-   bo = gbm_bo_import(gbm_, GBM_BO_IMPORT_GBM_BUF_TYPE, gbo_info,
-                        GBM_BO_USE_SCANOUT|GBM_BO_USE_RENDERING);
-
-   gbm_perform(GBM_PERFORM_GET_SECURE_BUFFER_STATUS, bo, &secure_status);
    attribs[i++] = EGL_WIDTH;
    attribs[i++] = gbm_bo_get_width(bo);
    attribs[i++] = EGL_HEIGHT;
@@ -89,14 +91,15 @@ EGLImageKHR EGLImageBufferLE::create_eglImage(struct gbm_buf_info *gbo_info, voi
    attribs[i++] = EGL_PROTECTED_CONTENT_EXT;
    attribs[i++] = secure_status;
    attribs[i++] = EGL_NONE;
-  // we no longer need the bo
-   if (bo) {
-     gbm_bo_destroy(bo);
-   }
 
    eglImage = create_image(eglGetCurrentDisplay(), (EGLContext)EGL_NO_CONTEXT,
                                            EGL_LINUX_DMA_BUF_EXT, NULL, attribs);
   }
+   // we no longer need the bo
+  if (bo) {
+    gbm_bo_destroy(bo);
+  }
+
   return eglImage;
 }
 
