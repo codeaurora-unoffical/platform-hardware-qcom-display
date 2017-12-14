@@ -677,12 +677,16 @@ int32_t HWCSession::SetPowerMode(hwc2_device_t *device, hwc2_display_t display, 
 // framebuffersurface & bufferqueue for external & tertiary display
   if(display == kFirst && notify == 1) {
      notify = 0;
-     DLOGE("Notify SurfaceFlinger for display kSecondary\n");
-     hwc_session->callbacks_.Hotplug(kSecondary, HWC2::Connection::Connected);
+     if (hwc_session->hwc_display_[kSecondary] != NULL) {
+       DLOGE("Notify SurfaceFlinger for display kSecondary\n");
+       hwc_session->callbacks_.Hotplug(kSecondary, HWC2::Connection::Connected);
+     }
 
 #ifdef ENABLE_THREE_DISPLAYS
-     DLOGE("Notify SurfaceFlinger for display kTertiary\n");
-     hwc_session->callbacks_.Hotplug(kTertiary, HWC2::Connection::Connected);
+     if (hwc_session->hwc_display_[kTertiary] != NULL) {
+       DLOGE("Notify SurfaceFlinger for display kTertiary\n");
+       hwc_session->callbacks_.Hotplug(kTertiary, HWC2::Connection::Connected);
+     }
 #endif
   }
   return ret;
