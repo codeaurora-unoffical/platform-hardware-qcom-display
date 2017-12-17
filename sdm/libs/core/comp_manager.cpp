@@ -454,10 +454,6 @@ void CompManager::ControlPartialUpdate(Handle display_ctx, bool enable) {
   display_comp_ctx->pu_constraints.enable = enable;
 }
 
-void CompManager::AppendDump(char *buffer, uint32_t length) {
-  SCOPE_LOCK(locker_);
-}
-
 DisplayError CompManager::ValidateScaling(const LayerRect &crop, const LayerRect &dst,
                                           bool rotate90) {
   BufferLayout layout = Debug::IsUbwcTiledFrameBuffer() ? kUBWC : kLinear;
@@ -488,6 +484,9 @@ DisplayError CompManager::GetScaleLutConfig(HWScaleLutInfo *lut_info) {
 DisplayError CompManager::SetDetailEnhancerData(Handle display_ctx,
                                                 const DisplayDetailEnhancerData &de_data) {
   SCOPE_LOCK(locker_);
+  if (!hw_res_info_.hw_dest_scalar_info.count) {
+    return kErrorResources;
+  }
 
   DisplayCompositionContext *display_comp_ctx =
                              reinterpret_cast<DisplayCompositionContext *>(display_ctx);

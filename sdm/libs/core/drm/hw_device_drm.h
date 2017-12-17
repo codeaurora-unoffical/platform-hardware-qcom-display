@@ -97,6 +97,7 @@ class HWDeviceDRM : public HWInterface {
   virtual DisplayError GetMixerAttributes(HWMixerAttributes *mixer_attributes);
   virtual void InitializeConfigs();
   virtual DisplayError DumpDebugData() { return kErrorNone; }
+  virtual void PopulateHWPanelInfo();
 
   enum {
     kHWEventVSync,
@@ -113,7 +114,6 @@ class HWDeviceDRM : public HWInterface {
   DisplayError SetStride(HWDeviceType device_type, LayerBufferFormat format, uint32_t width,
                          uint32_t *target);
   DisplayError PopulateDisplayAttributes(uint32_t index);
-  void PopulateHWPanelInfo();
   void GetHWDisplayPortAndMode();
   void GetHWPanelMaxBrightness();
   bool EnableHotPlugDetection(int enable);
@@ -121,7 +121,7 @@ class HWDeviceDRM : public HWInterface {
   void SetSolidfillStages();
   void AddSolidfillStage(const HWSolidfillStage &sf, uint32_t plane_alpha);
   void SetBlending(const LayerBlending &source, sde_drm::DRMBlendType *target);
-  void SetSrcConfig(const LayerBuffer &input_buffer, uint32_t *config);
+  void SetSrcConfig(const LayerBuffer &input_buffer, const HWRotatorMode &mode, uint32_t *config);
   void SelectCscType(const LayerBuffer &input_buffer, sde_drm::DRMCscType *type);
   void SetRect(const LayerRect &source, sde_drm::DRMRect *target);
   void SetRotation(LayerTransform transform, const HWRotatorMode &mode, uint32_t* rot_bit_mask);
@@ -183,7 +183,6 @@ class HWDeviceDRM : public HWInterface {
   std::vector<sde_drm::DRMSolidfillStage> solid_fills_ {};
   bool resolution_switch_enabled_ = false;
   uint32_t vrefresh_ = 0;
-  bool switch_mode_ = false;
   bool autorefresh_ = false;
 };
 

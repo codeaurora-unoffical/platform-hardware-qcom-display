@@ -396,6 +396,9 @@ int HWCDisplay::Deinit() {
   }
 
   delete client_target_;
+  for (auto hwc_layer : layer_set_) {
+    delete hwc_layer;
+  }
 
   if (color_mode_) {
     color_mode_->DeInit();
@@ -457,6 +460,10 @@ void HWCDisplay::BuildLayerStack() {
   metadata_refresh_rate_ = 0;
   auto working_primaries = ColorPrimaries_BT709_5;
   bool secure_display_active = false;
+  layer_stack_.flags.animating = animating_;
+
+  uint32_t color_mode_count = 0;
+  display_intf_->GetColorModeCount(&color_mode_count);
 
   // Add one layer for fb target
   // TODO(user): Add blit target layers
@@ -530,7 +537,7 @@ void HWCDisplay::BuildLayerStack() {
     bool hdr_layer = layer->input_buffer.color_metadata.colorPrimaries == ColorPrimaries_BT2020 &&
                      (layer->input_buffer.color_metadata.transfer == Transfer_SMPTE_ST2084 ||
                      layer->input_buffer.color_metadata.transfer == Transfer_HLG);
-    if (hdr_layer && !disable_hdr_handling_) {
+    if (hdr_layer && !disable_hdr_handling_ && color_mode_count) {
       // dont honor HDR when its handling is disabled
       layer->input_buffer.flags.hdr = true;
       layer_stack_.flags.hdr_present = true;
@@ -539,8 +546,11 @@ void HWCDisplay::BuildLayerStack() {
     // TODO(user): Move to a getter if this is needed at other places
     hwc_rect_t scaled_display_frame = {INT(layer->dst_rect.left), INT(layer->dst_rect.top),
                                        INT(layer->dst_rect.right), INT(layer->dst_rect.bottom)};
-    ApplyScanAdjustment(&scaled_display_frame);
+    if (hwc_layer->GetGeometryChanges() & kDisplayFrame) {
+      ApplyScanAdjustment(&scaled_display_frame);
+    }
     hwc_layer->SetLayerDisplayFrame(scaled_display_frame);
+    hwc_layer->ResetPerFrameData();
     // SDM requires these details even for solid fill
     if (layer->flags.solid_fill) {
       LayerBuffer *layer_buffer = &layer->input_buffer;
@@ -1454,6 +1464,9 @@ LayerBufferFormat HWCDisplay::GetSDMFormat(const int32_t &source, const int flag
     case HAL_PIXEL_FORMAT_YCbCr_420_P010_UBWC:
       format = kFormatYCbCr420P010Ubwc;
       break;
+    case HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS:
+      format = kFormatYCbCr420P010Venus;
+      break;
     default:
       DLOGW("Unsupported format type = %d", source);
       return kFormatInvalid;
@@ -1618,10 +1631,13 @@ int HWCDisplay::SetFrameBufferResolution(uint32_t x_pixels, uint32_t y_pixels) {
 
   // Create rects to represent the new source and destination crops
   LayerRect crop = LayerRect(0, 0, FLOAT(x_pixels), FLOAT(y_pixels));
-  LayerRect dst = LayerRect(0, 0, FLOAT(fb_config.x_pixels), FLOAT(fb_config.y_pixels));
+  hwc_rect_t scaled_display_frame = {0, 0, INT(x_pixels), INT(y_pixels)};
+  ApplyScanAdjustment(&scaled_display_frame);
+  client_target_->SetLayerDisplayFrame(scaled_display_frame);
+  client_target_->ResetPerFrameData();
+
   auto client_target_layer = client_target_->GetSDMLayer();
   client_target_layer->src_rect = crop;
-  client_target_layer->dst_rect = dst;
 
   int aligned_width;
   int aligned_height;
@@ -1985,7 +2001,7 @@ void HWCDisplay::ClearRequestFlags() {
 
 std::string HWCDisplay::Dump() {
   std::ostringstream os;
-  os << "-------------------------------" << std::endl;
+  os << "\n------------HWC----------------\n";
   os << "HWC2 display_id: " << id_ << std::endl;
   for (auto layer : layer_set_) {
     auto sdm_layer = layer->GetSDMLayer();
@@ -2005,10 +2021,19 @@ std::string HWCDisplay::Dump() {
     os << " buffer_id: " << std::hex << "0x" << sdm_layer->input_buffer.buffer_id << std::dec
        << std::endl;
   }
+
   if (color_mode_) {
+    os << "\n----------Color Modes---------\n";
     color_mode_->Dump(&os);
   }
-  os << "-------------------------------" << std::endl;
+
+  if (display_intf_) {
+    os << "\n------------SDM----------------\n";
+    os << display_intf_->Dump();
+  }
+
+  os << "\n";
+
   return os.str();
 }
 

@@ -191,10 +191,13 @@ DisplayError HWInfoDRM::GetHWResourceInfo(HWResourceInfo *hw_resource) {
   hw_resource->has_dyn_bw_support = false;
   hw_resource->has_qseed3 = false;
   hw_resource->has_concurrent_writeback = false;
-  hw_resource->has_hdr = true;
 
   hw_resource->hw_version = SDEVERSION(4, 0, 1);
-  hw_resource->hw_revision = 0;
+  // TODO(user): On FB driver hw_revision comprises of major version, minor version and hw_revision.
+  // On DRM driver, hw_revision is deprecated and hw_version comprises major version, minor version
+  // and hw_revision information. Since QDCM uses hw_revision variable populate hw_revision with
+  // hw_version. Remove hw_revision variable when FB code is deperecated.
+  hw_resource->hw_revision = SDEVERSION(4, 0, 1);
 
   // TODO(user): Deprecate
   hw_resource->max_mixer_width = 2560;
@@ -274,6 +277,7 @@ DisplayError HWInfoDRM::GetHWResourceInfo(HWResourceInfo *hw_resource) {
 void HWInfoDRM::GetSystemInfo(HWResourceInfo *hw_resource) {
   DRMCrtcInfo info;
   drm_mgr_intf_->GetCrtcInfo(0 /* system_info */, &info);
+  hw_resource->has_hdr = info.has_hdr;
   hw_resource->is_src_split = info.has_src_split;
   hw_resource->has_qseed3 = (info.qseed_version == sde_drm::QSEEDVersion::V3);
   hw_resource->num_blending_stages = info.max_blend_stages;
@@ -293,6 +297,11 @@ void HWInfoDRM::GetSystemInfo(HWResourceInfo *hw_resource) {
   hw_resource->max_bandwidth_high = info.max_bandwidth_high / kKiloUnit;
   hw_resource->max_sde_clk = info.max_sde_clk;
   hw_resource->hw_version = info.hw_version;
+  // TODO(user): On FB driver hw_revision comprises of major version, minor version and hw_revision.
+  // On DRM driver, hw_revision is deprecated and hw_version comprises major version, minor version
+  // and hw_revision information. Since QDCM uses hw_revision variable populate hw_revision with
+  // hw_version. Remove hw_revision variable when FB code is deperecated.
+  hw_resource->hw_revision = info.hw_version;
 
   std::vector<LayerBufferFormat> sdm_format;
   for (auto &it : info.comp_ratio_rt_map) {
@@ -482,8 +491,9 @@ void HWInfoDRM::GetSDMFormat(uint32_t v4l2_format, LayerBufferFormat *sdm_format
     case SDE_PIX_FMT_RGBA_1010102_UBWC: *sdm_format = kFormatRGBA1010102Ubwc;          break;
     case SDE_PIX_FMT_RGBX_1010102_UBWC: *sdm_format = kFormatRGBX1010102Ubwc;          break;
     case SDE_PIX_FMT_Y_CBCR_H2V2_P010:  *sdm_format = kFormatYCbCr420P010;             break;
-    case SDE_PIX_FMT_Y_CBCR_H2V2_TP10_UBWC: *sdm_format = kFormatYCbCr420TP10Ubwc;     break;
-    case SDE_PIX_FMT_Y_CBCR_H2V2_P010_UBWC: *sdm_format = kFormatYCbCr420P010Ubwc;     break;
+    case SDE_PIX_FMT_Y_CBCR_H2V2_TP10_UBWC:  *sdm_format = kFormatYCbCr420TP10Ubwc;     break;
+    case SDE_PIX_FMT_Y_CBCR_H2V2_P010_UBWC:  *sdm_format = kFormatYCbCr420P010Ubwc;     break;
+    case SDE_PIX_FMT_Y_CBCR_H2V2_P010_VENUS: *sdm_format = kFormatYCbCr420P010Venus;    break;
     default: *sdm_format = kFormatInvalid;
   }
 }
@@ -652,7 +662,8 @@ void HWInfoDRM::GetSDMFormat(uint32_t drm_format, uint64_t drm_format_modifier,
       } else if (drm_format_modifier == DRM_FORMAT_MOD_QCOM_COMPRESSED) {
          fmts.push_back(kFormatYCbCr420SPVenusUbwc);
       } else if (drm_format_modifier == DRM_FORMAT_MOD_QCOM_DX) {
-         fmts.push_back(kFormatYCbCr420P010);
+        fmts.push_back(kFormatYCbCr420P010);
+        fmts.push_back(kFormatYCbCr420P010Venus);
       } else {
          fmts.push_back(kFormatYCbCr420SemiPlanarVenus);
          fmts.push_back(kFormatYCbCr420SemiPlanar);
