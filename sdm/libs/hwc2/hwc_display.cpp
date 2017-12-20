@@ -122,6 +122,16 @@ HWC2::Error HWCColorMode::SetColorMode(android_color_mode_t mode) {
   return status;
 }
 
+HWC2::Error HWCColorMode::RestoreColorTransform() {
+  DisplayError error = display_intf_->SetColorTransform(kColorTransformMatrixCount, color_matrix_);
+  if (error != kErrorNone) {
+    DLOGE("Failed to set Color Transform");
+    return HWC2::Error::BadParameter;
+  }
+
+  return HWC2::Error::None;
+}
+
 HWC2::Error HWCColorMode::SetColorTransform(const float *matrix, android_color_transform_t hint) {
   if (!matrix || (hint < HAL_COLOR_TRANSFORM_IDENTITY ||
       hint > HAL_COLOR_TRANSFORM_CORRECT_TRITANOPIA)) {
@@ -725,11 +735,13 @@ HWC2::Error HWCDisplay::SetPowerMode(HWC2::PowerMode mode) {
 HWC2::Error HWCDisplay::GetClientTargetSupport(uint32_t width, uint32_t height, int32_t format,
                                                int32_t dataspace) {
   ColorMetaData color_metadata = {};
-  LayerBufferFormat sdm_format = GetSDMFormat(format, 0);
-  GetColorPrimary(dataspace, &(color_metadata.colorPrimaries));
-  GetTransfer(dataspace, &(color_metadata.transfer));
-  GetRange(dataspace, &(color_metadata.range));
+  if (dataspace != HAL_DATASPACE_UNKNOWN) {
+    GetColorPrimary(dataspace, &(color_metadata.colorPrimaries));
+    GetTransfer(dataspace, &(color_metadata.transfer));
+    GetRange(dataspace, &(color_metadata.range));
+  }
 
+  LayerBufferFormat sdm_format = GetSDMFormat(format, 0);
   if (display_intf_->GetClientTargetSupport(width, height, sdm_format,
                                             color_metadata) != kErrorNone) {
     return HWC2::Error::Unsupported;
@@ -1417,6 +1429,7 @@ void HWCDisplay::DumpInputBuffers() {
     return;
   }
 
+  DLOGI("dump_frame_count %d dump_input_layers %d", dump_frame_count_, dump_input_layers_);
   snprintf(dir_path, sizeof(dir_path), "%s/frame_dump_%s", HWCDebugHandler::DumpDir(),
            GetDisplayString());
 
@@ -1445,22 +1458,43 @@ void HWCDisplay::DumpInputBuffers() {
       }
     }
 
-    if (pvt_handle && pvt_handle->base) {
-      char dump_file_name[PATH_MAX];
-      size_t result = 0;
+    DLOGI("Dump layer[%d] of %d pvt_handle %x pvt_handle->base %x", i, layer_stack_.layers.size(),
+          pvt_handle, pvt_handle? pvt_handle->base : 0);
 
-      snprintf(dump_file_name, sizeof(dump_file_name), "%s/input_layer%d_%dx%d_%s_frame%d.raw",
-               dir_path, i, pvt_handle->width, pvt_handle->height,
-               qdutils::GetHALPixelFormatString(pvt_handle->format), dump_frame_index_);
-
-      FILE *fp = fopen(dump_file_name, "w+");
-      if (fp) {
-        result = fwrite(reinterpret_cast<void *>(pvt_handle->base), pvt_handle->size, 1, fp);
-        fclose(fp);
-      }
-
-      DLOGI("Frame Dump %s: is %s", dump_file_name, result ? "Successful" : "Failed");
+    if (!pvt_handle) {
+      DLOGE("Buffer handle is null");
+      return;
     }
+
+    if (!pvt_handle->base) {
+      DisplayError error = buffer_allocator_->MapBuffer(pvt_handle, -1);
+      if (error != kErrorNone) {
+        DLOGE("Failed to map buffer, error = %d", error);
+        return;
+      }
+    }
+
+    char dump_file_name[PATH_MAX];
+    size_t result = 0;
+
+    snprintf(dump_file_name, sizeof(dump_file_name), "%s/input_layer%d_%dx%d_%s_frame%d.raw",
+             dir_path, i, pvt_handle->width, pvt_handle->height,
+             qdutils::GetHALPixelFormatString(pvt_handle->format), dump_frame_index_);
+
+    FILE *fp = fopen(dump_file_name, "w+");
+    if (fp) {
+      result = fwrite(reinterpret_cast<void *>(pvt_handle->base), pvt_handle->size, 1, fp);
+      fclose(fp);
+    }
+
+    int release_fence = -1;
+    DisplayError error = buffer_allocator_->UnmapBuffer(pvt_handle, &release_fence);
+    if (error != kErrorNone) {
+      DLOGE("Failed to unmap buffer, error = %d", error);
+      return;
+    }
+
+    DLOGI("Frame Dump %s: is %s", dump_file_name, result ? "Successful" : "Failed");
   }
 }
 
