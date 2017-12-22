@@ -211,6 +211,9 @@ static void GetDRMFormat(LayerBufferFormat format, uint32_t *drm_format,
     case kFormatYCrCb420PlanarStride16:
       *drm_format = DRM_FORMAT_YVU420;
       break;
+    case kFormatCbYCrY422H2V1Packed:
+      *drm_format = DRM_FORMAT_UYVY;
+      break;
     default:
       DLOGW("Unsupported format %s", GetFormatString(format));
   }

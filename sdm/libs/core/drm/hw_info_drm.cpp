@@ -606,6 +606,9 @@ void HWInfoDRM::GetSDMFormat(uint32_t drm_format, uint64_t drm_format_modifier,
     case DRM_FORMAT_NV16:
       fmts.push_back(kFormatYCbCr422H2V1SemiPlanar);
       break;
+    case DRM_FORMAT_UYVY:
+      fmts.push_back(kFormatCbYCrY422H2V1Packed);
+      break;
     default:
       break;
   }
