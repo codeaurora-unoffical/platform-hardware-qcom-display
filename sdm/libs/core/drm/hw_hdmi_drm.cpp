@@ -155,6 +155,10 @@ DisplayError HWHDMIDRM::GetDisplayAttributes(uint32_t index,
     res_mgr->GetMode(&mode);
     res_mgr->GetDisplayDimInMM(&mm_width, &mm_height);
   } else {
+    if (index >= connector_info_.modes.size()) {
+      DLOGE("Invalid mode index %d mode size %d", index, UINT32(connector_info_.modes.size()));
+      return kErrorResources;
+    }
     mode = connector_info_.modes[index];
     mm_width = mode.hdisplay;
     mm_height = mode.vdisplay;
