@@ -89,7 +89,7 @@ static int GetDrmMasterFd() {
 //-----------------------------------------------------------------------------
 // initialize GL
 //
-void* engine_initialize()
+void* engine_initialize(bool isSecure)
 //-----------------------------------------------------------------------------
 {
   EngineContext* engineContext = new EngineContext();
@@ -119,11 +119,20 @@ void* engine_initialize()
   EGL(eglChooseConfig(engineContext->eglDisplay, eglConfigAttribList, &eglConfig, 1, &numConfig));
 
   // context
-  EGLint eglContextAttribList[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
+  EGLint eglContextAttribList[] = {EGL_CONTEXT_CLIENT_VERSION, 3,
+                                   isSecure ? EGL_PROTECTED_CONTENT_EXT : EGL_NONE,
+                                   isSecure ? EGL_TRUE : EGL_NONE,
+                                   EGL_NONE};
+
   engineContext->eglContext = eglCreateContext(engineContext->eglDisplay, eglConfig, NULL, eglContextAttribList);
 
   // surface
-  EGLint eglSurfaceAttribList[] = {EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_NONE, EGL_NONE};
+  EGLint eglSurfaceAttribList[] = {EGL_WIDTH, 1,
+                                   EGL_HEIGHT, 1,
+                                   isSecure ? EGL_PROTECTED_CONTENT_EXT : EGL_NONE,
+                                   isSecure ? EGL_TRUE : EGL_NONE,
+                                   EGL_NONE};
+
   engineContext->eglSurface = eglCreatePbufferSurface(engineContext->eglDisplay, eglConfig, eglSurfaceAttribList);
 
   eglMakeCurrent(engineContext->eglDisplay, engineContext->eglSurface, engineContext->eglSurface, engineContext->eglContext);
@@ -352,7 +361,6 @@ int engine_blit(int srcFenceFd)
   GL(glEnableVertexAttribArray(0));
   GL(glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, fullscreen_vertices));
   GL(glDrawArrays(GL_TRIANGLES, 0, 3));
-  fd = CreateNativeFence();
   if (perf_time_profiler)
    gettimeofday(&blit_start, NULL);
   //Currently, Fence method is not supported in LE.
