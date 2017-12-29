@@ -44,9 +44,10 @@ using ::android::hardware::Void;
 void HWCSession::StartServices() {
   status_t status = IDisplayConfig::registerAsService();
   if (status != OK) {
-    DLOGW("Could not register IDisplayConfig as service (%d).", status);
+    ALOGW("%s::%s: Could not register IDisplayConfig as service (%d).",
+          __CLASS__, __FUNCTION__, status);
   } else {
-    DLOGI("IDisplayConfig service registration completed.");
+    ALOGI("%s::%s: IDisplayConfig service registration completed.", __CLASS__, __FUNCTION__);
   }
 }
 
@@ -234,21 +235,24 @@ Return<void> HWCSession::getDisplayAttributes(uint32_t configIndex,
   IDisplayConfig::DisplayAttributes display_attributes = {};
   int disp_id = MapDisplayType(dpy);
 
-  SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_id]);
-  if (disp_id >= 0 && hwc_display_[disp_id]) {
-    DisplayConfigVariableInfo hwc_display_attributes;
-    error = hwc_display_[disp_id]->GetDisplayAttributesForConfig(static_cast<int>(configIndex),
-                                                                 &hwc_display_attributes);
-    if (!error) {
-      display_attributes.vsyncPeriod = hwc_display_attributes.vsync_period_ns;
-      display_attributes.xRes = hwc_display_attributes.x_pixels;
-      display_attributes.yRes = hwc_display_attributes.y_pixels;
-      display_attributes.xDpi = hwc_display_attributes.x_dpi;
-      display_attributes.yDpi = hwc_display_attributes.y_dpi;
-      display_attributes.panelType = IDisplayConfig::DisplayPortType::DISPLAY_PORT_DEFAULT;
-      display_attributes.isYuv = hwc_display_attributes.is_yuv;
+  if (disp_id >= HWC_DISPLAY_PRIMARY && disp_id < HWC_NUM_DISPLAY_TYPES) {
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[disp_id]);
+    if (hwc_display_[disp_id]) {
+      DisplayConfigVariableInfo hwc_display_attributes;
+      error = hwc_display_[disp_id]->GetDisplayAttributesForConfig(static_cast<int>(configIndex),
+                                                                   &hwc_display_attributes);
+      if (!error) {
+        display_attributes.vsyncPeriod = hwc_display_attributes.vsync_period_ns;
+        display_attributes.xRes = hwc_display_attributes.x_pixels;
+        display_attributes.yRes = hwc_display_attributes.y_pixels;
+        display_attributes.xDpi = hwc_display_attributes.x_dpi;
+        display_attributes.yDpi = hwc_display_attributes.y_dpi;
+        display_attributes.panelType = IDisplayConfig::DisplayPortType::DISPLAY_PORT_DEFAULT;
+        display_attributes.isYuv = hwc_display_attributes.is_yuv;
+      }
     }
   }
+  _hidl_cb(error, display_attributes);
 
   return Void();
 }

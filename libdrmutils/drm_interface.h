@@ -304,6 +304,12 @@ enum struct DRMOps {
    *      uint32_t - CRTC ID
    */
   CONNECTOR_SET_CRTC,
+  /*
+   * Op: Sets connector hdr metadata
+   * Arg: uint32_t - Connector ID
+   *      drm_msm_ext_hdr_metadata - hdr_metadata
+   */
+  CONNECTOR_SET_HDR_METADATA,
 };
 
 enum struct DRMRotation {
@@ -370,6 +376,7 @@ enum struct SmartDMARevision {
 /* Per CRTC Resource Info*/
 struct DRMCrtcInfo {
   bool has_src_split;
+  bool has_hdr;
   uint32_t max_blend_stages;
   uint32_t max_solidfill_stages;
   QSEEDVersion qseed_version;
@@ -394,6 +401,7 @@ struct DRMCrtcInfo {
   uint32_t max_dest_scaler_input_width = 0;
   uint32_t max_dest_scaler_output_width = 0;
   uint32_t max_dest_scale_up = 1;
+  uint32_t min_prefill_lines = 0;
 };
 
 enum struct DRMPlaneType {
@@ -443,22 +451,10 @@ enum struct DRMPanelMode {
   COMMAND,
 };
 
-/* Per Connector Info*/
-struct DRMConnectorInfo {
-  uint32_t mmWidth;
-  uint32_t mmHeight;
-  uint32_t type;
-  std::vector<drmModeModeInfo> modes;
+/* Per mode info */
+struct DRMModeInfo {
+  drmModeModeInfo mode;
   DRMTopology topology;
-  std::string panel_name;
-  DRMPanelMode panel_mode;
-  bool is_primary;
-  // Valid only if DRMPanelMode is VIDEO
-  bool dynamic_fps;
-  // FourCC format enum and modifier
-  std::vector<std::pair<uint32_t, uint64_t>> formats_supported;
-  // Valid only if type is DRM_MODE_CONNECTOR_VIRTUAL
-  uint32_t max_linewidth;
   // Valid only if mode is command
   int num_roi;
   int xstart;
@@ -468,9 +464,27 @@ struct DRMConnectorInfo {
   int wmin;
   int hmin;
   bool roi_merge;
+};
+
+/* Per Connector Info*/
+struct DRMConnectorInfo {
+  uint32_t mmWidth;
+  uint32_t mmHeight;
+  uint32_t type;
+  std::vector<DRMModeInfo> modes;
+  std::string panel_name;
+  DRMPanelMode panel_mode;
+  bool is_primary;
+  // Valid only if DRMPanelMode is VIDEO
+  bool dynamic_fps;
+  // FourCC format enum and modifier
+  std::vector<std::pair<uint32_t, uint64_t>> formats_supported;
+  // Valid only if type is DRM_MODE_CONNECTOR_VIRTUAL
+  uint32_t max_linewidth;
   DRMRotation panel_orientation;
   drm_panel_hdr_properties panel_hdr_prop;
   uint32_t transfer_time_us;
+  drm_msm_ext_hdr_properties ext_hdr_prop;
 };
 
 /* Identifier token for a display */
