@@ -104,6 +104,12 @@ static void GetDRMFormat(LayerBufferFormat format, uint32_t *drm_format,
     case kFormatRGBA8888:
       *drm_format = DRM_FORMAT_ABGR8888;
       break;
+    case kFormatARGB8888:
+      *drm_format = DRM_FORMAT_BGRA8888;
+      break;
+    case kFormatABGR8888:
+      *drm_format = DRM_FORMAT_RGBA8888;
+      break;
     case kFormatRGBA8888Ubwc:
       *drm_format = DRM_FORMAT_ABGR8888;
       *drm_format_modifier = DRM_FORMAT_MOD_QCOM_COMPRESSED;

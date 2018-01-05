@@ -523,6 +523,9 @@ void HWInfoDRM::GetSDMFormat(uint32_t drm_format, uint64_t drm_format_modifier,
     case DRM_FORMAT_BGRA8888:
       fmts.push_back(kFormatARGB8888);
       break;
+    case DRM_FORMAT_RGBA8888:
+      fmts.push_back(kFormatABGR8888);
+      break;
     case DRM_FORMAT_ABGR8888:
       fmts.push_back(drm_format_modifier ? kFormatRGBA8888Ubwc : kFormatRGBA8888);
       break;

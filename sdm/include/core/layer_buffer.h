@@ -54,6 +54,7 @@ enum LayerBufferFormat {
      compatibility.
   */
   kFormatARGB8888,      //!< 8-bits Alpha, Red, Green, Blue interleaved in ARGB order.
+  kFormatABGR8888,      //!< 8-bits Alpha, Blue, Green, Red interleaved in ABGR order.
   kFormatRGBA8888,      //!< 8-bits Red, Green, Blue, Alpha interleaved in RGBA order.
   kFormatBGRA8888,      //!< 8-bits Blue, Green, Red, Alpha interleaved in BGRA order.
   kFormatXRGB8888,      //!< 8-bits Padding, Red, Green, Blue interleaved in XRGB order. No Alpha.

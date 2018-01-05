@@ -73,6 +73,7 @@ bool Is10BitFormat(LayerBufferFormat format) {
 const char *GetFormatString(const LayerBufferFormat &format) {
   switch (format) {
   case kFormatARGB8888:                 return "ARGB_8888";
+  case kFormatABGR8888:                 return "ABGR_8888";
   case kFormatRGBA8888:                 return "RGBA_8888";
   case kFormatBGRA8888:                 return "BGRA_8888";
   case kFormatXRGB8888:                 return "XRGB_8888";
