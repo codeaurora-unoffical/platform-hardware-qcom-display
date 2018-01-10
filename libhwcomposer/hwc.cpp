@@ -974,6 +974,28 @@ int hwc_setBacklightOverride(struct hwc_composer_device_1* dev, int disp,
     return 0;
 }
 
+int hwc_setRegulatorOverride(struct hwc_composer_device_1* dev, int disp,
+        bool value) {
+    hwc_context_t* ctx = (hwc_context_t*)(dev);
+    Locker::Autolock _l(ctx->mDrawLock);
+    if(!validDisplay(disp)) {
+        return -EINVAL;
+    }
+    ALOGD_IF(POWER_MODE_DEBUG, "%s: value %d on display: %d",
+            __FUNCTION__, value, disp);
+    struct msmfb_metadata metadata;
+    memset(&metadata, 0 , sizeof(metadata));
+    metadata.op = metadata_op_secure_reg;
+    metadata.data.sec_reg_on = value;
+    if (ioctl(ctx->dpyAttr[disp].fd, MSMFB_METADATA_SET, &metadata) == -1) {
+        ALOGE("In %s: MSMFB_METADATA_SET failed Err Str = %s",
+                __FUNCTION__, strerror(errno));
+        return -1;
+
+    }
+    return 0;
+}
+
 static int hwc_device_close(struct hw_device_t *dev)
 {
     if(!dev) {
@@ -1018,6 +1040,7 @@ static int hwc_device_open(const struct hw_module_t* module, const char* name,
         dev->device.getActiveConfig     = hwc_getActiveConfig;
         dev->device.setActiveConfig     = hwc_setActiveConfig;
         dev->device.setBacklightOverride = hwc_setBacklightOverride;
+        dev->device.setRegulatorOverride = hwc_setRegulatorOverride;
         *device = &dev->device.common;
         status = 0;
     }
