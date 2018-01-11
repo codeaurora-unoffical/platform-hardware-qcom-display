@@ -337,6 +337,24 @@ struct DRMConnectorInfo {
   std::vector<std::pair<uint32_t, uint64_t>> formats_supported;
   // Valid only if type is DRM_MODE_CONNECTOR_VIRTUAL
   uint32_t max_linewidth;
+
+  DRMConnectorInfo& operator= (const DRMConnectorInfo &rhs) = delete;
+  void clear()
+  {
+    mmWidth=0;
+    mmHeight=0;
+    type=0;
+    hdcp_version=0;
+    modes.clear();
+    topology = DRMTopology::UNKNOWN;
+    hdr_prop = {};
+    hdr_ctrl = {};
+    panel_name.clear();
+    is_primary = false;
+    dynamic_fps = false;
+    formats_supported.clear();
+    max_linewidth = 0;
+  }
 };
 
 /* Identifier token for a display */
