@@ -673,17 +673,17 @@ HWC2::Error HWCDisplay::GetDisplayName(uint32_t *out_size, char *out_name) {
   } else {
     std::string name;
     switch (id_) {
-      case HWC_DISPLAY_PRIMARY:
+      case kFirst:
         name = "Primary Display";
         break;
-      case HWC_DISPLAY_EXTERNAL:
+      case kSecondary:
         name = "External Display";
         break;
-      case HWC_DISPLAY_VIRTUAL:
-        name = "Virtual Display";
+      case kTertiary:
+        name = "Tertiary Display";
         break;
       default:
-        name = "Unknown";
+        name = "Virtual Display";
         break;
     }
     std::strncpy(out_name, name.c_str(), name.size());
@@ -694,7 +694,7 @@ HWC2::Error HWCDisplay::GetDisplayName(uint32_t *out_size, char *out_name) {
 
 HWC2::Error HWCDisplay::GetDisplayType(int32_t *out_type) {
   if (out_type != nullptr) {
-    if (id_ == HWC_DISPLAY_VIRTUAL) {
+    if (id_ == kOrderMax) {
       *out_type = HWC2_DISPLAY_TYPE_VIRTUAL;
     } else {
       *out_type = HWC2_DISPLAY_TYPE_PHYSICAL;
