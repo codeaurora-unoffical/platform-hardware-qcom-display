@@ -134,6 +134,7 @@ HWInfoDRM::~HWInfoDRM() {
 
   DRMLibLoader::Destroy();
   DRMMaster::DestroyInstance();
+  delete DRMLogger::Get();
 }
 
 DisplayError HWInfoDRM::GetDynamicBWLimits(HWResourceInfo *hw_resource) {
