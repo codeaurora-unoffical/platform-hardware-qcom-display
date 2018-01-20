@@ -41,6 +41,7 @@
 #include <core/display_interface.h>
 #include <linux/msm_mdp_ext.h>
 #include <utils/rect.h>
+#include <gralloc_priv.h>
 
 #include <string>
 
@@ -137,6 +138,32 @@ bool HWPrimary::GetCurrentModeFromSysfs(size_t *curr_x_pixels, size_t *curr_y_pi
   }
 
   return ret;
+}
+
+static int getFBformat(fb_var_screeninfo vinfo) {
+    int fbformat = HAL_PIXEL_FORMAT_RGBA_8888;
+
+#ifdef GET_FRAMEBUFFER_FORMAT_FROM_HWC
+    // Here, we are adding the formats that are supported by both GPU and MDP.
+    // The formats that fall in this category are RGBA_8888, RGB_565, RGB_888
+    switch(vinfo.bits_per_pixel) {
+        case 16:
+            fbformat = HAL_PIXEL_FORMAT_RGB_565;
+            break;
+        case 24:
+            if ((vinfo.transp.offset == 0) && (vinfo.transp.length == 0))
+                fbformat = HAL_PIXEL_FORMAT_RGB_888;
+            break;
+        case 32:
+            if ((vinfo.red.offset == 0) && (vinfo.green.offset == 8) &&
+                    (vinfo.blue.offset == 16) && (vinfo.transp.offset == 24))
+                fbformat = HAL_PIXEL_FORMAT_RGBA_8888;
+            break;
+        default:
+            fbformat = HAL_PIXEL_FORMAT_RGBA_8888;
+    }
+#endif
+    return fbformat;
 }
 
 void HWPrimary::InitializeConfigs() {
@@ -238,6 +265,7 @@ DisplayError HWPrimary::PopulateDisplayAttributes() {
 
   display_attributes_.x_pixels = var_screeninfo.xres;
   display_attributes_.y_pixels = var_screeninfo.yres;
+  display_attributes_.fbformat = getFBformat(var_screeninfo);
   display_attributes_.v_front_porch = var_screeninfo.lower_margin;
   display_attributes_.v_back_porch = var_screeninfo.upper_margin;
   display_attributes_.v_pulse_width = var_screeninfo.vsync_len;
