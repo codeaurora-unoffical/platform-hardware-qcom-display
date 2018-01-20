@@ -22,6 +22,10 @@ ifeq ($(TARGET_USES_DRM_PP),true)
     LOCAL_CFLAGS              += -DPP_DRM_ENABLE
 endif
 
+ifeq ($(GET_FRAMEBUFFER_FORMAT_FROM_HWC),true)
+     LOCAL_CFLAGS += -DGET_FRAMEBUFFER_FORMAT_FROM_HWC
+endif
+
 LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps) $(kernel_deps)
 LOCAL_SRC_FILES               := core_interface.cpp \
                                  core_impl.cpp \

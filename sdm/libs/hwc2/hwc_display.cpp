@@ -807,6 +807,9 @@ HWC2::Error HWCDisplay::GetDisplayAttribute(hwc2_config_t config, HWC2::Attribut
     case HWC2::Attribute::DpiY:
       *out_value = INT32(variable_config.y_dpi * 1000.0f);
       break;
+    case HWC2::Attribute::FbFormat:
+      *out_value = INT32(variable_config.fbformat);
+      break;
     default:
       DLOGW("Spurious attribute type = %s", to_string(attribute).c_str());
       *out_value = -1;
@@ -1588,7 +1591,7 @@ int HWCDisplay::SetFrameBufferResolution(uint32_t x_pixels, uint32_t y_pixels) {
   int aligned_width;
   int aligned_height;
   uint32_t usage = GRALLOC_USAGE_HW_FB;
-  int format = HAL_PIXEL_FORMAT_RGBA_8888;
+  int format = fb_config.fbformat;;
   int ubwc_disabled = 0;
   int flags = 0;
 
