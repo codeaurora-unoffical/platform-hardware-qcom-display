@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -36,6 +36,7 @@
 #include <set>
 #include "core/buffer_allocator.h"
 #include "hwc_buffer_allocator.h"
+#include "hwc_sideband.h"
 
 namespace sdm {
 
@@ -61,6 +62,7 @@ class HWCLayer {
   uint32_t GetZ() const { return z_; }
   hwc2_layer_t GetId() const { return id_; }
   Layer *GetSDMLayer() { return layer_; }
+  android::sp<SidebandStreamBuf> mSidebandStreamBuffer;
 
   HWC2::Error SetLayerBlendMode(HWC2::BlendMode mode);
   HWC2::Error SetLayerBuffer(buffer_handle_t buffer, int32_t acquire_fence);
@@ -74,6 +76,7 @@ class HWCLayer {
   HWC2::Error SetLayerTransform(HWC2::Transform transform);
   HWC2::Error SetLayerVisibleRegion(hwc_region_t visible);
   HWC2::Error SetLayerZOrder(uint32_t z);
+  HWC2::Error SetLayerSidebandStream(android::sp<SidebandStreamBuf> buf);
   void SetComposition(const LayerComposition &sdm_composition);
   HWC2::Composition GetClientRequestedCompositionType() { return client_requested_; }
   void UpdateClientCompositionType(HWC2::Composition type) { client_requested_ = type; }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -117,6 +117,8 @@ class HWCSession : hwc2_device_t, public IDisplayConfig, public qClient::BnQClie
                               int32_t /*android_color_mode_t*/ int_mode);
   static int32_t SetColorTransform(hwc2_device_t *device, hwc2_display_t display,
                                    const float *matrix, int32_t /*android_color_transform_t*/ hint);
+  static int32_t SetLayerSidebandStream(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
+                                  buffer_handle_t stream);
 
  private:
   static const int kExternalConnectionTimeoutMs = 500;
@@ -218,6 +220,8 @@ class HWCSession : hwc2_device_t, public IDisplayConfig, public qClient::BnQClie
   qService::QService *qservice_ = NULL;
   HWCSocketHandler socket_handler_;
   Locker callbacks_lock_;
+  friend class HWCSidebandStream;
+  std::map<int32_t, HWCSidebandStream*> mSidebandStreamList;
 };
 
 }  // namespace sdm
