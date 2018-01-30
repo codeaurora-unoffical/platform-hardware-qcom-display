@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -119,7 +119,7 @@ HWC2::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, int32_t acquire_fen
   layer_buffer->unaligned_height = UINT32(handle->unaligned_height);
 
   layer_buffer->format = GetSDMFormat(handle->format, handle->flags);
-  if (SetMetaData(const_cast<private_handle_t *>(handle), layer_) != kErrorNone) {
+  if (!layer_buffer->flags.sideband && SetMetaData(const_cast<private_handle_t *>(handle), layer_) != kErrorNone) {
     return HWC2::Error::BadLayer;
   }
 
@@ -205,6 +205,8 @@ HWC2::Error HWCLayer::SetLayerCompositionType(HWC2::Composition type) {
       break;
     case HWC2::Composition::Cursor:
       break;
+    case HWC2::Composition::Sideband:
+      break;
     case HWC2::Composition::Invalid:
       return HWC2::Error::BadParameter;
     default:
@@ -239,6 +241,27 @@ HWC2::Error HWCLayer::SetLayerPlaneAlpha(float alpha) {
     geometry_changes_ |= kPlaneAlpha;
     layer_->plane_alpha = plane_alpha;
   }
+
+  return HWC2::Error::None;
+}
+
+HWC2::Error HWCLayer::SetLayerSidebandStream(android::sp<SidebandStreamBuf> buf) {
+  private_handle_t * handle = buf->mSBHandle;
+
+  // mark buffer as sideband
+  layer_->input_buffer.flags.sideband = true;
+
+  // setup layer buffer
+  SetLayerBuffer(handle, -1);
+
+  // no SetLayerSourceCrop for sideband stream layer
+  layer_->src_rect.left = 0;
+  layer_->src_rect.top = 0;
+  layer_->src_rect.right = FLOAT(handle->width);
+  layer_->src_rect.bottom = FLOAT(handle->height);
+
+  // bookeep current buffer
+  mSidebandStreamBuffer = buf;
 
   return HWC2::Error::None;
 }
@@ -687,6 +710,9 @@ void HWCLayer::SetComposition(const LayerComposition &sdm_composition) {
       break;
     case kCompositionHWCursor:
       hwc_composition = HWC2::Composition::Cursor;
+      break;
+    case kCompositionSideband:
+      hwc_composition = HWC2::Composition::Sideband;
       break;
     default:
       hwc_composition = HWC2::Composition::Device;

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2016, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -123,6 +123,8 @@ enum LayerComposition {
                             //!< then this would be ignored.
                             //!< Blit target layers shall be placed after GPUTarget in the layer
                             //!< stack.
+
+  kCompositionSideband,     //!< Sideband layer
 };
 
 /*! @brief This structure defines rotation and flip values for a display layer.
@@ -172,6 +174,9 @@ struct LayerFlags {
 
       uint32_t single_buffer : 1;  //!< This flag shall be set by client to indicate that the layer
                                    //!< uses only a single buffer that will not be swapped out
+
+      uint32_t sideband : 1;  //!< This flag shall be set by client to indicate that this layer
+                              //!< is a sideband layer
     };
 
     uint32_t flags = 0;       //!< For initialization purpose only.
@@ -251,6 +256,8 @@ struct LayerStackFlags {
                                            // This applies only to primary displays currently
 
       uint32_t hdr_present : 1;  //!< Set if stack has HDR content
+
+      uint32_t sideband_present : 1; //!< Set if stack has sideband content
     };
 
     uint32_t flags = 0;               //!< For initialization purpose only.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -367,6 +367,8 @@ void HWCDisplay::BuildLayerStack() {
       layer->flags.skip = true;
     } else if (hwc_layer->GetClientRequestedCompositionType() == HWC2::Composition::SolidColor) {
       layer->flags.solid_fill = true;
+    } else if (hwc_layer->GetClientRequestedCompositionType() == HWC2::Composition::Sideband) {
+      layer->flags.sideband = true;
     }
 
     if (!hwc_layer->SupportedDataspace()) {
@@ -409,6 +411,10 @@ void HWCDisplay::BuildLayerStack() {
 
     if (layer->flags.skip) {
       layer_stack_.flags.skip_present = true;
+    }
+
+    if (layer->flags.sideband) {
+      layer_stack_.flags.sideband_present = true;
     }
 
     if (hwc_layer->GetClientRequestedCompositionType() == HWC2::Composition::Cursor) {
@@ -1028,7 +1034,7 @@ HWC2::Error HWCDisplay::PostCommitLayerStack(int32_t *out_retire_fence) {
     if (!flush_) {
       // If swapinterval property is set to 0 or for single buffer layers, do not update f/w
       // release fences and discard fences from driver
-      if (swap_interval_zero_ || layer->flags.single_buffer) {
+      if (swap_interval_zero_ || layer->flags.single_buffer || layer->flags.sideband) {
         close(layer_buffer->release_fence_fd);
         layer_buffer->release_fence_fd = -1;
       } else if (layer->composition != kCompositionGPU) {
