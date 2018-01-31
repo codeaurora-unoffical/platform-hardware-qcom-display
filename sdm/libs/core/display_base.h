@@ -135,7 +135,9 @@ class DisplayBase : public DisplayInterface, DumpImpl {
   DisplayError SetColorModeInternal(const std::string &color_mode);
 
   recursive_mutex recursive_mutex_;
+  DisplayOrder display_order_;
   DisplayType display_type_;
+  DisplaySyncEventType sync_event_type_;
   DisplayEventHandler *event_handler_ = NULL;
   HWDeviceType hw_device_type_;
   HWInterface *hw_intf_ = NULL;
