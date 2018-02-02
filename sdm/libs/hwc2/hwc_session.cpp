@@ -97,7 +97,14 @@ int HWCSession::GetDisplayInfos(void) {
 }
 
 DisplayOrder HWCSession::GetDisplayOrder(uint32_t display_id) {
-    return hw_disp_info_[display_id].order;
+    if (display_id < HWC_DISPLAY_VIRTUAL)
+        return hw_disp_info_[display_id].order;
+    else if (display_id >= HWC_DISPLAY_VIRTUAL && display_id < HWC_DISPLAY_VIRTUAL + MAX_VIRTUAL_DISPLAY_NUM)
+        return kOrderMax;
+    else if (display_id - MAX_VIRTUAL_DISPLAY_NUM < kOrderMax)
+        return hw_disp_info_[display_id - MAX_VIRTUAL_DISPLAY_NUM].order;
+    else
+        return kOrderMax;
 }
 
 int HWCSession::Init() {
@@ -130,7 +137,7 @@ int HWCSession::Init() {
     return -EINVAL;
   }
 
-  for (uint32_t i = HWC_DISPLAY_PRIMARY; i < HWC_NUM_DISPLAY_TYPES; i++) {
+  for (uint32_t i = HWC_DISPLAY_PRIMARY; i < kOrderMax + MAX_VIRTUAL_DISPLAY_NUM; i++) {
     hwc_display_[i] = NULL;
   }
 
@@ -175,16 +182,26 @@ int HWCSession::Init() {
 //fix: Now we are creating number of displays configured in kernel.
 //if ENABLE_THREE_DISPLAYS is not enabled, still we will be creating
 //displays but will not send notification to SurfaceFlinger
-  for (uint32_t i = kSecondary; i < display_count; i++) {
+
+// To keep backward compability, the layout of displayId was set to:
+// 0: Primary
+// 1: External
+// 2: Virtual
+// 3~inf: External
+  for (uint32_t i = HWC_DISPLAY_EXTERNAL; i < display_count + MAX_VIRTUAL_DISPLAY_NUM; i ++) {
+
+    if (i >= HWC_DISPLAY_VIRTUAL && i < HWC_DISPLAY_VIRTUAL + MAX_VIRTUAL_DISPLAY_NUM) {
+        continue;
+    }
 
     DisplayOrder display_order = GetDisplayOrder(i);
 
-    if (error == kErrorNone && hw_disp_info_[i].type == kHDMI) {
-      DLOGE("Display type is kHDMI & order = %d, i = %d", hw_disp_info_[i].order, i);
+    if (error == kErrorNone && hw_disp_info_[display_order].type == kHDMI) {
+      DLOGE("Display type is kHDMI & order = %d, i = %d", display_order, i);
       status = HWCDisplayExternal::Create(core_intf_, buffer_allocator_, &callbacks_, qservice_,
                                           display_order, &hwc_display_[i]);
     } else {
-      DLOGE("Display type is kPrimary & order = %d, i = %d", hw_disp_info_[i].order, i);
+      DLOGE("Display type is kPrimary & order = %d, i = %d", display_order, i);
       status = HWCDisplayPrimary::Create(core_intf_, buffer_allocator_, &callbacks_, qservice_,
                                          display_order, &hwc_display_[i]);
     }
@@ -198,7 +215,7 @@ int HWCSession::Init() {
 
   if (error != kErrorNone) {
     // clean up if there is error during display creation
-    for (uint32_t i = kFirst; i < display_count; i ++) {
+    for (uint32_t i = HWC_DISPLAY_PRIMARY; i < kOrderMax + MAX_VIRTUAL_DISPLAY_NUM; i ++) {
        if (hwc_display_[i] != NULL) {
            HWCDisplayPrimary::Destroy(hwc_display_[i]);
            hwc_display_[i] = NULL;
@@ -230,21 +247,8 @@ int HWCSession::Init() {
 }
 
 int HWCSession::Deinit() {
-  uint32_t display_count = 0;
-  display_count = GetDisplayCount();
-  if (!display_count) {
-      DLOGE("fail to get display from SDM! count=%d \n", display_count);
-      return -1;
-  }
-
-  for(uint32_t i = kFirst; i < display_count; i ++) {
-     if (hwc_display_[i] != NULL && hw_disp_info_[i].type == kHDMI) {
-         HWCDisplayExternal::Destroy(hwc_display_[i]);
-         hwc_display_[i] = NULL;
-     } else if (hwc_display_[i] != NULL && hw_disp_info_[i].type == kVirtual) {
-         HWCDisplayVirtual::Destroy(hwc_display_[i]);
-         hwc_display_[i] = NULL;
-     } else if (hwc_display_[i] != NULL) {
+  for(uint32_t i = HWC_DISPLAY_PRIMARY; i < kOrderMax + MAX_VIRTUAL_DISPLAY_NUM; i ++) {
+     if (hwc_display_[i] != NULL) {
          HWCDisplayPrimary::Destroy(hwc_display_[i]);
          hwc_display_[i] = NULL;
      }
@@ -400,7 +404,7 @@ void HWCSession::Dump(hwc2_device_t *device, uint32_t *out_size, char *out_buffe
     char sdm_dump[4096];
     DumpInterface::GetDump(sdm_dump, 4096);  // TODO(user): Fix this workaround
     std::string s("");
-    for (int id = HWC_DISPLAY_PRIMARY; id < HWC_NUM_DISPLAY_TYPES; id++) {
+    for (uint32_t id = HWC_DISPLAY_PRIMARY; id < kOrderMax+MAX_VIRTUAL_DISPLAY_NUM; id++) {
       if (hwc_session->hwc_display_[id]) {
         s += hwc_session->hwc_display_[id]->Dump();
       }
@@ -490,7 +494,7 @@ static int32_t GetHdrCapabilities(hwc2_device_t* device, hwc2_display_t display,
 }
 
 static uint32_t GetMaxVirtualDisplayCount(hwc2_device_t *device) {
-  return 1;
+  return MAX_VIRTUAL_DISPLAY_NUM;
 }
 
 static int32_t GetReleaseFences(hwc2_device_t *device, hwc2_display_t display,
@@ -535,8 +539,8 @@ int32_t HWCSession::RegisterCallback(hwc2_device_t *device, int32_t descriptor,
   DLOGD("Registering callback: %s", to_string(desc).c_str());
 
   if (descriptor == HWC2_CALLBACK_HOTPLUG) {
-     DLOGE("Notify SurfaceFlinger for display kFirst\n");
-     hwc_session->callbacks_.Hotplug(kFirst, HWC2::Connection::Connected);
+     DLOGE("Notify SurfaceFlinger for HWC_DISPLAY_PRIMARY\n");
+     hwc_session->callbacks_.Hotplug(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected);
   }
   hwc_session->callbacks_lock_.Broadcast();
   return INT32(error);
@@ -677,15 +681,17 @@ int32_t HWCSession::SetPowerMode(hwc2_device_t *device, hwc2_display_t display, 
 // framebuffersurface & bufferqueue for external & tertiary display
   if(display == kFirst && notify == 1) {
      notify = 0;
-     if (hwc_session->hwc_display_[kSecondary] != NULL) {
+     if (hwc_session->hwc_display_[HWC_DISPLAY_EXTERNAL] != NULL) {
        DLOGE("Notify SurfaceFlinger for display kSecondary\n");
-       hwc_session->callbacks_.Hotplug(kSecondary, HWC2::Connection::Connected);
+       hwc_session->callbacks_.Hotplug(HWC_DISPLAY_EXTERNAL, HWC2::Connection::Connected);
      }
 
 #ifdef ENABLE_THREE_DISPLAYS
-     if (hwc_session->hwc_display_[kTertiary] != NULL) {
-       DLOGE("Notify SurfaceFlinger for display kTertiary\n");
-       hwc_session->callbacks_.Hotplug(kTertiary, HWC2::Connection::Connected);
+     for (uint32_t i = HWC_DISPLAY_VIRTUAL + MAX_VIRTUAL_DISPLAY_NUM; i < kOrderMax + MAX_VIRTUAL_DISPLAY_NUM; i++) {
+         if (hwc_session->hwc_display_[i] != NULL) {
+           DLOGE("Notify SurfaceFlinger for display kTertiary\n");
+           hwc_session->callbacks_.Hotplug(i, HWC2::Connection::Connected);
+         }
      }
 #endif
   }
@@ -838,7 +844,7 @@ HWC2::Error HWCSession::CreateVirtualDisplayObject(uint32_t width, uint32_t heig
     return HWC2::Error::NoResources;
   }
 
-  DisplayOrder display_order = GetDisplayOrder(4);
+  DisplayOrder display_order = GetDisplayOrder(HWC_DISPLAY_VIRTUAL);
 
   auto status = HWCDisplayVirtual::Create(core_intf_, buffer_allocator_, &callbacks_, width,
                                           height, format, display_order, &hwc_display_[HWC_DISPLAY_VIRTUAL]);
@@ -1108,31 +1114,15 @@ android::status_t HWCSession::SetMaxMixerStages(const android::Parcel *input_par
   std::bitset<32> bit_mask_display_type = UINT32(input_parcel->readInt32());
   uint32_t max_mixer_stages = UINT32(input_parcel->readInt32());
 
-  if (bit_mask_display_type[HWC_DISPLAY_PRIMARY]) {
-    if (hwc_display_[HWC_DISPLAY_PRIMARY]) {
-      error = hwc_display_[HWC_DISPLAY_PRIMARY]->SetMaxMixerStages(max_mixer_stages);
-      if (error != kErrorNone) {
-        return -EINVAL;
+  for (uint32_t i = HWC_DISPLAY_PRIMARY; i < kOrderMax+MAX_VIRTUAL_DISPLAY_NUM; i++) {
+      if (bit_mask_display_type[i]) {
+        if (hwc_display_[i]) {
+          error = hwc_display_[i]->SetMaxMixerStages(max_mixer_stages);
+          if (error != kErrorNone) {
+            return -EINVAL;
+          }
+        }
       }
-    }
-  }
-
-  if (bit_mask_display_type[HWC_DISPLAY_EXTERNAL]) {
-    if (hwc_display_[HWC_DISPLAY_EXTERNAL]) {
-      error = hwc_display_[HWC_DISPLAY_EXTERNAL]->SetMaxMixerStages(max_mixer_stages);
-      if (error != kErrorNone) {
-        return -EINVAL;
-      }
-    }
-  }
-
-  if (bit_mask_display_type[HWC_DISPLAY_VIRTUAL]) {
-    if (hwc_display_[HWC_DISPLAY_VIRTUAL]) {
-      error = hwc_display_[HWC_DISPLAY_VIRTUAL]->SetMaxMixerStages(max_mixer_stages);
-      if (error != kErrorNone) {
-        return -EINVAL;
-      }
-    }
   }
 
   return 0;
@@ -1145,22 +1135,12 @@ void HWCSession::SetFrameDumpConfig(const android::Parcel *input_parcel) {
   std::bitset<32> bit_mask_display_type = UINT32(input_parcel->readInt32());
   uint32_t bit_mask_layer_type = UINT32(input_parcel->readInt32());
 
-  if (bit_mask_display_type[HWC_DISPLAY_PRIMARY]) {
-    if (hwc_display_[HWC_DISPLAY_PRIMARY]) {
-      hwc_display_[HWC_DISPLAY_PRIMARY]->SetFrameDumpConfig(frame_dump_count, bit_mask_layer_type);
-    }
-  }
-
-  if (bit_mask_display_type[HWC_DISPLAY_EXTERNAL]) {
-    if (hwc_display_[HWC_DISPLAY_EXTERNAL]) {
-      hwc_display_[HWC_DISPLAY_EXTERNAL]->SetFrameDumpConfig(frame_dump_count, bit_mask_layer_type);
-    }
-  }
-
-  if (bit_mask_display_type[HWC_DISPLAY_VIRTUAL]) {
-    if (hwc_display_[HWC_DISPLAY_VIRTUAL]) {
-      hwc_display_[HWC_DISPLAY_VIRTUAL]->SetFrameDumpConfig(frame_dump_count, bit_mask_layer_type);
-    }
+  for (uint32_t i = HWC_DISPLAY_PRIMARY; i < kOrderMax+MAX_VIRTUAL_DISPLAY_NUM; i++) {
+      if (bit_mask_display_type[i]) {
+        if (hwc_display_[i]) {
+          hwc_display_[i]->SetFrameDumpConfig(frame_dump_count, bit_mask_layer_type);
+        }
+      }
   }
 }
 

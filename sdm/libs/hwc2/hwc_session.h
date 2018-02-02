@@ -33,6 +33,8 @@
 #include "hwc_color_manager.h"
 #include "hwc_socket_handler.h"
 
+#define MAX_VIRTUAL_DISPLAY_NUM 1
+
 namespace sdm {
 
 using ::vendor::display::config::V1_0::IDisplayConfig;
@@ -193,7 +195,7 @@ class HWCSession : hwc2_device_t, public IDisplayConfig, public qClient::BnQClie
 
   static Locker locker_;
   CoreInterface *core_intf_ = NULL;
-  HWCDisplay *hwc_display_[HWC_NUM_DISPLAY_TYPES] = {NULL};
+  HWCDisplay * hwc_display_[kOrderMax+MAX_VIRTUAL_DISPLAY_NUM] = {};
   HWDisplayInterfaceInfo hw_disp_info_[kOrderMax] = {};
   HWCCallbacks callbacks_;
   pthread_t uevent_thread_;
