@@ -678,6 +678,14 @@ class DisplayInterface {
   */
   virtual DisplayError SetCompositionState(LayerComposition composition_type, bool enable) = 0;
 
+  /*! @brief Method to enable or disable display HPD Clock.
+
+    @param[in] state \link enable or disable the HPD Clock \endlink
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError UpdateHPDClockState(uint32_t state) = 0;
+
   /*! @brief Method to enable display PLL update.
 
     @param[in] enable enable or disable the PLL update function.

@@ -117,6 +117,7 @@ class HWInterface {
   virtual DisplayError SetScaleLutConfig(HWScaleLutInfo *lut_info) = 0;
   virtual DisplayError SetMixerAttributes(const HWMixerAttributes &mixer_attributes) = 0;
   virtual DisplayError GetMixerAttributes(HWMixerAttributes *mixer_attributes) = 0;
+  virtual DisplayError UpdateHPDClockState(uint32_t state) = 0;
   virtual DisplayError EnablePllUpdate(int32_t enable) = 0;
   virtual DisplayError UpdateDisplayPll(int32_t ppm) = 0;
 
