@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2018 The Linux Foundation. All rights reserved.
  * Not a Contribution
  *
  * Copyright (C) 2010 The Android Open Source Project
@@ -407,7 +407,7 @@ int BufferManager::GetHandleFlags(int format, gralloc1_producer_usage_t prod_usa
     flags |= private_handle_t::PRIV_FLAGS_HW_TEXTURE;
   }
 
-  if (prod_usage & GRALLOC1_CONSUMER_USAGE_PRIVATE_SECURE_DISPLAY) {
+  if (cons_usage & GRALLOC1_CONSUMER_USAGE_PRIVATE_SECURE_DISPLAY) {
     flags |= private_handle_t::PRIV_FLAGS_SECURE_DISPLAY;
   }
 
@@ -827,33 +827,6 @@ gralloc1_error_t BufferManager::Perform(int operation, va_list args) {
       break;
   }
   return GRALLOC1_ERROR_NONE;
-}
-
-static bool IsYuvFormat(const private_handle_t *hnd) {
-  switch (hnd->format) {
-    case HAL_PIXEL_FORMAT_YCbCr_420_SP:
-    case HAL_PIXEL_FORMAT_YCbCr_422_SP:
-    case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
-    case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:   // Same as YCbCr_420_SP_VENUS
-    case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC:
-    case HAL_PIXEL_FORMAT_YCrCb_420_SP:
-    case HAL_PIXEL_FORMAT_YCrCb_422_SP:
-    case HAL_PIXEL_FORMAT_YCrCb_420_SP_ADRENO:
-    case HAL_PIXEL_FORMAT_NV21_ZSL:
-    case HAL_PIXEL_FORMAT_RAW16:
-    case HAL_PIXEL_FORMAT_Y16:
-    case HAL_PIXEL_FORMAT_RAW12:
-    case HAL_PIXEL_FORMAT_RAW10:
-    case HAL_PIXEL_FORMAT_YV12:
-    case HAL_PIXEL_FORMAT_Y8:
-    case HAL_PIXEL_FORMAT_YCbCr_420_P010:
-    case HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC:
-    case HAL_PIXEL_FORMAT_YCbCr_420_P010_UBWC:
-    case HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS:
-      return true;
-    default:
-      return false;
-  }
 }
 
 gralloc1_error_t BufferManager::GetNumFlexPlanes(const private_handle_t *hnd,
