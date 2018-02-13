@@ -2,10 +2,14 @@
 
 ACLOCAL_AMFLAGS = -I m4
 
-SUBDIRS = libqservice libqdutils libgralloc sdm/libs/utils
+SUBDIRS = sdm/libs/utils
 if ENABLE_SDMHALDRM
 SUBDIRS += libdrmutils
-SUBDIRS += gpu_tonemapper
+#SUBDIRS += gpu_tonemapper
+else
+SUBDIRS += libqservice
+SUBDIRS += libqdutils
+SUBDIRS += libgralloc
 endif
 SUBDIRS += sdm/libs/core
 
