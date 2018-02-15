@@ -34,6 +34,7 @@
 #include "hwc_socket_handler.h"
 
 #define MAX_VIRTUAL_DISPLAY_NUM 1
+#define MAX_TOTAL_DISPLAY_NUM   (kOrderMax + MAX_VIRTUAL_DISPLAY_NUM)
 
 namespace sdm {
 
@@ -61,7 +62,7 @@ class HWCSession : hwc2_device_t, public IDisplayConfig, public qClient::BnQClie
       return HWC2_ERROR_BAD_PARAMETER;
     }
 
-    if (display >= HWC_NUM_DISPLAY_TYPES) {
+    if (display >= MAX_TOTAL_DISPLAY_NUM) {
       return HWC2_ERROR_BAD_DISPLAY;
     }
 
@@ -199,7 +200,7 @@ class HWCSession : hwc2_device_t, public IDisplayConfig, public qClient::BnQClie
 
   static Locker locker_;
   CoreInterface *core_intf_ = NULL;
-  HWCDisplay * hwc_display_[kOrderMax+MAX_VIRTUAL_DISPLAY_NUM] = {};
+  HWCDisplay * hwc_display_[MAX_TOTAL_DISPLAY_NUM] = {};
   HWDisplayInterfaceInfo hw_disp_info_[kOrderMax] = {};
   HWCCallbacks callbacks_;
   pthread_t uevent_thread_;

@@ -137,7 +137,7 @@ int HWCSession::Init() {
     return -EINVAL;
   }
 
-  for (uint32_t i = HWC_DISPLAY_PRIMARY; i < kOrderMax + MAX_VIRTUAL_DISPLAY_NUM; i++) {
+  for (uint32_t i = HWC_DISPLAY_PRIMARY; i < MAX_TOTAL_DISPLAY_NUM; i++) {
     hwc_display_[i] = NULL;
   }
 
@@ -215,7 +215,7 @@ int HWCSession::Init() {
 
   if (error != kErrorNone) {
     // clean up if there is error during display creation
-    for (uint32_t i = HWC_DISPLAY_PRIMARY; i < kOrderMax + MAX_VIRTUAL_DISPLAY_NUM; i ++) {
+    for (uint32_t i = HWC_DISPLAY_PRIMARY; i < MAX_TOTAL_DISPLAY_NUM; i ++) {
        if (hwc_display_[i] != NULL) {
            HWCDisplayPrimary::Destroy(hwc_display_[i]);
            hwc_display_[i] = NULL;
@@ -247,7 +247,7 @@ int HWCSession::Init() {
 }
 
 int HWCSession::Deinit() {
-  for(uint32_t i = HWC_DISPLAY_PRIMARY; i < kOrderMax + MAX_VIRTUAL_DISPLAY_NUM; i ++) {
+  for(uint32_t i = HWC_DISPLAY_PRIMARY; i < MAX_TOTAL_DISPLAY_NUM; i ++) {
      if (hwc_display_[i] != NULL) {
          HWCDisplayPrimary::Destroy(hwc_display_[i]);
          hwc_display_[i] = NULL;
@@ -339,9 +339,6 @@ static hwc2_function_pointer_t AsFP(T function) {
 // Defined in the same order as in the HWC2 header
 
 int32_t HWCSession::AcceptDisplayChanges(hwc2_device_t *device, hwc2_display_t display) {
-  if (display >= HWC_NUM_DISPLAY_TYPES) {
-    return  HWC2_ERROR_BAD_DISPLAY;
-  }
   SCOPE_LOCK(locker_);
   return HWCSession::CallDisplayFunction(device, display, &HWCDisplay::AcceptDisplayChanges);
 }
@@ -350,9 +347,6 @@ int32_t HWCSession::CreateLayer(hwc2_device_t *device, hwc2_display_t display,
                                 hwc2_layer_t *out_layer_id) {
   if (!out_layer_id) {
     return  HWC2_ERROR_BAD_PARAMETER;
-  }
-  if (display >= HWC_NUM_DISPLAY_TYPES) {
-    return  HWC2_ERROR_BAD_DISPLAY;
   }
   SCOPE_LOCK(locker_);
   return CallDisplayFunction(device, display, &HWCDisplay::CreateLayer, out_layer_id);
@@ -384,9 +378,6 @@ int32_t HWCSession::CreateVirtualDisplay(hwc2_device_t *device, uint32_t width, 
 
 int32_t HWCSession::DestroyLayer(hwc2_device_t *device, hwc2_display_t display,
                                  hwc2_layer_t layer) {
-  if (display >= HWC_NUM_DISPLAY_TYPES) {
-    return  HWC2_ERROR_BAD_DISPLAY;
-  }
   SCOPE_LOCK(locker_);
   return CallDisplayFunction(device, display, &HWCDisplay::DestroyLayer, layer);
 }
@@ -424,7 +415,7 @@ void HWCSession::Dump(hwc2_device_t *device, uint32_t *out_size, char *out_buffe
     char sdm_dump[4096];
     DumpInterface::GetDump(sdm_dump, 4096);  // TODO(user): Fix this workaround
     std::string s("");
-    for (uint32_t id = HWC_DISPLAY_PRIMARY; id < kOrderMax+MAX_VIRTUAL_DISPLAY_NUM; id++) {
+    for (uint32_t id = HWC_DISPLAY_PRIMARY; id < MAX_TOTAL_DISPLAY_NUM; id++) {
       if (hwc_session->hwc_display_[id]) {
         s += hwc_session->hwc_display_[id]->Dump();
       }
@@ -711,7 +702,7 @@ int32_t HWCSession::SetPowerMode(hwc2_device_t *device, hwc2_display_t display, 
      }
 
 #ifdef ENABLE_THREE_DISPLAYS
-     for (uint32_t i = HWC_DISPLAY_VIRTUAL + MAX_VIRTUAL_DISPLAY_NUM; i < kOrderMax + MAX_VIRTUAL_DISPLAY_NUM; i++) {
+     for (uint32_t i = HWC_DISPLAY_VIRTUAL + MAX_VIRTUAL_DISPLAY_NUM; i < MAX_TOTAL_DISPLAY_NUM; i++) {
          if (hwc_session->hwc_display_[i] != NULL) {
            DLOGE("Notify SurfaceFlinger for display kTertiary\n");
            hwc_session->callbacks_.Hotplug(i, HWC2::Connection::Connected);
@@ -1079,7 +1070,7 @@ android::status_t HWCSession::HandleGetDisplayAttributesForConfig(const android:
   int error = android::BAD_VALUE;
   DisplayConfigVariableInfo display_attributes;
 
-  if (dpy < HWC_DISPLAY_PRIMARY || dpy >= HWC_NUM_DISPLAY_TYPES || config < 0) {
+  if (dpy < HWC_DISPLAY_PRIMARY || dpy >= MAX_TOTAL_DISPLAY_NUM || config < 0) {
     return android::BAD_VALUE;
   }
 
@@ -1138,7 +1129,7 @@ android::status_t HWCSession::SetMaxMixerStages(const android::Parcel *input_par
   std::bitset<32> bit_mask_display_type = UINT32(input_parcel->readInt32());
   uint32_t max_mixer_stages = UINT32(input_parcel->readInt32());
 
-  for (uint32_t i = HWC_DISPLAY_PRIMARY; i < kOrderMax+MAX_VIRTUAL_DISPLAY_NUM; i++) {
+  for (uint32_t i = HWC_DISPLAY_PRIMARY; i < MAX_TOTAL_DISPLAY_NUM; i++) {
       if (bit_mask_display_type[i]) {
         if (hwc_display_[i]) {
           error = hwc_display_[i]->SetMaxMixerStages(max_mixer_stages);
@@ -1159,7 +1150,7 @@ void HWCSession::SetFrameDumpConfig(const android::Parcel *input_parcel) {
   std::bitset<32> bit_mask_display_type = UINT32(input_parcel->readInt32());
   uint32_t bit_mask_layer_type = UINT32(input_parcel->readInt32());
 
-  for (uint32_t i = HWC_DISPLAY_PRIMARY; i < kOrderMax+MAX_VIRTUAL_DISPLAY_NUM; i++) {
+  for (uint32_t i = HWC_DISPLAY_PRIMARY; i < MAX_TOTAL_DISPLAY_NUM; i++) {
       if (bit_mask_display_type[i]) {
         if (hwc_display_[i]) {
           hwc_display_[i]->SetFrameDumpConfig(frame_dump_count, bit_mask_layer_type);
@@ -1201,10 +1192,6 @@ android::status_t HWCSession::SetColorModeOverride(const android::Parcel *input_
   auto display = static_cast<hwc2_display_t >(input_parcel->readInt32());
   auto mode = static_cast<android_color_mode_t>(input_parcel->readInt32());
   auto device = static_cast<hwc2_device_t *>(this);
-
-  if (display >= HWC_NUM_DISPLAY_TYPES) {
-    return -EINVAL;
-  }
 
   auto err = CallDisplayFunction(device, display, &HWCDisplay::SetColorMode, mode);
   if (err != HWC2_ERROR_NONE)
@@ -1562,7 +1549,7 @@ android::status_t HWCSession::GetVisibleDisplayRect(const android::Parcel *input
 
   int dpy = input_parcel->readInt32();
 
-  if (dpy < HWC_DISPLAY_PRIMARY || dpy >= HWC_NUM_DISPLAY_TYPES) {
+  if (dpy < HWC_DISPLAY_PRIMARY || dpy >= MAX_TOTAL_DISPLAY_NUM) {
     return android::BAD_VALUE;
   }
 
