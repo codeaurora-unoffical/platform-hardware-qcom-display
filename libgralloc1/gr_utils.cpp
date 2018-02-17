@@ -803,6 +803,9 @@ int GetBufferLayout(private_handle_t *hnd, uint32_t stride[4],
       offset[2] = static_cast<uint32_t>(reinterpret_cast<uint64_t>(yuvInfo.cb) - hnd->base);
       (*num_planes)++;
       break;
+    case HAL_PIXEL_FORMAT_CbYCrY_422_I:
+      *num_planes = 1;
+      break;
     default:
       ALOGW("%s: Unsupported format", __FUNCTION__);
       ret = -EINVAL;
