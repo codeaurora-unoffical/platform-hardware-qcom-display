@@ -204,11 +204,6 @@ DisplayError HWEventsDRM::SetEventState(HWEvent event, bool enable, void *arg) {
         if(!vbl_pending_) {
           RegisterVSync();
         }
-      } else {
-        //wait till pending vblank is consumed...
-        while (vbl_pending_) {
-          pthread_cond_wait(&vbl_cond_, &vbl_mutex_);
-        }
       }
       pthread_mutex_unlock(&vbl_mutex_);
       break;
@@ -393,9 +388,6 @@ void HWEventsDRM::VSyncHandlerCallback(int fd, unsigned int sequence, unsigned i
   pThis->vbl_pending_ = false;
   pThis->RegisterVSync();
   pThis->event_handler_->VSync(timestamp);
-  if(!pThis->vbl_pending_) {
-    pthread_cond_signal(&pThis->vbl_cond_);
-  }
   pthread_mutex_unlock(&pThis->vbl_mutex_);
 }
 
@@ -430,9 +422,6 @@ void HWEventsDRM::VBlankHandlerCallback(int fd, unsigned int sequence, unsigned 
   pThis->vbl_pending_ = false;
   pThis->RegisterVSync();
   pThis->event_handler_->VSync(fd, sequence, tv_sec, tv_usec, data);
-  if(!pThis->vbl_pending_) {
-    pthread_cond_signal(&pThis->vbl_cond_);
-  }
   pthread_mutex_unlock(&pThis->vbl_mutex_);
 }
 
