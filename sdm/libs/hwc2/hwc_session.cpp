@@ -189,6 +189,9 @@ int HWCSession::Init() {
 // 2: Virtual
 // 3~inf: External
   for (uint32_t i = HWC_DISPLAY_EXTERNAL; i < display_count + MAX_VIRTUAL_DISPLAY_NUM; i ++) {
+    if (display_count == 1) {
+        break;
+    }
 
     if (i >= HWC_DISPLAY_VIRTUAL && i < HWC_DISPLAY_VIRTUAL + MAX_VIRTUAL_DISPLAY_NUM) {
         continue;
