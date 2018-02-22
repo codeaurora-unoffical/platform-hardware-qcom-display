@@ -97,7 +97,9 @@ enum HWBwModes {
 
 */
 struct HWDisplayInterfaceInfo {
+  DisplayOrder order;
   DisplayType type;
+  char name[30];
   bool is_connected;
 };
 
@@ -187,6 +189,25 @@ class CoreInterface {
   virtual DisplayError CreateDisplay(DisplayType type, DisplayEventHandler *event_handler,
                                      DisplayInterface **interface) = 0;
 
+  /*! @brief Method to create a display device for a given type.
+
+    @details Client shall use this method to create each of the connected display type. A handle to
+    interface associated with this object is returned via output parameter which can be used to
+    interact further with the display device.
+
+    @param[in] type \link DisplayType \endlink
+    @param[in] type \link DisplaySyncEventType \endlink
+    @param[in] event_handler \link DisplayEventHandler \endlink
+    @param[out] interface \link DisplayInterface \endlink
+
+    @return \link DisplayError \endlink
+
+    @sa DestroyDisplay
+  */
+  virtual DisplayError CreateDisplay(DisplayType type, DisplaySyncEventType sync_event_type,
+                                     DisplayEventHandler *event_handler,
+                                     DisplayInterface **interface) = 0;
+
   /*! @brief Method to destroy a display device.
 
     @details Client shall use this method to destroy each of the created display device objects.
@@ -220,6 +241,29 @@ class CoreInterface {
    */
     virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info) = 0;
 
+  /*! @brief Method to get display count.
+
+    @details Client shall use this method to get the count of connected displays.
+
+    @param[out] how many displays are connected.
+
+    @return \link DisplayError \endlink
+
+   */
+  virtual DisplayError GetDisplayCount(uint32_t *count) = 0;
+
+  /*! @brief Method to get characteristics of all displays by display order.
+
+    @details Client shall use this method to get the display type, and whether
+    it is currently connected.
+
+    @param[in] hw_disp_info_arrary structure that display info will be filled into.
+    @param[in] how many display info will be filled.
+
+    @return \link DisplayError \endlink
+
+   */
+  virtual DisplayError GetDisplayInterfaceTypeByOrder(HWDisplayInterfaceInfo *hw_disp_info_array)=0;
 
  protected:
   virtual ~CoreInterface() { }

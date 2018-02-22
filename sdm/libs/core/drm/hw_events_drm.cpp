@@ -98,7 +98,16 @@ DisplayError HWEventsDRM::SetEventParser() {
   for (auto &event_data : event_data_list_) {
     switch (event_data.event_type) {
       case HWEvent::VSYNC:
-        event_data.event_parser = &HWEventsDRM::HandlePageFlip;
+        if (sync_event_type_ == kVSyncTimeStamp)
+          event_data.event_parser = &HWEventsDRM::HandleVSync;
+        else if (sync_event_type_ == kVBlankEvent)
+          event_data.event_parser = &HWEventsDRM::HandleVBlank;
+        else if (sync_event_type_ == kPageFlipEvent)
+          event_data.event_parser = &HWEventsDRM::HandlePageFlip;
+        else {
+          DLOGE("Sync Event %d not supported!", sync_event_type_);
+          error = kErrorParameters;
+        }
         break;
       case HWEvent::IDLE_NOTIFY:
         event_data.event_parser = &HWEventsDRM::HandleIdleTimeout;
@@ -138,21 +147,19 @@ void HWEventsDRM::PopulateHWEventData(const vector<HWEvent> &event_list) {
   InitializePollFd();
 }
 
-DisplayError HWEventsDRM::Init(int display_type, HWEventHandler *event_handler,
+DisplayError HWEventsDRM::Init(int display_type, DisplaySyncEventType sync_event_type,
+                               HWEventHandler *event_handler,
                                const vector<HWEvent> &event_list) {
   if (!event_handler)
     return kErrorParameters;
 
+  sync_event_type_ = sync_event_type;
   event_handler_ = event_handler;
   poll_fds_.resize(event_list.size());
   event_thread_name_ += " - " + std::to_string(display_type);
 
   PopulateHWEventData(event_list);
 
-  if (pthread_create(&event_thread_, NULL, &DisplayEventThread, this) < 0) {
-    DLOGE("Failed to start %s, error = %s", event_thread_name_.c_str());
-    return kErrorResources;
-  }
   // For multiple display case, don't launch multiple threads to handle event together,
   // otherwise only one thread can get chance to handle vblank event after polling and
   // other threads will get stuck on drmHandleVBlank. The result is the vblank callback
@@ -164,6 +171,13 @@ DisplayError HWEventsDRM::Init(int display_type, HWEventHandler *event_handler,
   // call RegisterVSync to register the first vblank event for each display.
   if (sync_event_type_ != kPageFlipEvent)
     RegisterVSync();
+
+  // Only create the thread for the first display.
+  // TODO: if (display_order == kFirst)
+  if (pthread_create(&event_thread_, NULL, &DisplayEventThread, this) < 0) {
+    DLOGE("Failed to start %s, error = %s", event_thread_name_.c_str());
+    return kErrorResources;
+  }
 
   return kErrorNone;
 }

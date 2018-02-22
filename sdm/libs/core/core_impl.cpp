@@ -114,6 +114,11 @@ DisplayError CoreImpl::Deinit() {
 
 DisplayError CoreImpl::CreateDisplay(DisplayType type, DisplayEventHandler *event_handler,
                                      DisplayInterface **intf) {
+    return CreateDisplay(type, kVSyncTimeStamp, event_handler, intf);
+  }
+
+DisplayError CoreImpl::CreateDisplay(DisplayType type, DisplaySyncEventType sync_event_type,
+                                     DisplayEventHandler *event_handler, DisplayInterface **intf) {
   SCOPE_LOCK(locker_);
 
   if (!event_handler || !intf) {
@@ -124,16 +129,16 @@ DisplayError CoreImpl::CreateDisplay(DisplayType type, DisplayEventHandler *even
 
   switch (type) {
   case kPrimary:
-    display_base = new DisplayPrimary(event_handler, hw_info_intf_, buffer_sync_handler_,
-                                      buffer_allocator_, &comp_mgr_);
+    display_base = new DisplayPrimary(sync_event_type, event_handler, hw_info_intf_,
+                                      buffer_sync_handler_, buffer_allocator_, &comp_mgr_);
     break;
   case kHDMI:
-    display_base = new DisplayHDMI(event_handler, hw_info_intf_, buffer_sync_handler_,
-                                   buffer_allocator_, &comp_mgr_);
+    display_base = new DisplayHDMI(sync_event_type, event_handler, hw_info_intf_,
+                                   buffer_sync_handler_, buffer_allocator_, &comp_mgr_);
     break;
   case kVirtual:
-    display_base = new DisplayVirtual(event_handler, hw_info_intf_, buffer_sync_handler_,
-                                      buffer_allocator_, &comp_mgr_);
+    display_base = new DisplayVirtual(sync_event_type, event_handler, hw_info_intf_,
+                                      buffer_sync_handler_, buffer_allocator_, &comp_mgr_);
     break;
   default:
     DLOGE("Spurious display type %d", type);
@@ -174,8 +179,16 @@ DisplayError CoreImpl::SetMaxBandwidthMode(HWBwModes mode) {
   return comp_mgr_.SetMaxBandwidthMode(mode);
 }
 
+DisplayError CoreImpl::GetDisplayCount(uint32_t *count) {
+  return hw_info_intf_->GetDisplayCount(count);
+}
+
 DisplayError CoreImpl::GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info) {
   return hw_info_intf_->GetFirstDisplayInterfaceType(hw_disp_info);
+}
+
+DisplayError CoreImpl::GetDisplayInterfaceTypeByOrder(HWDisplayInterfaceInfo *hw_disp_info_array) {
+  return hw_info_intf_->GetDisplayInterfaceTypeByOrder(hw_disp_info_array);
 }
 
 }  // namespace sdm
