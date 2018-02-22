@@ -46,7 +46,7 @@ using std::lock_guard;
 
 class DisplayBase : public DisplayInterface, DumpImpl {
  public:
-  DisplayBase(DisplayType display_type, DisplayEventHandler *event_handler,
+  DisplayBase(DisplayType display_type, DisplaySyncEventType sync_event_type, DisplayEventHandler *event_handler,
               HWDeviceType hw_device_type, BufferSyncHandler *buffer_sync_handler,
               BufferAllocator *buffer_allocator, CompManager *comp_manager,
               HWInfoInterface *hw_info_intf);

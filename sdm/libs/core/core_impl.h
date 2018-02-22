@@ -53,11 +53,13 @@ class CoreImpl : public CoreInterface {
   virtual DisplayError Deinit();
 
   // Methods from core interface
-  virtual DisplayError CreateDisplay(DisplayType type, DisplayEventHandler *event_handler,
+  virtual DisplayError CreateDisplay(DisplayType type, DisplaySyncEventType sync_event_type, DisplayEventHandler *event_handler,
                                      DisplayInterface **intf);
   virtual DisplayError DestroyDisplay(DisplayInterface *intf);
   virtual DisplayError SetMaxBandwidthMode(HWBwModes mode);
   virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info);
+  virtual DisplayError GetDisplayCount(uint32_t *count);
+  virtual DisplayError GetDisplayInterfaceTypeByOrder(HWDisplayInterfaceInfo *hw_disp_info_array);
 
  protected:
   Locker locker_;

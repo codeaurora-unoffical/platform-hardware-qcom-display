@@ -38,10 +38,11 @@
 
 namespace sdm {
 
-DisplayPrimary::DisplayPrimary(DisplayEventHandler *event_handler, HWInfoInterface *hw_info_intf,
+DisplayPrimary::DisplayPrimary(DisplaySyncEventType sync_event_type,
+                               DisplayEventHandler *event_handler, HWInfoInterface *hw_info_intf,
                                BufferSyncHandler *buffer_sync_handler,
                                BufferAllocator *buffer_allocator, CompManager *comp_manager)
-  : DisplayBase(kPrimary, event_handler, kDevicePrimary, buffer_sync_handler, buffer_allocator,
+  : DisplayBase(kPrimary, sync_event_type, event_handler, kDevicePrimary, buffer_sync_handler, buffer_allocator,
                 comp_manager, hw_info_intf) {
 }
 
@@ -70,7 +71,7 @@ DisplayError DisplayPrimary::Init() {
 
   avr_prop_disabled_ = Debug::IsAVRDisabled();
 
-  error = HWEventsInterface::Create(INT(display_type_), this, event_list_, &hw_events_intf_);
+  error = HWEventsInterface::Create(INT(display_type_), sync_event_type_, this, event_list_, &hw_events_intf_);
   if (error != kErrorNone) {
     DLOGE("Failed to create hardware events interface. Error = %d", error);
     DisplayBase::Deinit();

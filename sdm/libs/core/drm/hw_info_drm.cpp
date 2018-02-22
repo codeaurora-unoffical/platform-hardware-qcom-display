@@ -77,6 +77,8 @@ using sde_drm::GetDRMManager;
 using sde_drm::DRMPlanesInfo;
 using sde_drm::DRMCrtcInfo;
 using sde_drm::DRMPlaneType;
+using sde_drm::DRMDisplayType;
+using sde_drm::DRMDisplayOrder;
 
 using std::vector;
 using std::map;
@@ -599,4 +601,84 @@ DisplayError HWInfoDRM::GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_
   return kErrorNone;
 }
 
+DisplayError HWInfoDRM::GetDisplayCount(uint32_t *count) {
+  *count = drm_mgr_intf_->GetConnectorCount();
+  return kErrorNone;
+}
+DisplayError HWInfoDRM::GetDisplayInterfaceTypeByOrder(HWDisplayInterfaceInfo *hw_disp_info_array) {
+  DRMDisplayOrder supported_orders[DRMDisplayOrder::kDRMMaxOrder] = { DRMDisplayOrder::kDRMPrimary,
+                                                                      DRMDisplayOrder::kDRMSecondary,
+                                                                      DRMDisplayOrder::kDRMTertiary };
+  uint32_t conn_count = drm_mgr_intf_->GetConnectorCount();
+  sde_drm::DRMConnectorInfo info;
+  std::map<uint32_t, const char*>::iterator it;
+  const char *type_name = nullptr;
+  uint32_t i, j;
+  uint32_t index = 0, order_index = 0;
+
+  if (!hw_disp_info_array)
+    return kErrorUndefined;
+
+  // It's assumed that all connector have different display order. If not, below logic may have problem.
+  for (i = 0; i < conn_count; i++) {
+    for (j = order_index; j < (int)DRMDisplayOrder::kDRMMaxOrder; j++) {
+      if(!drm_mgr_intf_->GetConnectorInfoByOrder(supported_orders[order_index], &info))
+        break;
+    }
+
+    if (j == conn_count) {
+      DLOGE("no matched connector %d for selected_order %d", i, order_index);
+      continue;
+    }
+
+    if (info.type == DRM_MODE_CONNECTOR_TV || info.type == DRM_MODE_CONNECTOR_HDMIA ||
+        info.type == DRM_MODE_CONNECTOR_HDMIB || info.type == DRM_MODE_CONNECTOR_VGA ||
+        info.type == DRM_MODE_CONNECTOR_DisplayPort) {
+      hw_disp_info_array[index].type = kHDMI;
+      hw_disp_info_array[index].is_connected = true;
+    } else {
+      hw_disp_info_array[index].type = kPrimary;
+      hw_disp_info_array[index].is_connected = true;
+    }
+
+    // get connector name
+    for(it = connector_name_map_.begin(); it != connector_name_map_.end() ; it++) {
+        if ((*it).first == info.type) {
+            type_name = (*it).second;
+            break;
+        }
+    }
+    if (type_name == nullptr) {
+        DLOGE("connector type %d can't be found in connector_name_map_", info.type);
+        type_name = "Unknown";
+    }
+    snprintf(hw_disp_info_array[index].name, sizeof hw_disp_info_array[index].name, "%s-%d", type_name, info.type_id);
+
+    DisplayOrder order = kOrderMax;
+    switch (supported_orders[order_index]) {
+      case DRMDisplayOrder::kDRMPrimary:
+        order = kFirst;
+        break;
+      case DRMDisplayOrder::kDRMSecondary:
+        order = kSecondary;
+        break;
+      case DRMDisplayOrder::kDRMTertiary:
+        order = kTertiary;
+        break;
+      default:
+        break;
+    }
+    hw_disp_info_array[index].order = order;
+    DLOGE("hw_disp_info%d, order=%d, type=%d", index, order, hw_disp_info_array[index].type);
+
+    index++;
+    order_index++;
+  }
+
+  if (!index) {
+    DLOGE("no matched connector is found!");
+  }
+
+  return kErrorNone;
+}
 }  // namespace sdm

@@ -827,6 +827,11 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
 }
 
 DisplayError HWDeviceDRM::Flush() {
+int ret = drm_atomic_intf_->Commit(false /* synchronous */, NULL);
+  if (ret) {
+    DLOGE("failed with error %d", ret);
+    return kErrorHardware;
+  }
   return kErrorNone;
 }
 

@@ -97,7 +97,9 @@ enum HWBwModes {
 
 */
 struct HWDisplayInterfaceInfo {
+  DisplayOrder order;
   DisplayType type;
+  char name[30];
   bool is_connected;
 };
 
@@ -184,7 +186,7 @@ class CoreInterface {
 
     @sa DestroyDisplay
   */
-  virtual DisplayError CreateDisplay(DisplayType type, DisplayEventHandler *event_handler,
+  virtual DisplayError CreateDisplay(DisplayType type, DisplaySyncEventType sync_event_type, DisplayEventHandler *event_handler,
                                      DisplayInterface **interface) = 0;
 
   /*! @brief Method to destroy a display device.
@@ -220,6 +222,29 @@ class CoreInterface {
    */
     virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info) = 0;
 
+  /*! @brief Method to get display count.
+
+    @details Client shall use this method to get the count of connected displays.
+
+    @param[out] how many displays are connected.
+
+    @return \link DisplayError \endlink
+
+   */
+    virtual DisplayError GetDisplayCount(uint32_t *count) = 0;
+
+  /*! @brief Method to get characteristics of all displays by display order.
+
+    @details Client shall use this method to get the display type, and whether
+    it is currently connected.
+
+    @param[in] hw_disp_info_arrary structure that display info will be filled into.
+    @param[in] how many display info will be filled.
+
+    @return \link DisplayError \endlink
+
+   */
+    virtual DisplayError GetDisplayInterfaceTypeByOrder(HWDisplayInterfaceInfo *hw_disp_info_array) = 0;
 
  protected:
   virtual ~CoreInterface() { }
