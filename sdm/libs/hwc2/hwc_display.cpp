@@ -518,6 +518,7 @@ void HWCDisplay::BuildLayerStack() {
       }
     }
 
+    bool is_secure = false;
     const private_handle_t *handle =
         reinterpret_cast<const private_handle_t *>(layer->input_buffer.buffer_id);
     if (handle) {
@@ -529,21 +530,17 @@ void HWCDisplay::BuildLayerStack() {
         layer_stack_.flags.video_present = true;
       }
       // TZ Protected Buffer - L1
-      if (handle->flags & private_handle_t::PRIV_FLAGS_SECURE_BUFFER) {
-        layer_stack_.flags.secure_present = true;
-      }
       // Gralloc Usage Protected Buffer - L3 - which needs to be treated as Secure & avoid fallback
-      if (handle->flags & private_handle_t::PRIV_FLAGS_PROTECTED_BUFFER) {
+      if (handle->flags & private_handle_t::PRIV_FLAGS_PROTECTED_BUFFER ||
+          handle->flags & private_handle_t::PRIV_FLAGS_SECURE_BUFFER) {
         layer_stack_.flags.secure_present = true;
+        is_secure = true;
       }
-    }
-
-    if (layer->flags.skip) {
-      layer_stack_.flags.skip_present = true;
     }
 
     if (layer->input_buffer.flags.secure_display) {
       secure_display_active = true;
+      is_secure = true;
     }
 
     if (hwc_layer->IsSingleBuffered() &&
@@ -567,6 +564,14 @@ void HWCDisplay::BuildLayerStack() {
       // dont honor HDR when its handling is disabled
       layer->input_buffer.flags.hdr = true;
       layer_stack_.flags.hdr_present = true;
+    }
+
+    if (hwc_layer->IsNonIntegralSourceCrop() && !is_secure && !hdr_layer) {
+      layer->flags.skip = true;
+    }
+
+    if (layer->flags.skip) {
+      layer_stack_.flags.skip_present = true;
     }
 
     // TODO(user): Move to a getter if this is needed at other places
@@ -637,8 +642,6 @@ void HWCDisplay::BuildLayerStack() {
   }
   // set secure display
   SetSecureDisplay(secure_display_active);
-
-  layer_stack_invalid_ = false;
 }
 
 void HWCDisplay::BuildSolidFillStack() {
@@ -1087,11 +1090,13 @@ HWC2::Error HWCDisplay::PrepareLayerStack(uint32_t *out_num_types, uint32_t *out
   *out_num_types = UINT32(layer_changes_.size());
   *out_num_requests = UINT32(layer_requests_.size());
   skip_validate_ = false;
+  layer_stack_invalid_ = false;
+
   if (*out_num_types > 0) {
     return HWC2::Error::HasChanges;
-  } else {
-    return HWC2::Error::None;
   }
+
+  return HWC2::Error::None;
 }
 
 HWC2::Error HWCDisplay::AcceptDisplayChanges() {
