@@ -93,13 +93,13 @@ DisplayError DisplayHDMI::Init() {
     DisplayBase::Deinit();
     HWInterface::Destroy(hw_intf_);
     DLOGE("Failed to create hardware events interface. Error = %d", error);
-  }
-
-  // When drm page flip event is used, we needs to hook the event class
-  // as user data while doing atomic commit. Or else, the callback handler
-  // will get NULL pointer access.
-  if (sync_event_type_ == kPageFlipEvent) {
-    hw_intf_->SetPageFlipState(true, (void *)hw_events_intf_);
+  } else {
+    // When drm page flip event is used, we needs to hook the event class
+    // as user data while doing atomic commit. Or else, the callback handler
+    // will get NULL pointer access.
+    if (sync_event_type_ == kPageFlipEvent) {
+      hw_intf_->SetPageFlipState(true, (void *)hw_events_intf_);
+    }
   }
 
   return error;
