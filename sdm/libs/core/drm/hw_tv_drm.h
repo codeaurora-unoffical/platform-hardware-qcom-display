@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -43,11 +43,12 @@ class HWTVDRM : public HWDeviceDRM {
   virtual DisplayError SetDisplayAttributes(uint32_t index);
   virtual DisplayError GetConfigIndex(char *mode, uint32_t *index);
   virtual DisplayError PowerOff();
-  virtual DisplayError Doze();
-  virtual DisplayError DozeSuspend();
+  virtual DisplayError Doze(int *release_fence);
+  virtual DisplayError DozeSuspend(int *release_fence);
   virtual DisplayError Standby();
   virtual DisplayError Commit(HWLayers *hw_layers);
   virtual void PopulateHWPanelInfo();
+  virtual DisplayError OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level);
 
  private:
   DisplayError UpdateHDRMetaData(HWLayers *hw_layers);
