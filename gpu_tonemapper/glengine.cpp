@@ -94,9 +94,15 @@ void* engine_initialize()
   int drm_fd = GetDrmMasterFd();
 
   // TODO (user): Need to destroy gbm_device on destructor.
-  struct gbm_device *gbm;
+  struct gbm_device *gbm = NULL;
   if (!(drm_fd < 0))
       gbm = gbm_create_device(drm_fd);
+
+  if (!gbm) {
+    fprintf(stderr, "%s: fail to create gbm device!\n", __FUNCTION__);
+    delete engineContext;
+    return NULL;
+  }
 
   // display
   engineContext->eglDisplay = eglGetDisplay((void*) gbm);

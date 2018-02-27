@@ -76,6 +76,11 @@ Tonemapper *Tonemapper::build(int type, void *colorMap, int colorMapSize, void *
   // build new tonemapper
   Tonemapper *tonemapper = new Tonemapper();
   tonemapper->engineContext = engine_initialize();
+  if (!tonemapper->engineContext) {
+      fprintf(stderr, "fail to create engine context!\n");
+      delete tonemapper;
+      return NULL;
+  }
 
   void* caller_context = engine_backup();
   engine_bind(tonemapper->engineContext);
