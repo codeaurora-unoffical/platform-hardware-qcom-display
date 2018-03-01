@@ -104,8 +104,19 @@ DisplayError HWHDMIDRM::Init() {
     int dev_fd = -1;
     DRMDisplayOrder drm_disp_order = GetDRMDisplayOrder(display_order_);
     DRMMaster::GetInstance(&drm_master);
+    if (!drm_master) {
+      DLOGE("Failed to acquire DRM Master instance");
+      return kErrorResources;
+    }
+
     drm_master->GetHandle(&dev_fd);
-    DRMLibLoader::GetInstance()->FuncGetDRMManager()(dev_fd, &drm_mgr_intf_);
+    DRMLibLoader *drm_lib_loader = DRMLibLoader::GetInstance();
+    if (!drm_lib_loader) {
+      DLOGE("DRMLibLoader::GetInstance failed");
+      return kErrorResources;
+    }
+
+    drm_lib_loader->FuncGetDRMManager()(dev_fd, &drm_mgr_intf_);
     if (drm_mgr_intf_->RegisterDisplay(drm_disp_order, DRMDisplayType::TV, &token_)) {
       DLOGE("RegisterDisplay failed");
       return kErrorResources;
