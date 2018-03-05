@@ -526,6 +526,10 @@ gralloc1_error_t BufferManager::Perform(int operation, va_list args) {
       int format = va_arg(args, int);
 
       native_handle_t **handle = va_arg(args, native_handle_t **);
+      if (!handle) {
+        return GRALLOC1_ERROR_BAD_HANDLE;
+      }
+
       private_handle_t *hnd = reinterpret_cast<private_handle_t *>(
           native_handle_create(private_handle_t::kNumFds, private_handle_t::NumInts()));
       if (hnd) {
@@ -535,7 +539,7 @@ gralloc1_error_t BufferManager::Perform(int operation, va_list args) {
         hnd->flags = private_handle_t::PRIV_FLAGS_USES_ION;
         hnd->size = size;
         hnd->offset = offset;
-        hnd->base = uint64_t(base) + offset;
+        hnd->base = uint64_t(base);
         hnd->gpuaddr = 0;
         BufferDescriptor descriptor(width, height, format);
         allocator_->GetAlignedWidthAndHeight(descriptor, &alignedw, &alignedh);
@@ -553,6 +557,11 @@ gralloc1_error_t BufferManager::Perform(int operation, va_list args) {
       int format = va_arg(args, int);
       int *stride = va_arg(args, int *);
       unsigned int alignedw = 0, alignedh = 0;
+
+      if (!stride) {
+        return GRALLOC1_ERROR_BAD_VALUE;
+      }
+
       BufferDescriptor descriptor(width, width, format);
       allocator_->GetAlignedWidthAndHeight(descriptor, &alignedw, &alignedh);
       *stride = INT(alignedw);
@@ -563,6 +572,10 @@ gralloc1_error_t BufferManager::Perform(int operation, va_list args) {
       int *stride = va_arg(args, int *);
       if (private_handle_t::validate(hnd) != 0) {
         return GRALLOC1_ERROR_BAD_HANDLE;
+      }
+
+      if (!stride) {
+        return GRALLOC1_ERROR_BAD_VALUE;
       }
 
       MetaData_t *metadata = reinterpret_cast<MetaData_t *>(hnd->base_metadata);
@@ -582,6 +595,9 @@ gralloc1_error_t BufferManager::Perform(int operation, va_list args) {
         return GRALLOC1_ERROR_BAD_HANDLE;
       }
 
+      if (!stride || !height) {
+        return GRALLOC1_ERROR_BAD_VALUE;
+      }
       MetaData_t *metadata = reinterpret_cast<MetaData_t *>(hnd->base_metadata);
       if (metadata && metadata->operation & UPDATE_BUFFER_GEOMETRY) {
         *stride = metadata->bufferDim.sliceWidth;
@@ -606,6 +622,10 @@ gralloc1_error_t BufferManager::Perform(int operation, va_list args) {
       int *aligned_width = va_arg(args, int *);
       int *aligned_height = va_arg(args, int *);
       int *tile_enabled = va_arg(args, int *);
+      if (!aligned_width || !aligned_height || !tile_enabled) {
+        return GRALLOC1_ERROR_BAD_VALUE;
+      }
+
       unsigned int alignedw, alignedh;
       BufferDescriptor descriptor(width, height, format, prod_usage, cons_usage);
       *tile_enabled = allocator_->IsUBwcEnabled(format, prod_usage, cons_usage);
@@ -618,8 +638,13 @@ gralloc1_error_t BufferManager::Perform(int operation, va_list args) {
     case GRALLOC_MODULE_PERFORM_GET_COLOR_SPACE_FROM_HANDLE: {
       private_handle_t *hnd = va_arg(args, private_handle_t *);
       int *color_space = va_arg(args, int *);
+
       if (private_handle_t::validate(hnd) != 0) {
         return GRALLOC1_ERROR_BAD_HANDLE;
+      }
+
+      if (!color_space) {
+        return GRALLOC1_ERROR_BAD_VALUE;
       }
       MetaData_t *metadata = reinterpret_cast<MetaData_t *>(hnd->base_metadata);
       if (!metadata) {
@@ -652,6 +677,10 @@ gralloc1_error_t BufferManager::Perform(int operation, va_list args) {
       if (private_handle_t::validate(hnd) != 0) {
         return GRALLOC1_ERROR_BAD_HANDLE;
       }
+
+      if (!ycbcr) {
+        return GRALLOC1_ERROR_BAD_VALUE;
+      }
       if (allocator_->GetYUVPlaneInfo(hnd, ycbcr)) {
         return GRALLOC1_ERROR_UNDEFINED;
       }
@@ -660,8 +689,13 @@ gralloc1_error_t BufferManager::Perform(int operation, va_list args) {
     case GRALLOC_MODULE_PERFORM_GET_MAP_SECURE_BUFFER_INFO: {
       private_handle_t *hnd = va_arg(args, private_handle_t *);
       int *map_secure_buffer = va_arg(args, int *);
+
       if (private_handle_t::validate(hnd) != 0) {
         return GRALLOC1_ERROR_BAD_HANDLE;
+      }
+
+      if (!map_secure_buffer) {
+        return GRALLOC1_ERROR_BAD_VALUE;
       }
       MetaData_t *metadata = reinterpret_cast<MetaData_t *>(hnd->base_metadata);
       if (metadata && metadata->operation & MAP_SECURE_BUFFER) {
@@ -674,17 +708,28 @@ gralloc1_error_t BufferManager::Perform(int operation, va_list args) {
     case GRALLOC_MODULE_PERFORM_GET_UBWC_FLAG: {
       private_handle_t *hnd = va_arg(args, private_handle_t *);
       int *flag = va_arg(args, int *);
+
       if (private_handle_t::validate(hnd) != 0) {
         return GRALLOC1_ERROR_BAD_HANDLE;
       }
+
+      if (!flag) {
+        return GRALLOC1_ERROR_BAD_VALUE;
+      }
+
       *flag = hnd->flags &private_handle_t::PRIV_FLAGS_UBWC_ALIGNED;
     } break;
 
     case GRALLOC_MODULE_PERFORM_GET_RGB_DATA_ADDRESS: {
       private_handle_t *hnd = va_arg(args, private_handle_t *);
       void **rgb_data = va_arg(args, void **);
+
       if (private_handle_t::validate(hnd) != 0) {
         return GRALLOC1_ERROR_BAD_HANDLE;
+      }
+
+      if (!rgb_data) {
+        return GRALLOC1_ERROR_BAD_VALUE;
       }
       if (allocator_->GetRgbDataAddress(hnd, rgb_data)) {
         return GRALLOC1_ERROR_UNDEFINED;
@@ -702,6 +747,10 @@ gralloc1_error_t BufferManager::Perform(int operation, va_list args) {
       uint32_t *aligned_width = va_arg(args, uint32_t *);
       uint32_t *aligned_height = va_arg(args, uint32_t *);
       uint32_t *size = va_arg(args, uint32_t *);
+
+      if (!aligned_width || !aligned_height || !size) {
+        return GRALLOC1_ERROR_BAD_VALUE;
+      }
       auto descriptor = BufferDescriptor(width, height, format, producer_usage, consumer_usage);
       allocator_->GetBufferSizeAndDimensions(descriptor, size, aligned_width, aligned_height);
       // Align size
