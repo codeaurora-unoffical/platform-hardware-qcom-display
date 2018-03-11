@@ -45,6 +45,7 @@ struct DRMBuffer {
   uint32_t stride[4] = {};
   uint32_t offset[4] = {};
   uint32_t num_planes = 1;
+  bool close_gem_handle = true;
 };
 
 class DRMMaster {

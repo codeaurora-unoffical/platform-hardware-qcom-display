@@ -96,6 +96,7 @@ DRMMaster::~DRMMaster() {
 
 int DRMMaster::CreateFbId(const DRMBuffer &drm_buffer, uint32_t *fb_id) {
   uint32_t gem_handle = 0;
+  bool close_gem_handle = drm_buffer.close_gem_handle;
   int ret = drmPrimeFDToHandle(dev_fd_, drm_buffer.fd, &gem_handle);
   if (ret) {
     DRM_LOGE("drmPrimeFDToHandle failed with error %d", ret);
@@ -119,12 +120,14 @@ int DRMMaster::CreateFbId(const DRMBuffer &drm_buffer, uint32_t *fb_id) {
     *fb_id = cmd2.fb_id;
   }
 
-  struct drm_gem_close gem_close = {};
-  gem_close.handle = gem_handle;
-  int ret1 = drmIoctl(dev_fd_, DRM_IOCTL_GEM_CLOSE, &gem_close);
-  if (ret1) {
-    DRM_LOGE("drmIoctl::DRM_IOCTL_GEM_CLOSE failed with error %d", ret1);
-    return ret1;
+  if (close_gem_handle) {
+    struct drm_gem_close gem_close = {};
+    gem_close.handle = gem_handle;
+    int ret1 = drmIoctl(dev_fd_, DRM_IOCTL_GEM_CLOSE, &gem_close);
+    if (ret1) {
+      DRM_LOGE("drmIoctl::DRM_IOCTL_GEM_CLOSE failed with error %d", ret1);
+      return ret1;
+    }
   }
 
   return ret;

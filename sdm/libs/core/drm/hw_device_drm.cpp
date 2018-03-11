@@ -279,6 +279,7 @@ void HWDeviceDRM::Registry::RegisterCurrent(HWLayers *hw_layers) {
       GetDRMFormat(buf_info.format, &layout.drm_format, &layout.drm_format_modifier);
       buffer_allocator_->GetBufferLayout(buf_info, layout.stride, layout.offset,
                                          &layout.num_planes);
+      layout.close_gem_handle = !input_buffer->flags.external_gem_handle;
       uint32_t fb_id = 0;
       int ret = master->CreateFbId(layout, &fb_id);
       if (ret < 0) {

@@ -210,6 +210,9 @@ struct LayerBufferFlags {
 
       uint32_t hdr : 1;             //!< This flag shall be set by the client to indicate that the
                                     //!< the content is HDR.
+
+      uint32_t external_gem_handle : 1;   //!< Indicate if the GEM handle is maintained by SDM or not.
+                                    //!< Don't close it if it's not created by SDM, jsut let the maintainer close it.
     };
 
     uint32_t flags = 0;             //!< For initialization purpose only.
