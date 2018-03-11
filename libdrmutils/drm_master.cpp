@@ -119,12 +119,14 @@ int DRMMaster::CreateFbId(const DRMBuffer &drm_buffer, uint32_t *fb_id) {
     *fb_id = cmd2.fb_id;
   }
 
-  struct drm_gem_close gem_close = {};
-  gem_close.handle = gem_handle;
-  int ret1 = drmIoctl(dev_fd_, DRM_IOCTL_GEM_CLOSE, &gem_close);
-  if (ret1) {
-    DRM_LOGE("drmIoctl::DRM_IOCTL_GEM_CLOSE failed with error %d", ret1);
-    return ret1;
+  if (!is_external_handle_) {
+    struct drm_gem_close gem_close = {};
+    gem_close.handle = gem_handle;
+    int ret1 = drmIoctl(dev_fd_, DRM_IOCTL_GEM_CLOSE, &gem_close);
+    if (ret1) {
+      DRM_LOGE("drmIoctl::DRM_IOCTL_GEM_CLOSE failed with error %d", ret1);
+      return ret1;
+    }
   }
 
   return ret;
