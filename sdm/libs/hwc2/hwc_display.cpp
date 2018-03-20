@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2016, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2016, 2020 The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -822,13 +822,13 @@ HWC2::Error HWCDisplay::GetDisplayRequests(int32_t *out_display_requests,
 }
 
 HWC2::Error HWCDisplay::CommitLayerStack(void) {
-  if (shutdown_pending_ || layer_set_.empty()) {
-    return HWC2::Error::None;
-  }
-
   if (!validated_) {
     DLOGW("Display is not validated");
     return HWC2::Error::NotValidated;
+  }
+
+  if (shutdown_pending_ || layer_set_.empty()) {
+    return HWC2::Error::None;
   }
 
   DumpInputBuffers();
@@ -894,9 +894,12 @@ HWC2::Error HWCDisplay::PostCommitLayerStack(int32_t *out_retire_fence) {
       close(layer_buffer->acquire_fence_fd);
       layer_buffer->acquire_fence_fd = -1;
     }
+
+    layer->request.flags = {};
   }
 
-  *out_retire_fence = stored_retire_fence_;
+  client_target_->GetSDMLayer()->request.flags = {};
+  *out_retire_fence = -1;
   if (!flush_) {
     // if swapinterval property is set to 0 then close and reset the list retire fence
     if (swap_interval_zero_) {
