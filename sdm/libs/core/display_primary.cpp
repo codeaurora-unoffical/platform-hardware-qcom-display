@@ -291,7 +291,7 @@ DisplayError DisplayPrimary::SetRefreshRate(uint32_t refresh_rate, bool final_ra
 }
 
 DisplayError DisplayPrimary::VSync(int64_t timestamp) {
-  if (vsync_enable_) {
+  if (vsync_enable_ && !drop_hw_vsync_) {
     DisplayEventVSync vsync;
     vsync.timestamp = timestamp;
     event_handler_->VSync(vsync);
@@ -302,7 +302,9 @@ DisplayError DisplayPrimary::VSync(int64_t timestamp) {
 
 void DisplayPrimary::IdleTimeout() {
   if (hw_panel_info_.mode == kModeVideo) {
-    event_handler_->HandleEvent(kIdleTimeout);
+    if (event_handler_->HandleEvent(kIdleTimeout) != kErrorNone) {
+      return;
+    }
     handle_idle_timeout_ = true;
     event_handler_->Refresh();
     lock_guard<recursive_mutex> obj(recursive_mutex_);
