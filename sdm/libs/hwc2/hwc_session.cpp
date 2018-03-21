@@ -668,10 +668,10 @@ int32_t HWCSession::SetLayerSidebandStream(hwc2_device_t *device, hwc2_display_t
   int32_t stream_id;
   HWCSidebandStream *stm;
 
-  if (android::SidebandHandle::validate(stream))
+  if (android::SidebandHandleBase::validate(stream))
     return HWC2_ERROR_NOT_VALIDATED;
 
-  const android::SidebandHandle * sb_nativeHandle_ = static_cast<const android::SidebandHandle *>(stream);
+  const android::SidebandHandleBase * sb_nativeHandle_ = static_cast<const android::SidebandHandleBase *>(stream);
   stream_id = sb_nativeHandle_->getSidebandHandleId();
 
   HWCSession *hwc_session = static_cast<HWCSession *>(device);

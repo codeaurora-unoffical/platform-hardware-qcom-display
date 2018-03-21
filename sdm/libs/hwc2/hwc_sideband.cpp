@@ -42,7 +42,7 @@ namespace sdm {
 
 SidebandStreamBuf::~SidebandStreamBuf(void) {
   if (mHandle) {
-    mHandle->sendBufferByDisplay(mIdx);
+    mHandle->releaseBuffer(mIdx);
     delete mSBHandle;
   }
 }
@@ -51,10 +51,19 @@ HWCSidebandStream::HWCSidebandStream(hwc2_device_t *device, buffer_handle_t hand
   :mDevice(device) {
 
   mNativeHandle = native_handle_clone(handle);
-  sb_nativeHandle_ = new android::SidebandHandle(mNativeHandle);
 
-  if (pthread_create(&sideband_thread_, NULL, &SidebandStreamThread, this) < 0) {
-    DLOGE("Failed to start thread %p\n", sb_nativeHandle_);
+  android::SidebandStreamHandle * sidebandHandle = SidebandStreamLoader::GetSidebandStreamHandle();
+  if (sidebandHandle && sidebandHandle->mHandleConsumer) {
+    sb_nativeHandle_ = sidebandHandle->mHandleConsumer(mNativeHandle);
+    if (sb_nativeHandle_) {
+      if (pthread_create(&sideband_thread_, NULL, &SidebandStreamThread, this) < 0) {
+        DLOGE("Failed to start thread %p\n", sb_nativeHandle_);
+      }
+    } else {
+      DLOGE("Failed to create SidebandStream consumer");
+    }
+  } else {
+    DLOGE("Failed to load SidebandStreamHandler");
   }
 }
 
@@ -62,7 +71,8 @@ HWCSidebandStream::~HWCSidebandStream() {
   sideband_thread_exit_ = true;
   pthread_join(sideband_thread_, NULL);
   mStreamBuf_ = nullptr;
-  delete sb_nativeHandle_;
+  if (sb_nativeHandle_)
+    delete sb_nativeHandle_;
   native_handle_close(mNativeHandle);
   native_handle_delete(mNativeHandle);
 }
@@ -121,7 +131,7 @@ void *HWCSidebandStream::SidebandThreadHandler(void) {
   size = (unsigned int)sb_nativeHandle_->getBufferSize();
 
   while (!sideband_thread_exit_) {
-    result = sb_nativeHandle_->getBufferByDisplay(&buf_idx, 50);
+    result = sb_nativeHandle_->acquireBuffer(&buf_idx, 50);
     if (result==android::NO_ERROR ){
       android::sp<SidebandStreamBuf> ptr = new SidebandStreamBuf;
       buf_fd = sb_nativeHandle_->getBufferFd(buf_idx);
@@ -172,6 +182,16 @@ void *HWCSidebandStream::SidebandThreadHandler(void) {
   }
 
   return NULL;
+}
+
+android::SidebandStreamHandle * SidebandStreamLoader::handle_inst_ = NULL;
+
+android::SidebandStreamHandle * SidebandStreamLoader::GetSidebandStreamHandle(void) {
+  if (!handle_inst_) {
+    handle_inst_ = new android::SidebandStreamHandle;
+    handle_inst_->init();
+  }
+  return handle_inst_;
 }
 
 }  // namespace sdm

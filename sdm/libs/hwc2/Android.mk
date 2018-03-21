@@ -9,7 +9,7 @@ LOCAL_VENDOR_MODULE           := true
 LOCAL_MODULE_RELATIVE_PATH    := hw
 LOCAL_MODULE_TAGS             := optional
 LOCAL_C_INCLUDES              := $(common_includes)\
-                                 $(TARGET_OUT_HEADERS)/mm-avinput/include
+                                 hardware/qcom/media/libsidebandstreamhandle
 LOCAL_HEADER_LIBRARIES        := display_headers
 
 LOCAL_CFLAGS                  := -Wno-missing-field-initializers -Wno-unused-parameter \
@@ -22,7 +22,7 @@ LOCAL_SHARED_LIBRARIES        := libsdmcore libqservice libbinder libhardware li
                                  libutils libcutils libsync libqdutils libqdMetaData libdl libdrmutils \
                                  libpowermanager libsdmutils libc++ liblog libgrallocutils libdl \
                                  vendor.display.config@1.0_vendor libhidlbase libhidltransport \
-                                 libsideband
+                                 libsidebandstreamhandle
 
 ifneq ($(TARGET_USES_GRALLOC1), true)
     LOCAL_SHARED_LIBRARIES += libmemalloc

@@ -34,14 +34,14 @@
 #include <utils/locker.h>
 #include <utils/StrongPointer.h>
 #include <utils/LightRefBase.h>
-#include <SidebandHandle.h>
+#include <SidebandStreamHandle.h>
 #include <map>
 
 namespace sdm {
 
   struct SidebandStreamBuf : public android::LightRefBase<SidebandStreamBuf> {
     private_handle_t *mSBHandle = nullptr;
-    android::SidebandHandle *mHandle = nullptr;
+    android::SidebandHandleBase *mHandle = nullptr;
     int32_t mIdx = 0;
     ~SidebandStreamBuf(void);
   };
@@ -63,10 +63,18 @@ namespace sdm {
     Locker mSidebandLock_;
     hwc2_device_t *mDevice = NULL;
     native_handle_t *mNativeHandle = NULL;
-    android::SidebandHandle *sb_nativeHandle_ = NULL;
+    android::SidebandHandleBase *sb_nativeHandle_ = NULL;
     android::sp<SidebandStreamBuf> mStreamBuf_;
     pthread_t sideband_thread_ = {};
     bool sideband_thread_exit_ = false;
+  };
+
+  class SidebandStreamLoader {
+   private:
+    static android::SidebandStreamHandle * handle_inst_;
+    explicit SidebandStreamLoader(void){}
+   public:
+    static android::SidebandStreamHandle * GetSidebandStreamHandle(void);
   };
 
 }  // namespace sdm
