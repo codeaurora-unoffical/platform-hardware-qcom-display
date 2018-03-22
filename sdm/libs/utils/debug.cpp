@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2016, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2016, 2018 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -214,6 +214,13 @@ bool Debug::SetProperty(const char* property_name, const char* value) {
   }
 
   return true;
+}
+
+bool Debug::IsDmaReservedForRotation() {
+  int value = 0;
+  debug_.debug_handler_->GetProperty("sdm.reserve_dma_rotation", &value);
+
+  return (value == 1);
 }
 
 }  // namespace sdm
