@@ -201,6 +201,7 @@ HWC2::Error HWCDisplayPrimary::Validate(uint32_t *out_num_types, uint32_t *out_n
   }
 
   if (layer_set_.empty()) {
+    validated_ = true;
     flush_ = true;
     return status;
   }
