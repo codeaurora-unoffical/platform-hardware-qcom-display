@@ -50,9 +50,9 @@ namespace sdm {
    public:
     int32_t AddLayer(hwc2_layer_t layer, hwc2_display_t display);
     int32_t RemoveLayer(hwc2_layer_t layer);
-    bool HasLayer(hwc2_layer_t layer);
     int32_t SetBuffer(android::sp<SidebandStreamBuf> buf);
     android::sp<SidebandStreamBuf> GetBuffer(void);
+    int32_t PostDisplay(hwc2_display_t display);
     static void *SidebandStreamThread(void *context);
     void *SidebandThreadHandler();
     HWCSidebandStream(hwc2_device_t *device, buffer_handle_t handle);
@@ -65,6 +65,9 @@ namespace sdm {
     native_handle_t *mNativeHandle = NULL;
     android::SidebandHandleBase *sb_nativeHandle_ = NULL;
     android::sp<SidebandStreamBuf> mStreamBuf_;
+    uint32_t displayMask_ = 0;
+    uint32_t pendingMask_ = 0;
+    bool enableBackpressure_ = true;
     pthread_t sideband_thread_ = {};
     bool sideband_thread_exit_ = false;
   };

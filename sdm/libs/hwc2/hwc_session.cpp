@@ -392,10 +392,8 @@ int32_t HWCSession::DestroyLayer(hwc2_device_t *device, hwc2_display_t display,
 
   std::vector<int32_t> removeList;
   for (auto & sbstream : hwc_session->mSidebandStreamList) {
-    if (sbstream.second->HasLayer(layer)) {
-      if (sbstream.second->RemoveLayer(layer) == HWC2_ERROR_NO_RESOURCES) {
-        removeList.push_back(sbstream.first);
-      }
+    if (sbstream.second->RemoveLayer(layer) == HWC2_ERROR_NO_RESOURCES) {
+      removeList.push_back(sbstream.first);
     }
   }
 
@@ -562,6 +560,10 @@ int32_t HWCSession::PresentDisplay(hwc2_device_t *device, hwc2_display_t display
     CALC_FPS();
   }
 
+  for (auto & sbstream : hwc_session->mSidebandStreamList) {
+    sbstream.second->PostDisplay(display);
+  }
+
   return INT32(status);
 }
 
@@ -689,10 +691,8 @@ int32_t HWCSession::SetLayerSidebandStream(hwc2_device_t *device, hwc2_display_t
   native_handle_close(native_handle);
   native_handle_delete(native_handle);
 
-  if (!stm->HasLayer(layer)) {
-    //add new layer as a listner to this sideband stream
-    stm->AddLayer(layer, display);
-  }
+  //try to add new layer as a listner to this sideband stream
+  stm->AddLayer(layer, display);
 
   //pickup most recent sideband stream buffer
   android::sp<SidebandStreamBuf> buf = stm->GetBuffer();

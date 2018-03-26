@@ -108,7 +108,12 @@ HWC2::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, int32_t acquire_fen
   LayerBuffer *layer_buffer = &layer_->input_buffer;
   int aligned_width, aligned_height;
 #ifdef USE_GRALLOC1
-  buffer_allocator_->GetCustomWidthAndHeight(handle, &aligned_width, &aligned_height);
+  if (handle->fd_metadata >= 0) {
+    buffer_allocator_->GetCustomWidthAndHeight(handle, &aligned_width, &aligned_height);
+  } else {
+    aligned_width = handle->width;
+    aligned_height = handle->height;
+  }
 #else
   AdrenoMemInfo::getInstance().getAlignedWidthAndHeight(handle, aligned_width, aligned_height);
 #endif
@@ -259,6 +264,9 @@ HWC2::Error HWCLayer::SetLayerSidebandStream(android::sp<SidebandStreamBuf> buf)
   layer_->src_rect.top = 0;
   layer_->src_rect.right = FLOAT(handle->width);
   layer_->src_rect.bottom = FLOAT(handle->height);
+
+  // defer buffer release
+  mOldSidebandStreamBuffer = mSidebandStreamBuffer;
 
   // bookeep current buffer
   mSidebandStreamBuffer = buf;

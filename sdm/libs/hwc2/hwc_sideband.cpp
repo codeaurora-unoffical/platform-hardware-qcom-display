@@ -52,6 +52,10 @@ HWCSidebandStream::HWCSidebandStream(hwc2_device_t *device, buffer_handle_t hand
 
   mNativeHandle = native_handle_clone(handle);
 
+  int enableBackpressure = 0;
+  if (Debug::Get()->GetProperty("sdm.debug.sideband.backpressure", &enableBackpressure) == 0)
+    enableBackpressure_ = enableBackpressure;
+
   android::SidebandStreamHandle * sidebandHandle = SidebandStreamLoader::GetSidebandStreamHandle();
   if (sidebandHandle && sidebandHandle->mHandleConsumer) {
     sb_nativeHandle_ = sidebandHandle->mHandleConsumer(mNativeHandle);
@@ -68,7 +72,10 @@ HWCSidebandStream::HWCSidebandStream(hwc2_device_t *device, buffer_handle_t hand
 }
 
 HWCSidebandStream::~HWCSidebandStream() {
+  mSidebandLock_.Lock();
   sideband_thread_exit_ = true;
+  mSidebandLock_.Signal();
+  mSidebandLock_.Unlock();
   pthread_join(sideband_thread_, NULL);
   mStreamBuf_ = nullptr;
   if (sb_nativeHandle_)
@@ -79,28 +86,42 @@ HWCSidebandStream::~HWCSidebandStream() {
 
 int32_t HWCSidebandStream::AddLayer(hwc2_layer_t layer, hwc2_display_t display) {
   SCOPE_LOCK(mSidebandLock_);
-  mLayers[layer] = display;
+  if (!mLayers.count(layer)) {
+    mLayers[layer] = display;
+    displayMask_ |= (1 << display);
+  }
   return 0;
 }
 
 int32_t HWCSidebandStream::RemoveLayer(hwc2_layer_t layer) {
   SCOPE_LOCK(mSidebandLock_);
-  mLayers.erase(layer);
-
-  if (mLayers.size() == 0) {
-    return HWC2_ERROR_NO_RESOURCES;
+  auto iter = mLayers.find(layer);
+  if (iter != mLayers.end()) {
+    if (pendingMask_ | (1 << iter->second)) {
+      pendingMask_ &= ~(1 << iter->second);
+      if (!pendingMask_)
+        mSidebandLock_.Signal();
+    }
+    mLayers.erase(iter);
+    displayMask_ = 0;
+    if (mLayers.size() == 0) {
+      return HWC2_ERROR_NO_RESOURCES;
+    }
+    for (auto & layer : mLayers) {
+      displayMask_ |= (1 << layer.second);
+    }
   }
-
   return 0;
-}
-
-bool HWCSidebandStream::HasLayer(hwc2_layer_t layer) {
-  SCOPE_LOCK(mSidebandLock_);
-  return mLayers.count(layer) > 0;
 }
 
 int32_t HWCSidebandStream::SetBuffer(android::sp<SidebandStreamBuf> buf) {
   SCOPE_LOCK(mSidebandLock_);
+  if (pendingMask_ && !sideband_thread_exit_) {
+    mSidebandLock_.Wait();
+  }
+  if (enableBackpressure_) {
+    pendingMask_ = displayMask_;
+  }
   mStreamBuf_ = buf;
   return 0;
 }
@@ -108,6 +129,16 @@ int32_t HWCSidebandStream::SetBuffer(android::sp<SidebandStreamBuf> buf) {
 android::sp<SidebandStreamBuf> HWCSidebandStream::GetBuffer(void) {
   SCOPE_LOCK(mSidebandLock_);
   return mStreamBuf_;
+}
+
+int32_t HWCSidebandStream::PostDisplay(hwc2_display_t displayId) {
+  SCOPE_LOCK(mSidebandLock_);
+  if (pendingMask_ | (1 << displayId)) {
+    pendingMask_ &= ~(1 << displayId);
+    if (!pendingMask_)
+      mSidebandLock_.Signal();
+  }
+  return 0;
 }
 
 void *HWCSidebandStream::SidebandStreamThread(void *context) {
@@ -169,14 +200,11 @@ void *HWCSidebandStream::SidebandThreadHandler(void) {
 
       SetBuffer(ptr);
 
-      std::bitset<32> bit_mask_display_refresh = 0;
-      for(auto & layer : mLayers) {
-        bit_mask_display_refresh[(size_t)layer.second] = 1;
-      }
-      for (uint32_t i = HWC_DISPLAY_PRIMARY; i < kOrderMax + MAX_VIRTUAL_DISPLAY_NUM; i++) {
-        if (bit_mask_display_refresh[i]) {
-          hwc_session->Refresh(i);
-        }
+      if (sideband_thread_exit_)
+        break;
+
+      for (auto & layer : mLayers) {
+        hwc_session->Refresh(layer.second);
       }
     }
   }
