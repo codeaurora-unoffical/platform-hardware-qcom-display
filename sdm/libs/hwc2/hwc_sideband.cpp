@@ -47,8 +47,8 @@ SidebandStreamBuf::~SidebandStreamBuf(void) {
   }
 }
 
-HWCSidebandStream::HWCSidebandStream(hwc2_device_t *device, buffer_handle_t handle)
-  :mDevice(device) {
+HWCSidebandStream::HWCSidebandStream(HWCSidebandStreamSession *session, buffer_handle_t handle)
+  :mSession(session) {
 
   mNativeHandle = native_handle_clone(handle);
 
@@ -89,6 +89,7 @@ int32_t HWCSidebandStream::AddLayer(hwc2_layer_t layer, hwc2_display_t display) 
   if (!mLayers.count(layer)) {
     mLayers[layer] = display;
     displayMask_ |= (1 << display);
+    mDisplays.insert(display);
   }
   return 0;
 }
@@ -104,11 +105,13 @@ int32_t HWCSidebandStream::RemoveLayer(hwc2_layer_t layer) {
     }
     mLayers.erase(iter);
     displayMask_ = 0;
+    mDisplays.clear();
     if (mLayers.size() == 0) {
       return HWC2_ERROR_NO_RESOURCES;
     }
     for (auto & layer : mLayers) {
       displayMask_ |= (1 << layer.second);
+      mDisplays.insert(layer.second);
     }
   }
   return 0;
@@ -150,8 +153,6 @@ void *HWCSidebandStream::SidebandStreamThread(void *context) {
 }
 
 void *HWCSidebandStream::SidebandThreadHandler(void) {
-  HWCSession *hwc_session = static_cast<HWCSession *>(mDevice);
-
   setpriority(PRIO_PROCESS, 0, HAL_PRIORITY_URGENT_DISPLAY);
   android::status_t result = android::NO_ERROR;
   int width, height, buf_idx, buf_fd, format;
@@ -203,9 +204,7 @@ void *HWCSidebandStream::SidebandThreadHandler(void) {
       if (sideband_thread_exit_)
         break;
 
-      for (auto & layer : mLayers) {
-        hwc_session->Refresh(layer.second);
-      }
+      mSession->UpdateSidebandStream(this);
     }
   }
 
@@ -220,6 +219,146 @@ android::SidebandStreamHandle * SidebandStreamLoader::GetSidebandStreamHandle(vo
     handle_inst_->init();
   }
   return handle_inst_;
+}
+
+int32_t HWCSidebandStreamSession::Init(HWCSession *session) {
+  hwc_session = session;
+  return 0;
+}
+
+void HWCSidebandStreamSession::StartPresentation(hwc2_display_t display) {
+  present_start = true;
+}
+
+void HWCSidebandStreamSession::StopPresentation(hwc2_display_t display) {
+  for (auto & sbstream : mSidebandStreamList) {
+    sbstream.second->PostDisplay(display);
+  }
+
+  clock_gettime(CLOCK_MONOTONIC, &present_timestamp_);
+  present_start = false;
+}
+
+int32_t HWCSidebandStreamSession::SetLayerSidebandStream(hwc2_display_t display,
+                                  hwc2_layer_t layer, buffer_handle_t stream) {
+  int32_t stream_id;
+  HWCSidebandStream *stm;
+
+  if (android::SidebandHandleBase::validate(stream))
+    return HWC2_ERROR_NOT_VALIDATED;
+
+  const android::SidebandHandleBase * sb_nativeHandle_ = static_cast<const android::SidebandHandleBase *>(stream);
+  stream_id = sb_nativeHandle_->getSidebandHandleId();
+
+  if (mSidebandStreamList.count(stream_id) == 0) {
+    //No active sideband thread for this stream, create one.
+    stm = new HWCSidebandStream(this, stream);
+    mSidebandStreamList[stream_id] = stm;
+  } else {
+    //sideband thread exist for this stream, Get the thread handle.
+    stm = mSidebandStreamList[stream_id];
+  }
+
+  //SF will always clone stream for sideband, delete them here to avoid memory/fd leak
+  native_handle_t* native_handle = const_cast<native_handle_t*>(stream);
+  native_handle_close(native_handle);
+  native_handle_delete(native_handle);
+
+  //try to add new layer as a listner to this sideband stream
+  stm->AddLayer(layer, display);
+
+  //pickup most recent sideband stream buffer
+  android::sp<SidebandStreamBuf> buf = stm->GetBuffer();
+  if (buf != nullptr) {
+    HWCSession::CallLayerFunction(hwc_session, display, layer, &HWCLayer::SetLayerSidebandStream, buf);
+  }
+
+  return HWC2_ERROR_NONE;
+}
+
+int32_t HWCSidebandStreamSession::DestroyLayer(hwc2_display_t display, hwc2_layer_t layer) {
+  std::vector<int32_t> removeList;
+  for (auto & sbstream : mSidebandStreamList) {
+    if (sbstream.second->RemoveLayer(layer) == HWC2_ERROR_NO_RESOURCES) {
+      removeList.push_back(sbstream.first);
+    }
+  }
+
+  for (auto stream_id : removeList) {
+    auto sbstream = mSidebandStreamList[stream_id];
+    mSidebandStreamList.erase(stream_id);
+    delete sbstream;
+  }
+
+  return HWC2_ERROR_NONE;
+}
+
+int32_t HWCSidebandStreamSession::UpdateSidebandStream(HWCSidebandStream * stm) {
+  int vsync_span = hwc_session->GetVsyncPeriod(0);
+
+  SCOPE_LOCK(hwc_session->locker_);
+
+  // if there are more than one streams, go back to surfaceflinger
+  if (mSidebandStreamList.size() > 1) {
+    for (auto & display : stm->mDisplays) {
+      hwc_session->Refresh(display);
+    }
+    return 0;
+  }
+
+  // if present start, return immediately
+  if (present_start)
+    return 0;
+
+  // check most recent present timestamp, if larger than vsync period, display right away
+  struct timespec tv;
+  clock_gettime(CLOCK_MONOTONIC, &tv);
+  int64_t span = (tv.tv_sec - present_timestamp_.tv_sec) * 1000000000LL +
+                (tv.tv_nsec - present_timestamp_.tv_nsec);
+  if (span <= vsync_span) {
+    hwc_session->locker_.WaitFinite((int)(vsync_span - span) / 1000000);
+    if (present_start)
+      return 0;
+  }
+
+  for (auto & pair : stm->mLayers) {
+    hwc2_layer_t layer = pair.first;
+    hwc2_display_t display = pair.second;
+    HWCSession::CallLayerFunction(hwc_session, display, layer, &HWCLayer::SetLayerSidebandStream, stm->GetBuffer());
+  }
+
+  for (auto & display : stm->mDisplays) {
+    uint32_t num_types, num_requests;
+    auto status = hwc_session->hwc_display_[display]->Validate(&num_types, &num_requests);
+    if (status != HWC2::Error::None) {
+      goto next;
+    }
+
+    int32_t retire_fence;
+    status = hwc_session->hwc_display_[display]->Present(&retire_fence);
+    if (status != HWC2::Error::None) {
+      goto next;
+    }
+    if (retire_fence >= 0)
+      ::close(retire_fence);
+
+    uint32_t num_layer;
+    hwc_session->hwc_display_[display]->GetReleaseFences(&num_layer, NULL, NULL);
+    if (num_layer) {
+      std::vector<hwc2_layer_t> layers(num_layer);
+      std::vector<int32_t> fences(num_layer);
+      hwc_session->hwc_display_[display]->GetReleaseFences(&num_layer, layers.data(), fences.data());
+      for (uint32_t i = 0; i < num_layer; i++) {
+        if (fences[i] >= 0)
+          ::close(fences[i]);
+      }
+    }
+
+next:
+    stm->PostDisplay(display);
+  }
+
+  return 0;
 }
 
 }  // namespace sdm

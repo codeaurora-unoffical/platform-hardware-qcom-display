@@ -35,7 +35,8 @@
 #include <utils/StrongPointer.h>
 #include <utils/LightRefBase.h>
 #include <SidebandStreamHandle.h>
-#include <map>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace sdm {
 
@@ -46,6 +47,9 @@ namespace sdm {
     ~SidebandStreamBuf(void);
   };
 
+  class HWCSession;
+  class HWCSidebandStreamSession;
+
   class HWCSidebandStream {
    public:
     int32_t AddLayer(hwc2_layer_t layer, hwc2_display_t display);
@@ -53,18 +57,22 @@ namespace sdm {
     int32_t SetBuffer(android::sp<SidebandStreamBuf> buf);
     android::sp<SidebandStreamBuf> GetBuffer(void);
     int32_t PostDisplay(hwc2_display_t display);
-    static void *SidebandStreamThread(void *context);
-    void *SidebandThreadHandler();
-    HWCSidebandStream(hwc2_device_t *device, buffer_handle_t handle);
+    HWCSidebandStream(HWCSidebandStreamSession *session, buffer_handle_t handle);
     ~HWCSidebandStream();
 
    private:
-    std::map<hwc2_layer_t, hwc2_display_t> mLayers;
+    static void *SidebandStreamThread(void *context);
+    void *SidebandThreadHandler();
+
+   private:
+    friend class HWCSidebandStreamSession;
+    std::unordered_map<hwc2_layer_t, hwc2_display_t> mLayers;
     Locker mSidebandLock_;
-    hwc2_device_t *mDevice = NULL;
+    HWCSidebandStreamSession *mSession = NULL;
     native_handle_t *mNativeHandle = NULL;
     android::SidebandHandleBase *sb_nativeHandle_ = NULL;
     android::sp<SidebandStreamBuf> mStreamBuf_;
+    std::unordered_set<hwc2_display_t> mDisplays;
     uint32_t displayMask_ = 0;
     uint32_t pendingMask_ = 0;
     bool enableBackpressure_ = true;
@@ -78,6 +86,25 @@ namespace sdm {
     explicit SidebandStreamLoader(void){}
    public:
     static android::SidebandStreamHandle * GetSidebandStreamHandle(void);
+  };
+
+  class HWCSidebandStreamSession {
+   public:
+    HWCSidebandStreamSession() {};
+    ~HWCSidebandStreamSession(void) {};
+    int32_t Init(HWCSession *session);
+    int32_t SetLayerSidebandStream(hwc2_display_t display, hwc2_layer_t layer,
+                    buffer_handle_t stream);
+    void StartPresentation(hwc2_display_t display);
+    void StopPresentation(hwc2_display_t display);
+    int32_t DestroyLayer(hwc2_display_t display, hwc2_layer_t layer);
+    int32_t UpdateSidebandStream(HWCSidebandStream * stream);
+
+   private:
+    HWCSession * hwc_session = NULL;
+    std::map<int32_t, HWCSidebandStream*> mSidebandStreamList;
+    bool present_start = false;
+    struct timespec present_timestamp_ = {};
   };
 
 }  // namespace sdm
