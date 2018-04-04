@@ -597,11 +597,10 @@ void HWCDisplay::BuildLayerStack() {
       layer->src_rect.bottom = layer_buffer->height;
     }
 
-    if (layer->frame_rate > metadata_refresh_rate_) {
+    if (hwc_layer->HasMetaDataRefreshRate() && layer->frame_rate > metadata_refresh_rate_) {
       metadata_refresh_rate_ = SanitizeRefreshRate(layer->frame_rate);
-    } else {
-      layer->frame_rate = current_refresh_rate_;
     }
+
     display_rect_ = Union(display_rect_, layer->dst_rect);
     geometry_changes_ |= hwc_layer->GetGeometryChanges();
 
@@ -1052,6 +1051,7 @@ HWC2::Error HWCDisplay::PrepareLayerStack(uint32_t *out_num_types, uint32_t *out
     return HWC2::Error::BadDisplay;
   }
 
+  UpdateRefreshRate();
   if (!skip_prepare_) {
     DisplayError error = display_intf_->Prepare(&layer_stack_);
     if (error != kErrorNone) {
@@ -1233,11 +1233,12 @@ HWC2::Error HWCDisplay::GetHdrCapabilities(uint32_t *out_num_types, int32_t *out
   }
 
   if (out_types == nullptr) {
-    // 1(now) - because we support only HDR10, change when HLG & DOLBY vision are supported
-    *out_num_types  = 1;
+    // We support HDR10 and HLG
+    *out_num_types = 2;
   } else {
-    // Only HDR10 supported
-    *out_types = HAL_HDR_HDR10;
+    // HDR10 and HLG are supported
+    out_types[0] = HAL_HDR_HDR10;
+    out_types[1] = HAL_HDR_HLG;
     static const float kLuminanceFactor = 10000.0;
     // luminance is expressed in the unit of 0.0001 cd/m2, convert it to 1cd/m2.
     *out_max_luminance = FLOAT(fixed_info.max_luminance)/kLuminanceFactor;
@@ -2138,6 +2139,16 @@ bool HWCDisplay::CanSkipValidate() {
   }
 
   return true;
+}
+
+void HWCDisplay::UpdateRefreshRate() {
+  for (auto hwc_layer : layer_set_) {
+    if (hwc_layer->HasMetaDataRefreshRate()) {
+      continue;
+    }
+    auto layer = hwc_layer->GetSDMLayer();
+    layer->frame_rate = current_refresh_rate_;
+  }
 }
 
 }  // namespace sdm
