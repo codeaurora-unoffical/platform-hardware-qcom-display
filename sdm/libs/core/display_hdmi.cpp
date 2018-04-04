@@ -342,6 +342,16 @@ DisplayError DisplayHDMI::PFlip(int fd,
   return kErrorNone;
 }
 
+DisplayError DisplayHDMI::UpdateHPDClockState(uint32_t state) {
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
+
+  int ret = kErrorNone;
+  DLOGI("Updating HPD Clock: %s", state ? "Disable": "Enable");
+  ret = hw_intf_->UpdateHPDClockState(state);
+  if (ret != kErrorNone)
+    DLOGE("Failed to Update HPD Clock. Error = %d", ret);
+}
+
 DisplayError DisplayHDMI::EnablePllUpdate(int32_t enable) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
 

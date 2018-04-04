@@ -214,6 +214,12 @@ enum struct DRMOps {
    *      uint32_t - Power Mode
    */
   CONNECTOR_SET_POWER_MODE,
+  /*
+   * Op: Update HPD Clock state for connector.
+   * Arg: uint32_t - Connector ID
+   *      uint32_t - state
+   */
+  CONNECTOR_UPDATE_HPD_CLOCK_STATE,
 };
 
 enum struct DRMRotation {
@@ -234,6 +240,11 @@ enum struct DRMPowerMode {
   DOZE,
   DOZE_SUSPEND,
   OFF,
+};
+
+enum struct DRMHpdMode {
+  ON = 0,
+  OFF = 1,
 };
 
 enum struct DRMSrcConfig {

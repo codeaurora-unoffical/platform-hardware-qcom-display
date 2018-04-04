@@ -62,6 +62,7 @@ class DisplayHDMI : public DisplayBase, HWEventHandler {
   virtual void ThermalEvent(int64_t thermal_level) { }
   virtual void CECMessage(char *message);
   virtual void IdlePowerCollapse() { }
+  virtual DisplayError UpdateHPDClockState(uint32_t state);
   virtual DisplayError EnablePllUpdate(int32_t enable);
   virtual DisplayError UpdateDisplayPll(int32_t ppm);
 
