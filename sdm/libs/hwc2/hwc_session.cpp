@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -42,6 +42,7 @@
 #include "hwc_debugger.h"
 #include "hwc_display_primary.h"
 #include "hwc_display_virtual.h"
+#include "hwc_sideband.h"
 
 #define __CLASS__ "HWCSession"
 
@@ -326,10 +327,11 @@ void HWCSession::GetCapabilities(struct hwc2_device *device, uint32_t *outCount,
     return;
   }
 
-  if (outCapabilities != nullptr && *outCount >= 1) {
+  if (outCapabilities != nullptr && *outCount >= 2) {
     outCapabilities[0] = HWC2_CAPABILITY_SKIP_CLIENT_COLOR_TRANSFORM;
+    outCapabilities[1] = HWC2_CAPABILITY_SIDEBAND_STREAM;
   }
-  *outCount = 1;
+  *outCount = 2;
 }
 
 template <typename PFN, typename T>
@@ -382,7 +384,28 @@ int32_t HWCSession::CreateVirtualDisplay(hwc2_device_t *device, uint32_t width, 
 int32_t HWCSession::DestroyLayer(hwc2_device_t *device, hwc2_display_t display,
                                  hwc2_layer_t layer) {
   SCOPE_LOCK(locker_);
-  return CallDisplayFunction(device, display, &HWCDisplay::DestroyLayer, layer);
+  if (!device)
+    return HWC2_ERROR_BAD_DISPLAY;
+
+  HWCSession *hwc_session = static_cast<HWCSession *>(device);
+  int32_t ret = CallDisplayFunction(device, display, &HWCDisplay::DestroyLayer, layer);
+
+  std::vector<int32_t> removeList;
+  for (auto & sbstream : hwc_session->mSidebandStreamList) {
+    if (sbstream.second->HasLayer(layer)) {
+      if (sbstream.second->RemoveLayer(layer) == HWC2_ERROR_NO_RESOURCES) {
+        removeList.push_back(sbstream.first);
+      }
+    }
+  }
+
+  for (auto stream_id : removeList) {
+    auto sbstream = hwc_session->mSidebandStreamList[stream_id];
+    hwc_session->mSidebandStreamList.erase(stream_id);
+    delete sbstream;
+  }
+
+  return ret;
 }
 
 int32_t HWCSession::DestroyVirtualDisplay(hwc2_device_t *device, hwc2_display_t display) {
@@ -640,6 +663,46 @@ static int32_t SetLayerPlaneAlpha(hwc2_device_t *device, hwc2_display_t display,
                                        alpha);
 }
 
+int32_t HWCSession::SetLayerSidebandStream(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
+                                  buffer_handle_t stream) {
+  int32_t stream_id;
+  HWCSidebandStream *stm;
+
+  if (android::SidebandHandleBase::validate(stream))
+    return HWC2_ERROR_NOT_VALIDATED;
+
+  const android::SidebandHandleBase * sb_nativeHandle_ = static_cast<const android::SidebandHandleBase *>(stream);
+  stream_id = sb_nativeHandle_->getSidebandHandleId();
+
+  HWCSession *hwc_session = static_cast<HWCSession *>(device);
+  if (hwc_session->mSidebandStreamList.count(stream_id) == 0) {
+    //No active sideband thread for this stream, create one.
+    stm = new HWCSidebandStream(device, stream);
+    hwc_session->mSidebandStreamList[stream_id] = stm;
+  } else {
+    //sideband thread exist for this stream, Get the thread handle.
+    stm = hwc_session->mSidebandStreamList[stream_id];
+  }
+
+  //SF will always clone stream for sideband, delete them here to avoid memory/fd leak
+  native_handle_t* native_handle = const_cast<native_handle_t*>(stream);
+  native_handle_close(native_handle);
+  native_handle_delete(native_handle);
+
+  if (!stm->HasLayer(layer)) {
+    //add new layer as a listner to this sideband stream
+    stm->AddLayer(layer, display);
+  }
+
+  //pickup most recent sideband stream buffer
+  android::sp<SidebandStreamBuf> buf = stm->GetBuffer();
+  if (buf != nullptr) {
+    CallLayerFunction(device, display, layer, &HWCLayer::SetLayerSidebandStream, buf);
+  }
+
+  return HWC2_ERROR_NONE;
+}
+
 static int32_t SetLayerSourceCrop(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
                                   hwc_frect_t crop) {
   return HWCSession::CallLayerFunction(device, display, layer, &HWCLayer::SetLayerSourceCrop, crop);
@@ -826,8 +889,8 @@ hwc2_function_pointer_t HWCSession::GetFunction(struct hwc2_device *device,
       return AsFP<HWC2_PFN_SET_LAYER_DISPLAY_FRAME>(SetLayerDisplayFrame);
     case HWC2::FunctionDescriptor::SetLayerPlaneAlpha:
       return AsFP<HWC2_PFN_SET_LAYER_PLANE_ALPHA>(SetLayerPlaneAlpha);
-    // Sideband stream is not supported
-    // case HWC2::FunctionDescriptor::SetLayerSidebandStream:
+    case HWC2::FunctionDescriptor::SetLayerSidebandStream:
+      return AsFP<HWC2_PFN_SET_LAYER_SIDEBAND_STREAM>(SetLayerSidebandStream);
     case HWC2::FunctionDescriptor::SetLayerSourceCrop:
       return AsFP<HWC2_PFN_SET_LAYER_SOURCE_CROP>(SetLayerSourceCrop);
     case HWC2::FunctionDescriptor::SetLayerSurfaceDamage:

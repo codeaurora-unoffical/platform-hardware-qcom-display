@@ -8,7 +8,8 @@ LOCAL_MODULE                  := hwcomposer.$(TARGET_BOARD_PLATFORM)
 LOCAL_VENDOR_MODULE           := true
 LOCAL_MODULE_RELATIVE_PATH    := hw
 LOCAL_MODULE_TAGS             := optional
-LOCAL_C_INCLUDES              := $(common_includes)
+LOCAL_C_INCLUDES              := $(common_includes)\
+                                 hardware/qcom/media/libsidebandstreamhandle
 LOCAL_HEADER_LIBRARIES        := display_headers
 
 LOCAL_CFLAGS                  := -Wno-missing-field-initializers -Wno-unused-parameter \
@@ -20,7 +21,8 @@ LOCAL_CLANG                   := true
 LOCAL_SHARED_LIBRARIES        := libsdmcore libqservice libbinder libhardware libhardware_legacy \
                                  libutils libcutils libsync libqdutils libqdMetaData libdl libdrmutils \
                                  libpowermanager libsdmutils libc++ liblog libgrallocutils libdl \
-                                 vendor.display.config@1.0_vendor libhidlbase libhidltransport
+                                 vendor.display.config@1.0_vendor libhidlbase libhidltransport \
+                                 libsidebandstreamhandle
 
 ifneq ($(TARGET_USES_GRALLOC1), true)
     LOCAL_SHARED_LIBRARIES += libmemalloc
@@ -38,7 +40,8 @@ LOCAL_SRC_FILES               := hwc_session.cpp \
                                  hwc_layers.cpp \
                                  hwc_callbacks.cpp \
                                  ../hwc/cpuhint.cpp \
-                                 ../hwc/hwc_socket_handler.cpp
+                                 ../hwc/hwc_socket_handler.cpp \
+                                 hwc_sideband.cpp
 
 ifneq ($(TARGET_USES_GRALLOC1), true)
     LOCAL_SRC_FILES += ../hwc/hwc_buffer_allocator.cpp
