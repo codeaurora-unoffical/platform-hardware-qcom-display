@@ -220,8 +220,8 @@ class HWCSession : hwc2_device_t, public IDisplayConfig, public qClient::BnQClie
   qService::QService *qservice_ = NULL;
   HWCSocketHandler socket_handler_;
   Locker callbacks_lock_;
-  friend class HWCSidebandStream;
-  std::map<int32_t, HWCSidebandStream*> mSidebandStreamList;
+  friend class HWCSidebandStreamSession;
+  HWCSidebandStreamSession sideband_stream_;
 };
 
 }  // namespace sdm

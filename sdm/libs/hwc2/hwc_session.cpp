@@ -180,6 +180,8 @@ int HWCSession::Init() {
     DLOGW("Failed to load HWCColorManager.");
   }
 
+  sideband_stream_.Init(this);
+
 //fix: Now we are creating number of displays configured in kernel.
 //if ENABLE_THREE_DISPLAYS is not enabled, still we will be creating
 //displays but will not send notification to SurfaceFlinger
@@ -389,22 +391,7 @@ int32_t HWCSession::DestroyLayer(hwc2_device_t *device, hwc2_display_t display,
 
   HWCSession *hwc_session = static_cast<HWCSession *>(device);
   int32_t ret = CallDisplayFunction(device, display, &HWCDisplay::DestroyLayer, layer);
-
-  std::vector<int32_t> removeList;
-  for (auto & sbstream : hwc_session->mSidebandStreamList) {
-    if (sbstream.second->HasLayer(layer)) {
-      if (sbstream.second->RemoveLayer(layer) == HWC2_ERROR_NO_RESOURCES) {
-        removeList.push_back(sbstream.first);
-      }
-    }
-  }
-
-  for (auto stream_id : removeList) {
-    auto sbstream = hwc_session->mSidebandStreamList[stream_id];
-    hwc_session->mSidebandStreamList.erase(stream_id);
-    delete sbstream;
-  }
-
+  hwc_session->sideband_stream_.DestroyLayer(display, layer);
   return ret;
 }
 
@@ -549,6 +536,8 @@ int32_t HWCSession::PresentDisplay(hwc2_device_t *device, hwc2_display_t display
                                    int32_t *out_retire_fence) {
   HWCSession *hwc_session = static_cast<HWCSession *>(device);
   DTRACE_SCOPED();
+  SCOPE_LOCK(locker_);
+
   if (!device) {
     return HWC2_ERROR_BAD_DISPLAY;
   }
@@ -562,6 +551,7 @@ int32_t HWCSession::PresentDisplay(hwc2_device_t *device, hwc2_display_t display
     CALC_FPS();
   }
 
+  hwc_session->sideband_stream_.StopPresentation(display);
   return INT32(status);
 }
 
@@ -665,42 +655,9 @@ static int32_t SetLayerPlaneAlpha(hwc2_device_t *device, hwc2_display_t display,
 
 int32_t HWCSession::SetLayerSidebandStream(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
                                   buffer_handle_t stream) {
-  int32_t stream_id;
-  HWCSidebandStream *stm;
-
-  if (android::SidebandHandleBase::validate(stream))
-    return HWC2_ERROR_NOT_VALIDATED;
-
-  const android::SidebandHandleBase * sb_nativeHandle_ = static_cast<const android::SidebandHandleBase *>(stream);
-  stream_id = sb_nativeHandle_->getSidebandHandleId();
-
   HWCSession *hwc_session = static_cast<HWCSession *>(device);
-  if (hwc_session->mSidebandStreamList.count(stream_id) == 0) {
-    //No active sideband thread for this stream, create one.
-    stm = new HWCSidebandStream(device, stream);
-    hwc_session->mSidebandStreamList[stream_id] = stm;
-  } else {
-    //sideband thread exist for this stream, Get the thread handle.
-    stm = hwc_session->mSidebandStreamList[stream_id];
-  }
-
-  //SF will always clone stream for sideband, delete them here to avoid memory/fd leak
-  native_handle_t* native_handle = const_cast<native_handle_t*>(stream);
-  native_handle_close(native_handle);
-  native_handle_delete(native_handle);
-
-  if (!stm->HasLayer(layer)) {
-    //add new layer as a listner to this sideband stream
-    stm->AddLayer(layer, display);
-  }
-
-  //pickup most recent sideband stream buffer
-  android::sp<SidebandStreamBuf> buf = stm->GetBuffer();
-  if (buf != nullptr) {
-    CallLayerFunction(device, display, layer, &HWCLayer::SetLayerSidebandStream, buf);
-  }
-
-  return HWC2_ERROR_NONE;
+  SCOPE_LOCK(locker_);
+  return hwc_session->sideband_stream_.SetLayerSidebandStream(display, layer, stream);
 }
 
 static int32_t SetLayerSourceCrop(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
@@ -814,6 +771,10 @@ int32_t HWCSession::ValidateDisplay(hwc2_device_t *device, hwc2_display_t displa
     }
 
     status = hwc_session->hwc_display_[display]->Validate(out_num_types, out_num_requests);
+
+    if (status == HWC2::Error::None) {
+      hwc_session->sideband_stream_.StartPresentation(display);
+    }
   }
   return INT32(status);
 }

@@ -62,7 +62,7 @@ class HWCLayer {
   uint32_t GetZ() const { return z_; }
   hwc2_layer_t GetId() const { return id_; }
   Layer *GetSDMLayer() { return layer_; }
-  android::sp<SidebandStreamBuf> mSidebandStreamBuffer;
+  android::sp<SidebandStreamBuf> mSidebandStreamBuffer, mOldSidebandStreamBuffer;
 
   HWC2::Error SetLayerBlendMode(HWC2::BlendMode mode);
   HWC2::Error SetLayerBuffer(buffer_handle_t buffer, int32_t acquire_fence);
