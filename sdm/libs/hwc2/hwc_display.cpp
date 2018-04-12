@@ -678,7 +678,7 @@ HWC2::Error HWCDisplay::SetVsyncEnabled(HWC2::Vsync enabled) {
       shutdown_pending_ = true;
       return HWC2::Error::None;
     }
-    DLOGE("Failed. enabled = %s, error = %d", to_string(enabled).c_str(), error);
+    DLOGW("Failed. enabled = %s, error = %d", to_string(enabled).c_str(), error);
     return HWC2::Error::BadDisplay;
   }
 

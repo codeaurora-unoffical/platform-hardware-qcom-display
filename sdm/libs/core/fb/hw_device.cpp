@@ -1175,7 +1175,8 @@ DisplayError HWDevice::SetVSyncState(bool enable) {
       DLOGI_IF(kTagDriverConfig, "Driver is processing shutdown sequence");
       return kErrorShutDown;
     }
-    IOCTL_LOGE(MSMFB_OVERLAY_VSYNC_CTRL, device_type_);
+    DLOGW("ioctl MSMFB_OVERLAY_VSYNC_CTRL, device = %d errno = %d, desc = %s",
+      device_type_, errno, strerror(errno));
     return kErrorHardware;
   }
   return kErrorNone;
