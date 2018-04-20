@@ -55,6 +55,30 @@ enum DisplayType {
   kDisplayMax,
 };
 
+/*! @brief This enum represents display device types where contents can be rendered.
+
+  @sa CoreInterface::CreateDisplay
+  @sa CoreInterface::IsDisplaySupported
+*/
+enum DisplayOrder {
+  kFirst,         //!< The first display.
+  kSecondary,     //!< The second display.
+  kTertiary,      //!< The third display.
+  kOrderMax,
+};
+
+/*! @brief This enum represents the sync event type which is handled by event callback
+     handler.
+
+  @sa CoreInterface::CreateDisplay
+*/
+enum DisplaySyncEventType {
+  kVSyncTimeStamp,         //!< Android use.
+  kVBlankEvent,            //!< Weston use.
+  kPageFlipEvent,          //!< Weston use(Recommended).
+  kEventMax,
+};
+
 /*! @brief This enum represents states of a display device.
 
   @sa DisplayInterface::GetDisplayState

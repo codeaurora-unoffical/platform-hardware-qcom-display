@@ -37,11 +37,12 @@
 
 namespace sdm {
 
-DisplayHDMI::DisplayHDMI(DisplayEventHandler *event_handler, HWInfoInterface *hw_info_intf,
+DisplayHDMI::DisplayHDMI(DisplaySyncEventType sync_event_type,
+                         DisplayEventHandler *event_handler, HWInfoInterface *hw_info_intf,
                          BufferSyncHandler *buffer_sync_handler, BufferAllocator *buffer_allocator,
                          CompManager *comp_manager)
-  : DisplayBase(kHDMI, event_handler, kDeviceHDMI, buffer_sync_handler, buffer_allocator,
-                comp_manager, hw_info_intf) {
+  : DisplayBase(kHDMI, sync_event_type, event_handler, kDeviceHDMI, buffer_sync_handler,
+                buffer_allocator, comp_manager, hw_info_intf) {
 }
 
 DisplayError DisplayHDMI::Init() {
@@ -90,11 +91,19 @@ DisplayError DisplayHDMI::Init() {
   s3d_format_to_mode_.insert(std::pair<LayerBufferS3DFormat, HWS3DMode>
                             (kS3dFormatFramePacking, kS3DModeFP));
 
-  error = HWEventsInterface::Create(INT(display_type_), this, event_list_, &hw_events_intf_);
+  error = HWEventsInterface::Create(INT(display_type_), sync_event_type_, this, event_list_,
+                                    &hw_events_intf_);
   if (error != kErrorNone) {
     DisplayBase::Deinit();
     HWInterface::Destroy(hw_intf_);
     DLOGE("Failed to create hardware events interface. Error = %d", error);
+  }
+
+  // When drm page flip event is used, we needs to hook the event class
+  // as user data while doing atomic commit. Or else, the callback handler
+  // will get NULL pointer access.
+  if (sync_event_type_ == kPageFlipEvent) {
+    hw_intf_->SetPageFlipState(true, (void *)hw_events_intf_);
   }
 
   return error;

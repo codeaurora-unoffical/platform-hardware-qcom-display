@@ -556,5 +556,14 @@ DisplayError HWInfo::GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_dis
   return kErrorNone;
 }
 
+DisplayError HWInfo::GetDisplayCount(uint32_t *count) {
+  *count = 0;
+  return kErrorNone;
+}
+
+DisplayError HWInfo::GetDisplayInterfaceTypeByOrder(HWDisplayInterfaceInfo *hw_disp_info_array) {
+  return kErrorNone;
+}
+
 }  // namespace sdm
 

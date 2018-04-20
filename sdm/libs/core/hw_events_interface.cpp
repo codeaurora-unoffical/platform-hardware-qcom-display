@@ -40,7 +40,8 @@
 
 namespace sdm {
 
-DisplayError HWEventsInterface::Create(int display_type, HWEventHandler *event_handler,
+DisplayError HWEventsInterface::Create(int display_type, DisplaySyncEventType sync_event_type,
+                                       HWEventHandler *event_handler,
                                        const std::vector<HWEvent> &event_list,
                                        HWEventsInterface **intf) {
   DisplayError error = kErrorNone;
@@ -53,7 +54,7 @@ DisplayError HWEventsInterface::Create(int display_type, HWEventHandler *event_h
 #endif
   }
 
-  error = hw_events->Init(display_type, event_handler, event_list);
+  error = hw_events->Init(display_type, sync_event_type, event_handler, event_list);
   if (error != kErrorNone) {
     delete hw_events;
   } else {

@@ -46,12 +46,14 @@ enum HWEvent {
 
 class HWEventsInterface {
  public:
-  virtual DisplayError Init(int display_type, HWEventHandler *event_handler,
+  virtual DisplayError Init(int display_type, DisplaySyncEventType sync_event_type,
+                            HWEventHandler *event_handler,
                             const std::vector<HWEvent> &event_list) = 0;
   virtual DisplayError Deinit() = 0;
   virtual DisplayError SetEventState(HWEvent event, bool enable, void *aux = nullptr) = 0;
 
-  static DisplayError Create(int display_type, HWEventHandler *event_handler,
+  static DisplayError Create(int display_type, DisplaySyncEventType sync_event_type,
+                             HWEventHandler *event_handler,
                              const std::vector<HWEvent> &event_list, HWEventsInterface **intf);
   static DisplayError Destroy(HWEventsInterface *intf);
 

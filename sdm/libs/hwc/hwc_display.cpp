@@ -149,7 +149,7 @@ HWCDisplay::HWCDisplay(CoreInterface *core_intf, hwc_procs_t const **hwc_procs, 
 }
 
 int HWCDisplay::Init() {
-  DisplayError error = core_intf_->CreateDisplay(type_, this, &display_intf_);
+  DisplayError error = core_intf_->CreateDisplay(type_, kVSyncTimeStamp, this, &display_intf_);
   if (error != kErrorNone) {
     DLOGE("Display create failed. Error = %d display_type %d event_handler %p disp_intf %p",
       error, type_, this, &display_intf_);

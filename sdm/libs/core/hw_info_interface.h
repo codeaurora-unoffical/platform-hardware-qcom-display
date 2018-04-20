@@ -37,6 +37,8 @@ class HWInfoInterface {
   static DisplayError Destroy(HWInfoInterface *intf);
   virtual DisplayError GetHWResourceInfo(HWResourceInfo *hw_resource) = 0;
   virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info) = 0;
+  virtual DisplayError GetDisplayCount(uint32_t *count) = 0;
+  virtual DisplayError GetDisplayInterfaceTypeByOrder(HWDisplayInterfaceInfo *hw_disp_info_array)=0;
 
  protected:
   virtual ~HWInfoInterface() { }
