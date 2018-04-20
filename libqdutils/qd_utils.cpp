@@ -302,6 +302,8 @@ const char *GetHALPixelFormatString(int format) {
     return "RGBA_4444";
   case HAL_PIXEL_FORMAT_YV12:
     return "YV12";
+  case HAL_PIXEL_FORMAT_YCbCr_422_888:
+    return "YCbCr_422_888_NV16";
   case HAL_PIXEL_FORMAT_YCbCr_422_SP:
     return "YCbCr_422_SP_NV16";
   case HAL_PIXEL_FORMAT_YCrCb_420_SP:
