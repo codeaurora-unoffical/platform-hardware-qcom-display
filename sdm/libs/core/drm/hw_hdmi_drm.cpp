@@ -185,8 +185,8 @@ DisplayError HWHDMIDRM::GetDisplayAttributes(uint32_t index,
     res_mgr->GetDisplayDimInMM(&mm_width, &mm_height);
   } else {
     mode = connector_info_.modes[index];
-    mm_width = mode.hdisplay;
-    mm_height = mode.vdisplay;
+    mm_width = connector_info_.mmWidth == 0 ? 160 : connector_info_.mmWidth;
+    mm_height = connector_info_.mmHeight == 0 ? 90 : connector_info_.mmHeight;
     topology = connector_info_.topology;
   }
 
