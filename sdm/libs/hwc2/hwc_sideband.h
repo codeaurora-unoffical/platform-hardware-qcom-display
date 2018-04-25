@@ -103,7 +103,7 @@ namespace sdm {
    private:
     HWCSession * hwc_session = NULL;
     std::map<int32_t, HWCSidebandStream*> mSidebandStreamList;
-    bool present_start = false;
+    uint32_t present_start = 0;
     struct timespec present_timestamp_ = {};
   };
 

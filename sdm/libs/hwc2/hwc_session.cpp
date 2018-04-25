@@ -772,9 +772,7 @@ int32_t HWCSession::ValidateDisplay(hwc2_device_t *device, hwc2_display_t displa
 
     status = hwc_session->hwc_display_[display]->Validate(out_num_types, out_num_requests);
 
-    if (status == HWC2::Error::None) {
-      hwc_session->sideband_stream_.StartPresentation(display);
-    }
+    hwc_session->sideband_stream_.StartPresentation(display);
   }
   return INT32(status);
 }

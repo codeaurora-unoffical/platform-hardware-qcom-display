@@ -227,7 +227,7 @@ int32_t HWCSidebandStreamSession::Init(HWCSession *session) {
 }
 
 void HWCSidebandStreamSession::StartPresentation(hwc2_display_t display) {
-  present_start = true;
+  present_start |= (1 << (int)display);
 }
 
 void HWCSidebandStreamSession::StopPresentation(hwc2_display_t display) {
@@ -236,7 +236,7 @@ void HWCSidebandStreamSession::StopPresentation(hwc2_display_t display) {
   }
 
   clock_gettime(CLOCK_MONOTONIC, &present_timestamp_);
-  present_start = false;
+  present_start &= ~(1 << (int)display);
 }
 
 int32_t HWCSidebandStreamSession::SetLayerSidebandStream(hwc2_display_t display,
@@ -284,11 +284,14 @@ int32_t HWCSidebandStreamSession::DestroyLayer(hwc2_display_t display, hwc2_laye
     }
   }
 
+  // there is no need to hold the session locker
+  hwc_session->locker_.Unlock();
   for (auto stream_id : removeList) {
     auto sbstream = mSidebandStreamList[stream_id];
     mSidebandStreamList.erase(stream_id);
     delete sbstream;
   }
+  hwc_session->locker_.Lock();
 
   return HWC2_ERROR_NONE;
 }
