@@ -300,9 +300,13 @@ void Allocator::GetIonHeapInfo(gralloc1_producer_usage_t prod_usage,
     heap_id |= ION_HEAP(ION_SYSTEM_HEAP_ID);
   }
 
-  if (prod_usage & GRALLOC1_PRODUCER_USAGE_PRIVATE_ADSP_HEAP ||
-      prod_usage & GRALLOC1_PRODUCER_USAGE_SENSOR_DIRECT_DATA) {
+  if (prod_usage & GRALLOC1_PRODUCER_USAGE_PRIVATE_ADSP_HEAP) {
     heap_id |= ION_HEAP(ION_ADSP_HEAP_ID);
+  }
+
+  if (prod_usage & GRALLOC1_PRODUCER_USAGE_SENSOR_DIRECT_DATA) {
+    heap_id |= ION_HEAP(ION_ADSP_HEAP_ID);
+    heap_id |= ION_HEAP(ION_SYSTEM_HEAP_ID);
   }
 
   if (flags & UINT(ION_SECURE)) {
