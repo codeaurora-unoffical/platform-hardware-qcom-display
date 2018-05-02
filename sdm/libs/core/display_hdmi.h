@@ -38,9 +38,10 @@ class HWHDMIInterface;
 
 class DisplayHDMI : public DisplayBase, HWEventHandler {
  public:
-  DisplayHDMI(DisplayEventHandler *event_handler, HWInfoInterface *hw_info_intf,
-              BufferSyncHandler *buffer_sync_handler, BufferAllocator *buffer_allocator,
-              CompManager *comp_manager);
+  DisplayHDMI(DisplaySyncEventType sync_event_type,
+              DisplayEventHandler *event_handler, HWInfoInterface *hw_info_intf,
+              BufferSyncHandler *buffer_sync_handler,
+              BufferAllocator *buffer_allocator, CompManager *comp_manager);
   virtual DisplayError Init();
   virtual DisplayError Prepare(LayerStack *layer_stack);
   virtual DisplayError GetRefreshRateRange(uint32_t *min_refresh_rate, uint32_t *max_refresh_rate);
@@ -62,6 +63,7 @@ class DisplayHDMI : public DisplayBase, HWEventHandler {
   virtual void ThermalEvent(int64_t thermal_level) { }
   virtual void CECMessage(char *message);
   virtual void IdlePowerCollapse() { }
+  virtual DisplayError UpdateHPDClockState(uint32_t state);
   virtual DisplayError EnablePllUpdate(int32_t enable);
   virtual DisplayError UpdateDisplayPll(int32_t ppm);
 

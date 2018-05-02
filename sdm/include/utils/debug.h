@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2017, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -82,6 +82,7 @@ class Debug {
   static int GetExtMaxlayers();
   static bool GetProperty(const char *property_name, char *value);
   static bool SetProperty(const char *property_name, const char *value);
+  static bool IsDmaReservedForRotation();
 
  private:
   Debug();

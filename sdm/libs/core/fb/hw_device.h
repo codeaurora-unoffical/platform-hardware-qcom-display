@@ -81,6 +81,7 @@ class HWDevice : public HWInterface {
   virtual DisplayError GetPPFeaturesVersion(PPFeatureVersion *vers);
   virtual DisplayError SetPPFeatures(PPFeaturesConfig *feature_list);
   virtual DisplayError SetVSyncState(bool enable);
+  virtual void SetPageFlipState(bool enable, void *user_data);
   virtual void SetIdleTimeoutMs(uint32_t timeout_ms);
   virtual DisplayError SetDisplayMode(const HWDisplayMode hw_display_mode);
   virtual DisplayError SetRefreshRate(uint32_t refresh_rate);
@@ -97,6 +98,7 @@ class HWDevice : public HWInterface {
   virtual DisplayError SetScaleLutConfig(HWScaleLutInfo *lut_info);
   virtual DisplayError SetMixerAttributes(const HWMixerAttributes &mixer_attributes);
   virtual DisplayError GetMixerAttributes(HWMixerAttributes *mixer_attributes);
+  virtual DisplayError UpdateHPDClockState(uint32_t state) { return kErrorNotSupported; };
   virtual DisplayError EnablePllUpdate(int32_t enable) { return kErrorNotSupported; };
   virtual DisplayError UpdateDisplayPll(int32_t ppm) { return kErrorNotSupported; };
 

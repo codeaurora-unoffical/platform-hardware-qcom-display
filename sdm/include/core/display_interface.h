@@ -55,6 +55,30 @@ enum DisplayType {
   kDisplayMax,
 };
 
+/*! @brief This enum represents display device types where contents can be rendered.
+
+  @sa CoreInterface::CreateDisplay
+  @sa CoreInterface::IsDisplaySupported
+*/
+enum DisplayOrder {
+  kFirst,         //!< The first display.
+  kSecondary,     //!< The second display.
+  kTertiary,      //!< The third display.
+  kOrderMax,
+};
+
+/*! @brief This enum represents the sync event type which is handled by event callback
+     handler.
+
+  @sa CoreInterface::CreateDisplay
+*/
+enum DisplaySyncEventType {
+  kVSyncTimeStamp,         //!< Android use.
+  kVBlankEvent,            //!< Weston use.
+  kPageFlipEvent,          //!< Weston use(Recommended).
+  kEventMax,
+};
+
 /*! @brief This enum represents states of a display device.
 
   @sa DisplayInterface::GetDisplayState
@@ -677,6 +701,14 @@ class DisplayInterface {
     @sa Prepare
   */
   virtual DisplayError SetCompositionState(LayerComposition composition_type, bool enable) = 0;
+
+  /*! @brief Method to enable or disable display HPD Clock.
+
+    @param[in] state \link enable or disable the HPD Clock \endlink
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError UpdateHPDClockState(uint32_t state) = 0;
 
   /*! @brief Method to enable display PLL update.
 

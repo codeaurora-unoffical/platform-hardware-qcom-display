@@ -47,6 +47,8 @@ class HWInfoDRM: public HWInfoInterface {
   virtual ~HWInfoDRM();
   virtual DisplayError GetHWResourceInfo(HWResourceInfo *hw_resource);
   virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info);
+  virtual DisplayError GetDisplayCount(uint32_t *count);
+  virtual DisplayError GetDisplayInterfaceTypeByOrder(HWDisplayInterfaceInfo *hw_disp_info_array);
 
  private:
   DisplayError GetHWRotatorInfo(HWResourceInfo *hw_resource);
@@ -71,6 +73,7 @@ class HWInfoDRM: public HWInfoInterface {
   // TODO(user): Read Mdss version from the driver
   static const int kHWMdssVersion5 = 500;  // MDSS_V5
   static const int kMaxStringLength = 1024;
+  std::map<uint32_t, const char *> connector_name_map_;
   static HWResourceInfo *hw_resource_;
 };
 

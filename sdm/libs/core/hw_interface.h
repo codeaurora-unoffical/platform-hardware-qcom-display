@@ -101,6 +101,7 @@ class HWInterface {
   virtual DisplayError GetPPFeaturesVersion(PPFeatureVersion *vers) = 0;
   virtual DisplayError SetPPFeatures(PPFeaturesConfig *feature_list) = 0;
   virtual DisplayError SetVSyncState(bool enable) = 0;
+  virtual void SetPageFlipState(bool enable, void *user_data) = 0;
   virtual void SetIdleTimeoutMs(uint32_t timeout_ms) = 0;
   virtual DisplayError SetDisplayMode(const HWDisplayMode hw_display_mode) = 0;
   virtual DisplayError SetRefreshRate(uint32_t refresh_rate) = 0;
@@ -117,6 +118,7 @@ class HWInterface {
   virtual DisplayError SetScaleLutConfig(HWScaleLutInfo *lut_info) = 0;
   virtual DisplayError SetMixerAttributes(const HWMixerAttributes &mixer_attributes) = 0;
   virtual DisplayError GetMixerAttributes(HWMixerAttributes *mixer_attributes) = 0;
+  virtual DisplayError UpdateHPDClockState(uint32_t state) = 0;
   virtual DisplayError EnablePllUpdate(int32_t enable) = 0;
   virtual DisplayError UpdateDisplayPll(int32_t ppm) = 0;
 

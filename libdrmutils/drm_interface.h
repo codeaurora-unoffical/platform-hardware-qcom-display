@@ -214,6 +214,12 @@ enum struct DRMOps {
    *      uint32_t - Power Mode
    */
   CONNECTOR_SET_POWER_MODE,
+  /*
+   * Op: Update HPD Clock state for connector.
+   * Arg: uint32_t - Connector ID
+   *      uint32_t - state
+   */
+  CONNECTOR_UPDATE_HPD_CLOCK_STATE,
 };
 
 enum struct DRMRotation {
@@ -236,6 +242,11 @@ enum struct DRMPowerMode {
   OFF,
 };
 
+enum struct DRMHpdMode {
+  ON = 0,
+  OFF = 1,
+};
+
 enum struct DRMSrcConfig {
   DEINTERLACE = 0,
 };
@@ -245,6 +256,13 @@ enum struct DRMDisplayType {
   PERIPHERAL,
   TV,
   VIRTUAL,
+};
+
+enum DRMDisplayOrder {
+  kDRMPrimary = 0,
+  kDRMSecondary = 1,
+  kDRMTertiary = 2,
+  kDRMMaxOrder = 3,
 };
 
 struct DRMRect {
@@ -323,6 +341,8 @@ struct DRMConnectorInfo {
   uint32_t mmWidth;
   uint32_t mmHeight;
   uint32_t type;
+  uint32_t type_id; // Match connector_type_id in drmModeConnector
+  uint32_t num_modes;
   uint32_t hdcp_version;
   std::vector<drmModeModeInfo> modes;
   DRMTopology topology;
@@ -330,6 +350,7 @@ struct DRMConnectorInfo {
   drm_msm_ext_panel_hdr_ctrl hdr_ctrl;
   std::string panel_name;
   DRMPanelMode panel_mode;
+  DRMDisplayOrder display_order;
   bool is_primary;
   // Valid only if DRMPanelMode is VIDEO
   bool dynamic_fps;
@@ -419,9 +440,12 @@ class DRMAtomicReqInterface {
    * Commit the params set via Perform(). Also resets the properties after commit. Needs to be
    * called every frame.
    * [input]: synchronous: Determines if the call should block until a h/w flip
+   * [input]: user_data: A pointer of data structure which will be passed to each commit.
+   *          Now only drmModeAtomicCommit use it.
    * [return]: Error code if the API fails, 0 on success.
    */
-  virtual int Commit(bool synchronous) = 0;
+  virtual int Commit(bool synchronous, void *user_data = nullptr) = 0;
+
   /*
    * Validate the params set via Perform().
    * [return]: Error code if the API fails, 0 on success.
@@ -467,6 +491,19 @@ class DRMManagerInterface {
    * [output]: DRMConnectorInfo: Resource Info for the given connector id
    */
   virtual void GetConnectorInfo(uint32_t conn_id, DRMConnectorInfo *info) = 0;
+
+  /*
+   * Will provide all the information of a selected connector.
+   * [input]: Use display order to obtain connector inforrmation
+   * [output]: DRMConnectorInfo: Resource Info for the given order
+   */
+  virtual int GetConnectorInfoByOrder(DRMDisplayOrder order, DRMConnectorInfo *info) = 0;
+
+  /*
+   * Return all available connectors.
+   * [output]: the count of connectors
+   */
+  virtual uint32_t GetConnectorCount() = 0;
 
   /*
    * Will query post propcessing feature info of a CRTC.
