@@ -285,6 +285,7 @@ void AdrenoMemInfo::getAlignedWidthAndHeight(int width, int height, int format,
             case HAL_PIXEL_FORMAT_RAW_OPAQUE:
                 break;
             case HAL_PIXEL_FORMAT_NV21_ZSL:
+            case HAL_PIXEL_FORMAT_YCbCr_422_888:
                 aligned_w = ALIGN(width, 64);
                 aligned_h = ALIGN(height, 64);
                 break;
@@ -612,6 +613,7 @@ unsigned int getSize(int format, int width, int height, int usage,
         case HAL_PIXEL_FORMAT_YCbCr_422_I:
         case HAL_PIXEL_FORMAT_YCrCb_422_I:
         case HAL_PIXEL_FORMAT_CbYCrY_422_I:
+        case HAL_PIXEL_FORMAT_YCbCr_422_888:
             if(width & 1) {
                 ALOGE("width is odd for the YUV422_SP format");
                 return 0;
@@ -789,6 +791,7 @@ int getYUVPlaneInfo(private_handle_t* hnd, struct android_ycbcr* ycbcr)
         case HAL_PIXEL_FORMAT_YCbCr_420_SP:
         case HAL_PIXEL_FORMAT_YCbCr_422_SP:
         case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
+        case HAL_PIXEL_FORMAT_YCbCr_422_888:
         case HAL_PIXEL_FORMAT_NV12_ENCODEABLE: //Same as YCbCr_420_SP_VENUS
             getYuvSPPlaneInfo(hnd->base, width, height, 1, ycbcr);
         break;
@@ -1186,6 +1189,7 @@ int getBufferLayout(private_handle_t *hnd, uint32_t stride[4],
     switch (hnd->format) {
         case HAL_PIXEL_FORMAT_YCbCr_420_SP:
         case HAL_PIXEL_FORMAT_YCbCr_422_SP:
+        case HAL_PIXEL_FORMAT_YCbCr_422_888:
         case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
         case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:
         case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC:
