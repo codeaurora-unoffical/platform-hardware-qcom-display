@@ -64,6 +64,8 @@ using sde_drm::DRMConnectorInfo;
 using sde_drm::DRMPPFeatureInfo;
 using sde_drm::DRMOps;
 using sde_drm::DRMTopology;
+using sde_drm::DRMPowerMode;
+using sde_drm::DRMHpdMode;
 
 namespace sdm {
 
@@ -408,6 +410,33 @@ DisplayError HWHDMIDRM::Commit(HWLayers *hw_layers) {
     return error;
   }
   return HWDeviceDRM::Commit(hw_layers);
+}
+
+DisplayError HWHDMIDRM::UpdateHPDClockState(uint32_t state) {
+  DTRACE_SCOPED();
+  if(state == 0)
+  {
+    drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 1);
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, DRMPowerMode::ON);
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_UPDATE_HPD_CLOCK_STATE,
+        token_.conn_id, DRMHpdMode::ON);
+    int ret = drm_atomic_intf_->Commit(false /* synchronous */);
+    if (ret) {
+      DLOGE("%s failed with error %d", __FUNCTION__, ret);
+      return kErrorHardware;
+    }
+  } else {
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_UPDATE_HPD_CLOCK_STATE,
+        token_.conn_id, DRMHpdMode::OFF);
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, DRMPowerMode::OFF);
+    drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 0);
+    int ret = drm_atomic_intf_->Commit(false /* synchronous */);
+    if (ret) {
+      DLOGE("%s failed with error %d", __FUNCTION__, ret);
+      return kErrorHardware;
+    }
+  }
+  return kErrorNone;
 }
 
 DisplayError HWHDMIDRM::EnablePllUpdate(int32_t enable) {

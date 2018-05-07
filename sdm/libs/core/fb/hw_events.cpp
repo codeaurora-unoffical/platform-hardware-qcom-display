@@ -122,8 +122,8 @@ void HWEvents::PopulateHWEventData() {
   }
 }
 
-DisplayError HWEvents::Init(int fb_num, HWEventHandler *event_handler,
-                            const vector<HWEvent> &event_list) {
+DisplayError HWEvents::Init(int fb_num, DisplaySyncEventType sync_event_type,
+                            HWEventHandler *event_handler, const vector<HWEvent> &event_list) {
   if (!event_handler)
     return kErrorParameters;
 
