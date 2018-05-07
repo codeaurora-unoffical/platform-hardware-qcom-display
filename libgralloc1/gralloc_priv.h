@@ -60,7 +60,7 @@ inline int roundUpToPageSize(int x) {
 #define GRALLOC1_CONSUMER_USAGE_PRIVATE_10BIT_TP  0x08000000
 
 /* This flag is used to indicate video NV21 format */
-#define GRALLOC1_PRODUCER_USAGE_PRIVATE_VIDEO_NV21_ENCODER (1ULL << 24)
+#define GRALLOC1_PRODUCER_USAGE_PRIVATE_VIDEO_NV21_ENCODER (1ULL << 48)
 
 /* Consumer flags */
 /* TODO(user): Fix when producer and consumer flags are actually separated */

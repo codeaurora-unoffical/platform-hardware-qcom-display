@@ -1233,11 +1233,12 @@ HWC2::Error HWCDisplay::GetHdrCapabilities(uint32_t *out_num_types, int32_t *out
   }
 
   if (out_types == nullptr) {
-    // 1(now) - because we support only HDR10, change when HLG & DOLBY vision are supported
-    *out_num_types  = 1;
+    // We support HDR10 and HLG
+    *out_num_types = 2;
   } else {
-    // Only HDR10 supported
-    *out_types = HAL_HDR_HDR10;
+    // HDR10 and HLG are supported
+    out_types[0] = HAL_HDR_HDR10;
+    out_types[1] = HAL_HDR_HLG;
     static const float kLuminanceFactor = 10000.0;
     // luminance is expressed in the unit of 0.0001 cd/m2, convert it to 1cd/m2.
     *out_max_luminance = FLOAT(fixed_info.max_luminance)/kLuminanceFactor;
@@ -1250,6 +1251,10 @@ HWC2::Error HWCDisplay::GetHdrCapabilities(uint32_t *out_num_types, int32_t *out
 
 
 HWC2::Error HWCDisplay::CommitLayerStack(void) {
+  if (flush_) {
+     return HWC2::Error::None;
+  }
+
   if (skip_validate_ && !CanSkipValidate()) {
     validated_ = false;
   }
@@ -1265,37 +1270,36 @@ HWC2::Error HWCDisplay::CommitLayerStack(void) {
 
   DumpInputBuffers();
 
-  if (!flush_) {
-    DisplayError error = kErrorUndefined;
-    int status = 0;
-    if (tone_mapper_) {
-      if (layer_stack_.flags.hdr_present) {
-        status = tone_mapper_->HandleToneMap(&layer_stack_);
-        if (status != 0) {
-          DLOGE("Error handling HDR in ToneMapper");
-        }
-      } else {
-        tone_mapper_->Terminate();
+  DisplayError error = kErrorUndefined;
+  int status = 0;
+  if (tone_mapper_) {
+    if (layer_stack_.flags.hdr_present) {
+      status = tone_mapper_->HandleToneMap(&layer_stack_);
+      if (status != 0) {
+        DLOGE("Error handling HDR in ToneMapper");
       }
-    }
-    error = display_intf_->Commit(&layer_stack_);
-
-    if (error == kErrorNone) {
-      // A commit is successfully submitted, start flushing on failure now onwards.
-      flush_on_error_ = true;
     } else {
-      if (error == kErrorShutDown) {
-        shutdown_pending_ = true;
-        return HWC2::Error::Unsupported;
-      } else if (error == kErrorNotValidated) {
-        validated_ = false;
-        return HWC2::Error::NotValidated;
-      } else if (error != kErrorPermission) {
-        DLOGE("Commit failed. Error = %d", error);
-        // To prevent surfaceflinger infinite wait, flush the previous frame during Commit()
-        // so that previous buffer and fences are released, and override the error.
-        flush_ = true;
-      }
+      tone_mapper_->Terminate();
+    }
+  }
+
+  error = display_intf_->Commit(&layer_stack_);
+
+  if (error == kErrorNone) {
+    // A commit is successfully submitted, start flushing on failure now onwards.
+    flush_on_error_ = true;
+  } else {
+    if (error == kErrorShutDown) {
+      shutdown_pending_ = true;
+      return HWC2::Error::Unsupported;
+    } else if (error == kErrorNotValidated) {
+      validated_ = false;
+      return HWC2::Error::NotValidated;
+    } else if (error != kErrorPermission) {
+      DLOGE("Commit failed. Error = %d", error);
+      // To prevent surfaceflinger infinite wait, flush the previous frame during Commit()
+      // so that previous buffer and fences are released, and override the error.
+      flush_ = true;
     }
   }
 
@@ -1997,6 +2001,10 @@ int HWCDisplay::SetActiveDisplayConfig(uint32_t config) {
 }
 
 int HWCDisplay::GetActiveDisplayConfig(uint32_t *config) {
+  if (config_pending_) {
+    *config = display_config_;
+    return 0;
+  }
   return display_intf_->GetActiveConfig(config) == kErrorNone ? 0 : -1;
 }
 
