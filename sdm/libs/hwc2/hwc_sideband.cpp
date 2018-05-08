@@ -119,19 +119,28 @@ int32_t HWCSidebandStream::RemoveLayer(hwc2_layer_t layer) {
 
 int32_t HWCSidebandStream::SetBuffer(android::sp<SidebandStreamBuf> buf) {
   SCOPE_LOCK(mSidebandLock_);
-  if (pendingMask_ && !sideband_thread_exit_) {
-    mSidebandLock_.Wait();
-  }
   if (enableBackpressure_) {
     pendingMask_ = displayMask_;
   }
   mStreamBuf_ = buf;
+  new_bufffer_ = true;
   return 0;
 }
 
 android::sp<SidebandStreamBuf> HWCSidebandStream::GetBuffer(void) {
   SCOPE_LOCK(mSidebandLock_);
+  new_bufffer_ = false;
   return mStreamBuf_;
+}
+
+int32_t HWCSidebandStream::CheckBuffer(void) {
+  SCOPE_LOCK(mSidebandLock_);
+  if (new_bufffer_)
+    return HWC2_ERROR_NOT_VALIDATED;
+  if (pendingMask_ && !sideband_thread_exit_) {
+    mSidebandLock_.Wait();
+  }
+  return 0;
 }
 
 int32_t HWCSidebandStream::PostDisplay(hwc2_display_t displayId) {
@@ -163,6 +172,11 @@ void *HWCSidebandStream::SidebandThreadHandler(void) {
   size = (unsigned int)sb_nativeHandle_->getBufferSize();
 
   while (!sideband_thread_exit_) {
+    if (CheckBuffer() == HWC2_ERROR_NOT_VALIDATED) {
+      mSession->UpdateSidebandStream(this);
+      continue;
+    }
+
     result = sb_nativeHandle_->acquireBuffer(&buf_idx, 50);
     if (result==android::NO_ERROR ){
       android::sp<SidebandStreamBuf> ptr = new SidebandStreamBuf;
@@ -298,6 +312,8 @@ int32_t HWCSidebandStreamSession::DestroyLayer(hwc2_display_t display, hwc2_laye
 
 int32_t HWCSidebandStreamSession::UpdateSidebandStream(HWCSidebandStream * stm) {
   int vsync_span = hwc_session->GetVsyncPeriod(0);
+  struct timespec tv;
+  int64_t span;
 
   SCOPE_LOCK(hwc_session->locker_);
 
@@ -306,22 +322,22 @@ int32_t HWCSidebandStreamSession::UpdateSidebandStream(HWCSidebandStream * stm) 
     for (auto & display : stm->mDisplays) {
       hwc_session->Refresh(display);
     }
-    return 0;
+    stm->GetBuffer();
+    goto wait_present;
   }
 
   // if present start, return immediately
   if (present_start)
-    return 0;
+    goto wait_present;
 
   // check most recent present timestamp, if larger than vsync period, display right away
-  struct timespec tv;
   clock_gettime(CLOCK_MONOTONIC, &tv);
-  int64_t span = (tv.tv_sec - present_timestamp_.tv_sec) * 1000000000LL +
+  span = (tv.tv_sec - present_timestamp_.tv_sec) * 1000000000LL +
                 (tv.tv_nsec - present_timestamp_.tv_nsec);
   if (span <= vsync_span) {
     hwc_session->locker_.WaitFinite((int)(vsync_span - span) / 1000000);
     if (present_start)
-      return 0;
+      goto wait_present;
   }
 
   for (auto & pair : stm->mLayers) {
@@ -361,6 +377,10 @@ next:
     stm->PostDisplay(display);
   }
 
+  return 0;
+
+wait_present:
+  hwc_session->locker_.WaitFinite(vsync_span / 1000000);
   return 0;
 }
 

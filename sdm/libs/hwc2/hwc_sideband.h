@@ -56,6 +56,7 @@ namespace sdm {
     int32_t RemoveLayer(hwc2_layer_t layer);
     int32_t SetBuffer(android::sp<SidebandStreamBuf> buf);
     android::sp<SidebandStreamBuf> GetBuffer(void);
+    int32_t CheckBuffer(void);
     int32_t PostDisplay(hwc2_display_t display);
     HWCSidebandStream(HWCSidebandStreamSession *session, buffer_handle_t handle);
     ~HWCSidebandStream();
@@ -78,6 +79,7 @@ namespace sdm {
     bool enableBackpressure_ = true;
     pthread_t sideband_thread_ = {};
     bool sideband_thread_exit_ = false;
+    bool new_bufffer_ = false;
   };
 
   class SidebandStreamLoader {
