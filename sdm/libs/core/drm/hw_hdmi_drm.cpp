@@ -122,12 +122,14 @@ void HWHDMIDRM::PopulateHWPanelInfo() {
   hw_panel_info_ = {};
 
   HWDeviceDRM::PopulateHWPanelInfo();
+#ifdef DRM_MSM_EXT_PANEL_HDR_CTRL
   hw_panel_info_.hdr_metadata_type_one = connector_info_.hdr_prop.hdr_metadata_type_one;
   hw_panel_info_.hdr_enabled = connector_info_.hdr_prop.hdr_supported;
   hw_panel_info_.hdr_eotf = connector_info_.hdr_prop.hdr_eotf;
   hw_panel_info_.peak_luminance = connector_info_.hdr_prop.hdr_max_luminance;
   hw_panel_info_.average_luminance = connector_info_.hdr_prop.hdr_avg_luminance;
   hw_panel_info_.blackness_level = connector_info_.hdr_prop.hdr_min_luminance;
+#endif
 }
 
 DisplayError HWHDMIDRM::GetNumDisplayAttributes(uint32_t *count) {
@@ -260,7 +262,7 @@ DisplayError HWHDMIDRM::GetConfigIndex(char *mode, uint32_t *index) {
    }
   return kErrorNotSupported;
 }
-
+#ifdef DRM_MSM_EXT_PANEL_HDR_CTRL
 static int32_t GetEOTF(const GammaTransfer &transfer) {
   int32_t hdr_transfer = -1;
 
@@ -389,6 +391,7 @@ DisplayError HWHDMIDRM::UpdateHDRMetaData(HWLayers *hw_layers) {
     }
   return error;
 }
+#endif
 
 DisplayError HWHDMIDRM::Validate(HWLayers *hw_layers) {
   HWDeviceDRM::ResetDisplayParams();
