@@ -149,6 +149,8 @@ class HWCSession : hwc2_device_t, public IDisplayConfig, public qClient::BnQClie
   int32_t SetSecondaryDisplayStatus(int disp_id, HWCDisplay::DisplayStatus status);
   int32_t GetPanelBrightness(int *level);
   int32_t MinHdcpEncryptionLevelChanged(int disp_id, uint32_t min_enc_level);
+  int32_t HWCUpdateResourceInfo(const char *uevent_data, int length);
+  int32_t UpdateResourceInfo();
 
   // service methods
   void StartServices();

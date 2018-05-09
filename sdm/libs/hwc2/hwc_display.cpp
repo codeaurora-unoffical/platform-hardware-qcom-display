@@ -1097,6 +1097,16 @@ DisplayError HWCDisplay::SetMaxMixerStages(uint32_t max_mixer_stages) {
   return error;
 }
 
+DisplayError HWCDisplay::UpdateResourceInfo() {
+  DisplayError error = kErrorNone;
+
+  if (display_intf_) {
+    error = display_intf_->UpdateResourceInfo();
+  }
+
+  return error;
+}
+
 LayerBufferFormat HWCDisplay::GetSDMFormat(const int32_t &source, const int flags) {
   LayerBufferFormat format = kFormatInvalid;
   if (flags & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED) {

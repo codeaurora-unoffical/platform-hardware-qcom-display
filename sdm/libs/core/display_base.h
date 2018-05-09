@@ -114,6 +114,7 @@ class DisplayBase : public DisplayInterface, DumpImpl {
   virtual DisplayError SetCompositionState(LayerComposition composition_type, bool enable);
   virtual DisplayError EnablePllUpdate(int32_t enable) { return kErrorNotSupported; };
   virtual DisplayError UpdateDisplayPll(int32_t ppm) { return kErrorNotSupported; };
+  virtual DisplayError UpdateResourceInfo();
 
  protected:
   DisplayError BuildLayerStackStats(LayerStack *layer_stack);

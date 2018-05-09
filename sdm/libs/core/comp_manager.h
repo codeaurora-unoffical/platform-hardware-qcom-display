@@ -75,6 +75,7 @@ class CompManager : public DumpImpl {
   DisplayError SetCompositionState(Handle display_ctx, LayerComposition composition_type,
                                    bool enable);
   DisplayError ControlDpps(bool enable);
+  DisplayError UpdateResourceInfo(Handle display_ctx);
 
   // DumpImpl method
   virtual void AppendDump(char *buffer, uint32_t length);
