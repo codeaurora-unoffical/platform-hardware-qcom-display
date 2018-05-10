@@ -399,10 +399,14 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   fixed_info->is_cmdmode = (hw_panel_info_.mode == kModeCommand);
 
-  HWResourceInfo hw_resource_info = HWResourceInfo();
+  HWResourceInfo hw_resource_info = {};
+  HWDisplayCaps caps = {};
   hw_info_intf_->GetHWResourceInfo(&hw_resource_info);
-  // hdr can be supported by display when target and panel supports HDR.
-  fixed_info->hdr_supported = (hw_resource_info.has_hdr && hw_panel_info_.hdr_enabled);
+  comp_manager_->GetCapabilities(display_comp_ctx_, &caps);
+  // hdr can be supported by display when target and panel supports HDR
+  // as well as composition strategies are available.
+  fixed_info->hdr_supported = (hw_resource_info.has_hdr && hw_panel_info_.hdr_enabled &&
+                               caps.hdr_supported);
   // Populate luminance values only if hdr will be supported on that display
   fixed_info->max_luminance = fixed_info->hdr_supported ? hw_panel_info_.peak_luminance: 0;
   fixed_info->average_luminance = fixed_info->hdr_supported ? hw_panel_info_.average_luminance : 0;
