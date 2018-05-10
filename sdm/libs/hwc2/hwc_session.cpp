@@ -155,7 +155,7 @@ int HWCSession::Init() {
     iqservice->connect(android::sp<qClient::IQClient>(this));
     qservice_ = reinterpret_cast<qService::QService *>(iqservice.get());
   } else {
-    ALOGE("%s::%s: Failed to acquire %s", __CLASS__, __FUNCTION__, qservice_name);
+    DLOGE("Failed to acquire %s", qservice_name);
     return -EINVAL;
   }
 
@@ -163,21 +163,19 @@ int HWCSession::Init() {
 
   DisplayError error = buffer_allocator_.Init();
   if (error != kErrorNone) {
-    ALOGE("%s::%s: Buffer allocaor initialization failed. Error = %d",
-          __CLASS__, __FUNCTION__, error);
+    DLOGE("Buffer allocator initialization failed. Error = %d", error);
     return -EINVAL;
   }
 
   g_hwc_uevent_.Register(this);
 
-  error = CoreInterface::CreateCore(HWCDebugHandler::Get(), &buffer_allocator_,
-                                    &buffer_sync_handler_, &socket_handler_, &core_intf_);
+  error = CoreInterface::CreateCore(&buffer_allocator_, &buffer_sync_handler_,
+                                    &socket_handler_, &core_intf_);
   if (error != kErrorNone) {
     buffer_allocator_.Deinit();
-    ALOGE("%s::%s: Display core initialization failed. Error = %d", __CLASS__, __FUNCTION__, error);
+    DLOGE("Display core initialization failed. Error = %d", error);
     return -EINVAL;
   }
-
 
   // If HDMI display is primary display, defer display creation until hotplug event is received.
   HWDisplayInterfaceInfo hw_disp_info = {};
@@ -251,7 +249,7 @@ int HWCSession::Deinit() {
 
   DisplayError error = CoreInterface::DestroyCore();
   if (error != kErrorNone) {
-    ALOGE("Display core de-initialization failed. Error = %d", error);
+    DLOGE("Display core de-initialization failed. Error = %d", error);
   }
 
   return 0;
@@ -259,7 +257,7 @@ int HWCSession::Deinit() {
 
 int HWCSession::Open(const hw_module_t *module, const char *name, hw_device_t **device) {
   if (!module || !name || !device) {
-    ALOGE("%s::%s: Invalid parameters.", __CLASS__, __FUNCTION__);
+    DLOGE("Invalid parameters.");
     return -EINVAL;
   }
 
@@ -1499,94 +1497,94 @@ android::status_t HWCSession::QdcmCMDHandler(const android::Parcel *input_parcel
     }
   }
 
-  if (ret) {
+  if (HWC_DISPLAY_PRIMARY != display_id) {
+    DLOGW("Skipping pending action %d on display = %d.", pending_action.action, display_id);
+    pending_action.action = kNoAction;
+  }
+
+  if (ret || pending_action.action == kNoAction) {
     output_parcel->writeInt32(ret);  // first field in out parcel indicates return code.
+    if (pending_action.action == kNoAction) {
+      HWCColorManager::MarshallStructIntoParcel(resp_payload, output_parcel);
+    }
     req_payload.DestroyPayload();
     resp_payload.DestroyPayload();
     return ret;
   }
 
-  if (kNoAction != pending_action.action) {
-    // Restrict pending actions to primary display.
-    if (HWC_DISPLAY_PRIMARY != display_id) {
-      DLOGW("Skipping pending action %d on display = %d.", pending_action.action, display_id);
-      pending_action.action = kNoAction;
-    }
+  int32_t action = pending_action.action;
+  int count = -1;
+  while (action > 0) {
+    count++;
+    int32_t bit = (action & 1);
+    action = action >> 1;
 
-    int32_t action = pending_action.action;
-    int count = -1;
-    while (action > 0) {
-      count++;
-      int32_t bit = (action & 1);
-      action = action >> 1;
+    if (!bit)
+      continue;
 
-      if (!bit)
-        continue;
-
-      DLOGV_IF(kTagQDCM, "pending action = %d", BITMAP(count));
-      switch (BITMAP(count)) {
-        case kInvalidating:
-          Refresh(HWC_DISPLAY_PRIMARY);
-          break;
-        case kEnterQDCMMode:
-          ret = color_mgr_->EnableQDCMMode(true, hwc_display_[HWC_DISPLAY_PRIMARY]);
-          break;
-        case kExitQDCMMode:
-          ret = color_mgr_->EnableQDCMMode(false, hwc_display_[HWC_DISPLAY_PRIMARY]);
-          break;
-        case kApplySolidFill:
-          {
-            SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
-            ret = color_mgr_->SetSolidFill(pending_action.params,
-                                            true, hwc_display_[HWC_DISPLAY_PRIMARY]);
-          }
-          Refresh(HWC_DISPLAY_PRIMARY);
-          usleep(kSolidFillDelay);
-          break;
-        case kDisableSolidFill:
-          {
-            SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
-            ret = color_mgr_->SetSolidFill(pending_action.params,
-                                            false, hwc_display_[HWC_DISPLAY_PRIMARY]);
-          }
-          Refresh(HWC_DISPLAY_PRIMARY);
-          usleep(kSolidFillDelay);
-          break;
-        case kSetPanelBrightness:
-          brightness_value = reinterpret_cast<int32_t *>(resp_payload.payload);
-          if (brightness_value == NULL) {
-            DLOGE("Brightness value is Null");
-            ret = -EINVAL;
-          } else {
-            ret = hwc_display_[HWC_DISPLAY_PRIMARY]->SetPanelBrightness(*brightness_value);
-          }
-          break;
-        case kEnableFrameCapture:
-          ret = color_mgr_->SetFrameCapture(pending_action.params, true,
-                                        hwc_display_[HWC_DISPLAY_PRIMARY]);
-          Refresh(HWC_DISPLAY_PRIMARY);
-          break;
-        case kDisableFrameCapture:
-          ret = color_mgr_->SetFrameCapture(pending_action.params, false,
-                                        hwc_display_[HWC_DISPLAY_PRIMARY]);
-          break;
-        case kConfigureDetailedEnhancer:
-          ret = color_mgr_->SetDetailedEnhancer(pending_action.params,
-                                            hwc_display_[HWC_DISPLAY_PRIMARY]);
-          Refresh(HWC_DISPLAY_PRIMARY);
-          break;
-        case kModeSet:
-          ret = static_cast<int>
-                 (hwc_display_[HWC_DISPLAY_PRIMARY]->RestoreColorTransform());
-          Refresh(HWC_DISPLAY_PRIMARY);
-          break;
-        case kNoAction:
-          break;
-        default:
-          DLOGW("Invalid pending action = %d!", pending_action.action);
-          break;
+    DLOGV_IF(kTagQDCM, "pending action = %d", BITMAP(count));
+    switch (BITMAP(count)) {
+    case kInvalidating:
+      Refresh(HWC_DISPLAY_PRIMARY);
+      break;
+    case kEnterQDCMMode:
+      ret = color_mgr_->EnableQDCMMode(true, hwc_display_[HWC_DISPLAY_PRIMARY]);
+      break;
+    case kExitQDCMMode:
+      ret = color_mgr_->EnableQDCMMode(false, hwc_display_[HWC_DISPLAY_PRIMARY]);
+      break;
+    case kApplySolidFill:
+      {
+        SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
+        ret = color_mgr_->SetSolidFill(pending_action.params,
+                                       true, hwc_display_[HWC_DISPLAY_PRIMARY]);
       }
-    }
+      Refresh(HWC_DISPLAY_PRIMARY);
+      usleep(kSolidFillDelay);
+      break;
+    case kDisableSolidFill:
+      {
+      SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
+      ret = color_mgr_->SetSolidFill(pending_action.params,
+                                     false, hwc_display_[HWC_DISPLAY_PRIMARY]);
+      }
+      Refresh(HWC_DISPLAY_PRIMARY);
+      usleep(kSolidFillDelay);
+      break;
+    case kSetPanelBrightness:
+      brightness_value = reinterpret_cast<int32_t *>(resp_payload.payload);
+      if (brightness_value == NULL) {
+        DLOGE("Brightness value is Null");
+        ret = -EINVAL;
+      } else {
+        ret = hwc_display_[HWC_DISPLAY_PRIMARY]->SetPanelBrightness(*brightness_value);
+      }
+      break;
+      case kEnableFrameCapture:
+        ret = color_mgr_->SetFrameCapture(pending_action.params, true,
+                                          hwc_display_[HWC_DISPLAY_PRIMARY]);
+        Refresh(HWC_DISPLAY_PRIMARY);
+        break;
+      case kDisableFrameCapture:
+        ret = color_mgr_->SetFrameCapture(pending_action.params, false,
+                                          hwc_display_[HWC_DISPLAY_PRIMARY]);
+        break;
+      case kConfigureDetailedEnhancer:
+        ret = color_mgr_->SetDetailedEnhancer(pending_action.params,
+                                              hwc_display_[HWC_DISPLAY_PRIMARY]);
+        Refresh(HWC_DISPLAY_PRIMARY);
+        break;
+      case kModeSet:
+        ret = static_cast<int>
+                 (hwc_display_[HWC_DISPLAY_PRIMARY]->RestoreColorTransform());
+        Refresh(HWC_DISPLAY_PRIMARY);
+        break;
+      case kNoAction:
+        break;
+      default:
+        DLOGW("Invalid pending action = %d!", pending_action.action);
+        break;
+     }
   }
   // for display API getter case, marshall returned params into out_parcel.
   output_parcel->writeInt32(ret);
