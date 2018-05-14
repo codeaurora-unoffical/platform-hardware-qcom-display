@@ -65,6 +65,7 @@ class ResourceDefault : public ResourceInterface {
   virtual DisplayError SetDetailEnhancerData(Handle display_ctx,
                                              const DisplayDetailEnhancerData &de_data);
   virtual DisplayError Perform(int cmd, ...) { return kErrorNone; }
+  virtual DisplayError UpdateResourceInfo(Handle display_ctx);
 
  private:
   enum PipeOwner {

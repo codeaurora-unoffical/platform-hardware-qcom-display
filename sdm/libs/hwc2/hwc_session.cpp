@@ -49,6 +49,7 @@
 #define HWC_UEVENT_SWITCH_HDMI "change@/devices/virtual/switch/hdmi"
 #define HWC_UEVENT_GRAPHICS_FB0 "change@/devices/virtual/graphics/fb0"
 #define HWC_UEVENT_DRM_EXT_HOTPLUG "mdss_mdp/drm/card"
+#define HWC_UEVENT_DRM_SPLASH_RESOURCE_UPDATE "sde_kms/drm/card0"
 
 static sdm::HWCSession::HWCModuleMethods g_hwc_module_methods;
 
@@ -1401,6 +1402,9 @@ void *HWCSession::HWCUeventThreadHandler() {
       }
     } else if (strcasestr(uevent_data, HWC_UEVENT_DRM_EXT_HOTPLUG)) {
       HandleExtHPD(uevent_data, length);
+    } else if (strcasestr(uevent_data, HWC_UEVENT_DRM_SPLASH_RESOURCE_UPDATE)) {
+      DLOGI("find change in sde_kms");
+      HWCUpdateResourceInfo(uevent_data, length);
     }
   }
   pthread_exit(0);
@@ -1427,6 +1431,31 @@ void HWCSession::HandleExtHPD(const char *uevent_data, int length) {
      DLOGE("Failed handling Hotplug = %s", connected ? "connected" : "disconnected");
     }
   }
+}
+
+int HWCSession::HWCUpdateResourceInfo(const char *uevent_data, int length) {
+  int pipe_released = 0;
+
+  pipe_released = GetEventValue(uevent_data, length, "pipe");
+
+  if (pipe_released >= 0) {
+    DLOGI("start to restore unavailable pipes to idle status");
+    UpdateResourceInfo();
+  }
+
+  return 0;
+}
+
+int HWCSession::UpdateResourceInfo()
+{
+  SCOPE_LOCK(locker_);
+
+  for (uint32_t i = HWC_DISPLAY_PRIMARY; i < MAX_TOTAL_DISPLAY_NUM; i++) {
+    if (hwc_display_[i])
+      hwc_display_[i]->UpdateResourceInfo();
+  }
+
+  return 0;
 }
 
 int HWCSession::GetEventValue(const char *uevent_data, int length, const char *event_info) {

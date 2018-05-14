@@ -510,6 +510,16 @@ DisplayError DisplayBase::SetMaxMixerStages(uint32_t max_mixer_stages) {
   return error;
 }
 
+DisplayError DisplayBase::UpdateResourceInfo()
+{
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
+  DisplayError error = kErrorNone;
+
+  error = comp_manager_->UpdateResourceInfo(display_comp_ctx_);
+
+  return error;
+}
+
 void DisplayBase::AppendDump(char *buffer, uint32_t length) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   HWDisplayAttributes attrib;
