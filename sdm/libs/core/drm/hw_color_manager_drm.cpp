@@ -273,6 +273,13 @@ DisplayError HWColorManagerDrm::GetDrmPAV2(const PPFeatureInfo &in_data,
     mdp_hsic->flags |= PA_HSIC_CONT_ENABLE;
     mdp_hsic->contrast = sde_pa->cont_adj;
   }
+  if (in_data.enable_flags_ & kRightSplitMode) {
+      DLOGE("PA HSIC configuration for right display only");
+    mdp_hsic->flags |= PA_HSIC_RIGHT_DISPLAY_ONLY;
+  } else if (in_data.enable_flags_ & kLeftSplitMode) {
+      DLOGE("PA HSIC configuration for left display only");
+    mdp_hsic->flags |= PA_HSIC_LEFT_DISPLAY_ONLY;
+  }
 
   if (mdp_hsic->flags) {
     out_data->payload = mdp_hsic;
