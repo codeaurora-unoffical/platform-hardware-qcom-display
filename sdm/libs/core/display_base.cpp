@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2017, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -159,8 +159,10 @@ DisplayError DisplayBase::BuildLayerStackStats(LayerStack *layer_stack) {
 
   if (!hw_layers_info.app_layer_count) {
     DLOGW("Layer count is zero");
+    layer_none_ = true;
     return kErrorNoAppLayers;
   }
+  layer_none_ = false;
 
   if (hw_layers_info.gpu_target_index) {
     return ValidateGPUTargetParams();
@@ -275,6 +277,13 @@ DisplayError DisplayBase::Commit(LayerStack *layer_stack) {
 
   if (!layer_stack) {
     return kErrorParameters;
+  }
+
+  if (layer_none_) {
+    // force to handle none app layers commit
+    DLOGE("Commit: None app layers commit for display = %d", display_type_);
+    error = hw_intf_->Commit(&hw_layers_);
+    return error;
   }
 
   if (!pending_commit_) {
