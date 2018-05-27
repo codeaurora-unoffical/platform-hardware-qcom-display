@@ -18,8 +18,9 @@ LOCAL_CLANG                   := true
 
 LOCAL_SHARED_LIBRARIES        := libsdmcore libqservice libbinder libhardware libhardware_legacy \
                                  libutils libcutils libsync libqdutils libqdMetaData libdl \
-                                 libsdmutils libc++ liblog libgrallocutils libui libgpu_tonemapper \
-                                 libhidlbase libhidltransport vendor.display.config@1.0_vendor
+                                 libdisplaydebug libsdmutils libc++ liblog libgrallocutils libui \
+                                 libgpu_tonemapper libhidlbase libhidltransport \
+                                 vendor.display.config@1.0_vendor
 
 ifeq ($(display_config_version), DISPLAY_CONFIG_1_1)
 LOCAL_SHARED_LIBRARIES        += vendor.display.config@1.1_vendor

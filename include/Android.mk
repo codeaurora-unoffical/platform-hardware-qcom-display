@@ -14,6 +14,7 @@ LOCAL_MODULE                  := display_headers
 LOCAL_VENDOR_MODULE           := true
 LOCAL_EXPORT_C_INCLUDE_DIRS   := $(LOCAL_PATH) \
                                  $(display_top)/libcopybit \
+                                 $(display_top)/libdebug \
                                  $(display_top)/libdrmutils \
                                  $(display_top)/libqdutils \
                                  $(display_top)/libqservice \
