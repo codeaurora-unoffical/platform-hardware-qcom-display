@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -300,9 +300,16 @@ HWDeviceDRM::HWDeviceDRM(BufferSyncHandler *buffer_sync_handler, BufferAllocator
                          HWInfoInterface *hw_info_intf)
     : hw_info_intf_(hw_info_intf), buffer_sync_handler_(buffer_sync_handler),
       registry_(buffer_allocator) {
-  device_type_ = kDeviceHDMI;
-  device_name_ = "HDMI Display";
   hw_info_intf_ = hw_info_intf;
+  HWDisplayInterfaceInfo hw_disp_info;
+  hw_info_intf_->GetFirstDisplayInterfaceType(&hw_disp_info);
+  if (hw_disp_info.type == kHDMI) {
+    device_type_ = kDeviceHDMI;
+    device_name_ = "HDMI Display";
+  } else {
+    device_type_ = kDevicePrimary;
+    device_name_ = "Primary Display";
+  }
 }
 
 DisplayError HWDeviceDRM::Init() {
@@ -314,8 +321,12 @@ DisplayError HWDeviceDRM::Init() {
     DRMMaster::GetInstance(&drm_master);
     drm_master->GetHandle(&dev_fd);
     DRMLibLoader::GetInstance()->FuncGetDRMManager()(dev_fd, &drm_mgr_intf_);
+    DRMDisplayType display_type = DRMDisplayType::PERIPHERAL;
+    if (device_type_ == kDeviceHDMI) {
+      display_type = DRMDisplayType::TV;
+    }
 
-    if (drm_mgr_intf_->RegisterDisplay(DRMDisplayType::TV, &token_)) {
+    if (drm_mgr_intf_->RegisterDisplay(display_type, &token_)) {
       DLOGE("RegisterDisplay failed");
       return kErrorResources;
     }
