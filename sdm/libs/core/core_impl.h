@@ -60,6 +60,7 @@ class CoreImpl : public CoreInterface {
   virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info);
   virtual DisplayError GetDisplayCount(uint32_t *count);
   virtual DisplayError GetDisplayInterfaceTypeByOrder(HWDisplayInterfaceInfo *hw_disp_info_array);
+  virtual DisplayError SetPlaneAvailable(uint32_t plane_id, bool is_available);
 
  protected:
   Locker locker_;

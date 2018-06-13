@@ -66,6 +66,7 @@ class ResourceDefault : public ResourceInterface {
                                              const DisplayDetailEnhancerData &de_data);
   virtual DisplayError Perform(int cmd, ...) { return kErrorNone; }
   virtual DisplayError UpdateResourceInfo(Handle display_ctx);
+  DisplayError SetPlaneAvailable(uint32_t plane_id, bool is_available);
 
  private:
   enum PipeOwner {
