@@ -619,4 +619,9 @@ bool CompManager::SetDisplayState(Handle display_ctx,
   return true;
 }
 
+DisplayError CompManager::SetPlaneAvailable(uint32_t pipe_id, bool is_available) {
+
+  return resource_intf_->SetPlaneAvailable(pipe_id, is_available);
+}
+
 }  // namespace sdm

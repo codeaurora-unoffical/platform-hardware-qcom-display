@@ -76,6 +76,7 @@ class CompManager : public DumpImpl {
                                    bool enable);
   DisplayError ControlDpps(bool enable);
   DisplayError UpdateResourceInfo(Handle display_ctx);
+  DisplayError SetPlaneAvailable(uint32_t pipe_id, bool is_available);
 
   // DumpImpl method
   virtual void AppendDump(char *buffer, uint32_t length);

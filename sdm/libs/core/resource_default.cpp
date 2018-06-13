@@ -958,4 +958,8 @@ DisplayError ResourceDefault::SetDetailEnhancerData(Handle display_ctx,
   return kErrorNotSupported;
 }
 
+DisplayError ResourceDefault::SetPlaneAvailable(uint32_t plane_id, bool is_available) {
+  return kErrorNotSupported;
+}
+
 }  // namespace sdm
