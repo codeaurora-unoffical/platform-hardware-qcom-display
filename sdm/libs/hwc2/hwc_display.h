@@ -295,6 +295,7 @@ class HWCDisplay : public DisplayEventHandler {
   bool validated_ = false;
   bool color_tranform_failed_ = false;
   HWCColorMode *color_mode_ = NULL;
+  bool layer_stack_invalid_ = true;
 
  private:
   void DumpInputBuffers(void);
