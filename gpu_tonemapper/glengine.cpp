@@ -102,7 +102,11 @@ void* engine_initialize(bool isSecure)
       gbm = gbm_create_device(drm_fd);
 
   // display
+#ifdef __GBM__
+  engineContext->eglDisplay = eglGetDisplay(gbm);
+#else
   engineContext->eglDisplay = eglGetDisplay((void*) gbm);
+#endif
   EGL(eglBindAPI(EGL_OPENGL_ES_API));
 
   // initialize
