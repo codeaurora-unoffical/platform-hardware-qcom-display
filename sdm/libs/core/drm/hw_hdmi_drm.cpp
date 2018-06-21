@@ -116,6 +116,11 @@ DisplayError HWHDMIDRM::Init() {
       return kErrorResources;
     }
 
+    if (!drm_lib_loader->FuncGetDRMManager()) {
+      DLOGE("DRMLibLoader::GetInstance failed");
+      return kErrorResources;
+    }
+
     drm_lib_loader->FuncGetDRMManager()(dev_fd, &drm_mgr_intf_);
     if (drm_mgr_intf_->RegisterDisplay(drm_disp_order, DRMDisplayType::TV, &token_)) {
       DLOGE("RegisterDisplay failed");
