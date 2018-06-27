@@ -30,6 +30,8 @@
 #define __CLASS__ "HWColorManagerDRM"
 
 #ifdef PP_DRM_ENABLE
+#include <stddef.h>
+#include <stdint.h>
 #include <drm/msm_drm_pp.h>
 #endif
 #include <utils/debug.h>
@@ -48,6 +50,13 @@ using sde_drm::kPPFeaturesMax;
 #ifdef PP_DRM_ENABLE
 static const uint32_t kPgcDataMask = 0x3FF;
 static const uint32_t kPgcShift = 16;
+
+#ifdef DRM_MSM_PA_HSIC
+static const uint32_t kPAHueMask = (1 << 12);
+static const uint32_t kPASatMask = (1 << 13);
+static const uint32_t kPAValMask = (1 << 14);
+static const uint32_t kPAContrastMask = (1 << 15);
+#endif
 #endif
 
 namespace sdm {
@@ -83,6 +92,7 @@ uint32_t HWColorManagerDrm::GetFeatureVersion(const DRMPPFeatureInfo &feature) {
     case kFeatureMixerGc:
       break;
     case kFeaturePaV2:
+        version = PPFeatureVersion::kSDEPaV17;
       break;
     case kFeatureDither:
       break;
@@ -205,6 +215,75 @@ DisplayError HWColorManagerDrm::GetDrmMixerGC(const PPFeatureInfo &in_data,
 DisplayError HWColorManagerDrm::GetDrmPAV2(const PPFeatureInfo &in_data,
                                            DRMPPFeatureInfo *out_data) {
   DisplayError ret = kErrorNone;
+
+#ifdef PP_DRM_ENABLE
+  struct SDEPaData *sde_pa;
+  struct drm_msm_pa_hsic *mdp_hsic;
+
+  if (!out_data) {
+    DLOGE("Invalid input parameter for pa hsic");
+    return kErrorParameters;
+  }
+
+  sde_pa = (struct SDEPaData *) in_data.GetConfigData();
+
+  out_data->id = kFeaturePaV2;
+  out_data->type = sde_drm::kPropBlob;
+  out_data->version = in_data.feature_version_;
+  out_data->payload_size = 0;
+  out_data->payload = NULL;
+
+  if (in_data.enable_flags_ & kOpsDisable) {
+    DLOGE("kOpsDisable");
+    /* Complete PA features disable case */
+    return ret;
+  } else if (!(in_data.enable_flags_ & kOpsEnable)) {
+    DLOGE("Invalid ops for pa hsic");
+    return kErrorParameters;
+  }
+
+  if (!(sde_pa->mode & (kPAHueMask | kPASatMask |
+                        kPAValMask | kPAContrastMask))) {
+    /* PA HSIC feature disable case, but other PA features active */
+    DLOGE("PA HSIC feature disable case, but other PA features active");
+    return ret;
+  }
+
+  mdp_hsic = new drm_msm_pa_hsic();
+  if (!mdp_hsic) {
+    DLOGE("Failed to allocate memory for pa hsic");
+    return kErrorMemory;
+  }
+
+  mdp_hsic->flags = 0;
+
+  if (in_data.enable_flags_ & kPaHueEnable) {
+    mdp_hsic->flags |= PA_HSIC_HUE_ENABLE;
+    mdp_hsic->hue = sde_pa->hue_adj;
+  }
+  if (in_data.enable_flags_ & kPaSatEnable) {
+    mdp_hsic->flags |= PA_HSIC_SAT_ENABLE;
+    mdp_hsic->saturation = sde_pa->sat_adj;
+  }
+  if (in_data.enable_flags_ & kPaValEnable) {
+    mdp_hsic->flags |= PA_HSIC_VAL_ENABLE;
+    mdp_hsic->value = sde_pa->val_adj;
+  }
+  if (in_data.enable_flags_ & kPaContEnable) {
+    mdp_hsic->flags |= PA_HSIC_CONT_ENABLE;
+    mdp_hsic->contrast = sde_pa->cont_adj;
+  }
+
+  if (mdp_hsic->flags) {
+    out_data->payload = mdp_hsic;
+    out_data->payload_size = sizeof(struct drm_msm_pa_hsic);
+  } else {
+    /* PA HSIC configuration unchanged, no better return code available */
+    DLOGE("PA HSIC configuration unchanged");
+    delete mdp_hsic;
+    ret = kErrorPermission;
+  }
+#endif
   return ret;
 }
 
