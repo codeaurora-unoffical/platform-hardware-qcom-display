@@ -563,7 +563,7 @@ int32_t HWCSession::PresentDisplay(hwc2_device_t *device, hwc2_display_t display
 int32_t HWCSession::RegisterCallback(hwc2_device_t *device, int32_t descriptor,
                                      hwc2_callback_data_t callback_data,
                                      hwc2_function_pointer_t pointer) {
-  if (!device || pointer == nullptr) {
+  if (!device) {
     return HWC2_ERROR_BAD_PARAMETER;
   }
   HWCSession *hwc_session = static_cast<HWCSession *>(device);
