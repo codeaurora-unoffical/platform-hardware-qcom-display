@@ -41,6 +41,15 @@ AC_ARG_ENABLE([sdmhaldrm],
 
 AM_CONDITIONAL([ENABLE_SDMHALDRM], [test "x${enable_sdmhaldrm}" = "xyes"])
 
+
+AC_ARG_ENABLE([sdmhalfb],
+     AC_HELP_STRING([--enable-sdmhalfb],
+        [enable sdmhalfb, build display-hal-linux with sdmhalfb]),
+        [enable_sdmhalfb="${enableval}"],
+        enable_sdmhalfb=no)
+
+AM_CONDITIONAL([ENABLE_SDMHALFB], [test "x${enable_sdmhalfb}" = "xyes"])
+
 # Checks for programs.
 AC_PROG_CC
 AM_PROG_CC_C_O
