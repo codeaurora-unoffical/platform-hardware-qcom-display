@@ -99,9 +99,10 @@ int HWCSession::GetDisplayInfos(void) {
 }
 
 DisplayOrder HWCSession::GetDisplayOrder(uint32_t display_id) {
-    if (display_id < HWC_DISPLAY_VIRTUAL)
+    if (display_id < qdutils::DISPLAY_VIRTUAL)
         return hw_disp_info_[display_id].order;
-    else if (display_id >= HWC_DISPLAY_VIRTUAL && display_id < HWC_DISPLAY_VIRTUAL + MAX_VIRTUAL_DISPLAY_NUM)
+    else if (display_id >= qdutils::DISPLAY_VIRTUAL &&
+             display_id < qdutils::DISPLAY_VIRTUAL + MAX_VIRTUAL_DISPLAY_NUM)
         return kOrderMax;
     else if (display_id - MAX_VIRTUAL_DISPLAY_NUM < kOrderMax)
         return hw_disp_info_[display_id - MAX_VIRTUAL_DISPLAY_NUM].order;
@@ -197,7 +198,7 @@ int HWCSession::Init() {
         break;
     }
 
-    if (i >= HWC_DISPLAY_VIRTUAL && i < HWC_DISPLAY_VIRTUAL + MAX_VIRTUAL_DISPLAY_NUM) {
+    if (i >= qdutils::DISPLAY_VIRTUAL && i < qdutils::DISPLAY_VIRTUAL + MAX_VIRTUAL_DISPLAY_NUM) {
         continue;
     }
 
@@ -375,7 +376,7 @@ int32_t HWCSession::CreateVirtualDisplay(hwc2_device_t *device, uint32_t width, 
   HWCSession *hwc_session = static_cast<HWCSession *>(device);
   auto status = hwc_session->CreateVirtualDisplayObject(width, height, format);
   if (status == HWC2::Error::None) {
-    *out_display_id = HWC_DISPLAY_VIRTUAL;
+    *out_display_id = qdutils::DISPLAY_VIRTUAL;
     DLOGI("Created virtual display id:% " PRIu64 " with res: %dx%d",
           *out_display_id, width, height);
   } else {
@@ -698,7 +699,7 @@ int32_t HWCSession::SetOutputBuffer(hwc2_device_t *device, hwc2_display_t displa
   }
 
   auto *hwc_session = static_cast<HWCSession *>(device);
-  if (display == HWC_DISPLAY_VIRTUAL && hwc_session->hwc_display_[display]) {
+  if (display == qdutils::DISPLAY_VIRTUAL && hwc_session->hwc_display_[display]) {
     auto vds = reinterpret_cast<HWCDisplayVirtual *>(hwc_session->hwc_display_[display]);
     auto status = vds->SetOutputBuffer(buffer, releaseFence);
     return INT32(status);
@@ -726,7 +727,8 @@ int32_t HWCSession::SetPowerMode(hwc2_device_t *device, hwc2_display_t display, 
      }
 
 #ifdef ENABLE_THREE_DISPLAYS
-     for (uint32_t i = HWC_DISPLAY_VIRTUAL + MAX_VIRTUAL_DISPLAY_NUM; i < MAX_TOTAL_DISPLAY_NUM; i++) {
+     for (uint32_t i = qdutils::DISPLAY_VIRTUAL + MAX_VIRTUAL_DISPLAY_NUM;
+          i < MAX_TOTAL_DISPLAY_NUM; i++) {
          if (hwc_session->hwc_display_[i] != NULL) {
            DLOGE("Notify SurfaceFlinger for display kTertiary\n");
            hwc_session->callbacks_.Hotplug(i, HWC2::Connection::Connected);
@@ -881,14 +883,15 @@ hwc2_function_pointer_t HWCSession::GetFunction(struct hwc2_device *device,
 
 HWC2::Error HWCSession::CreateVirtualDisplayObject(uint32_t width, uint32_t height,
                                                    int32_t *format) {
-  if (hwc_display_[HWC_DISPLAY_VIRTUAL]) {
+  if (hwc_display_[qdutils::DISPLAY_VIRTUAL]) {
     return HWC2::Error::NoResources;
   }
 
-  DisplayOrder display_order = GetDisplayOrder(HWC_DISPLAY_VIRTUAL);
+  DisplayOrder display_order = GetDisplayOrder(qdutils::DISPLAY_VIRTUAL);
 
-  auto status = HWCDisplayVirtual::Create(core_intf_, buffer_allocator_, &callbacks_, width,
-                                          height, format, display_order, &hwc_display_[HWC_DISPLAY_VIRTUAL]);
+  auto status = HWCDisplayVirtual::Create(core_intf_, buffer_allocator_, &callbacks_,
+                                          width, height, format, display_order,
+                                          &hwc_display_[qdutils::DISPLAY_VIRTUAL]);
   // TODO(user): validate width and height support
   if (status)
     return HWC2::Error::Unsupported;
@@ -927,7 +930,7 @@ int HWCSession::DisconnectDisplay(int disp) {
 
   if (disp == HWC_DISPLAY_EXTERNAL) {
     HWCDisplayExternal::Destroy(hwc_display_[disp]);
-  } else if (disp == HWC_DISPLAY_VIRTUAL) {
+  } else if (disp == qdutils::DISPLAY_VIRTUAL) {
     HWCDisplayVirtual::Destroy(hwc_display_[disp]);
   } else {
     DLOGE("Invalid display type");
@@ -1529,7 +1532,7 @@ int HWCSession::HotPlugHandler(bool connected) {
       // Connect external display if virtual display is not connected.
       // Else, defer external display connection and process it when virtual display
       // tears down; Do not notify SurfaceFlinger since connection is deferred now.
-      if (!hwc_display_[HWC_DISPLAY_VIRTUAL]) {
+      if (!hwc_display_[qdutils::DISPLAY_VIRTUAL]) {
         status = ConnectDisplay(HWC_DISPLAY_EXTERNAL);
         if (status) {
           return status;

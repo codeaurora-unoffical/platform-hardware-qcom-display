@@ -24,6 +24,9 @@
 #include <core/core_interface.h>
 #include <utils/locker.h>
 
+#include <qd_utils.h>
+#include <display_config.h>
+
 #include "hwc_callbacks.h"
 #include "hwc_layers.h"
 #include "hwc_display.h"
