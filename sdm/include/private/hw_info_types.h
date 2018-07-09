@@ -339,6 +339,7 @@ struct HWRotatorSession {
   float input_compression = 1.0f;
   float output_compression = 1.0f;
   bool is_buffer_cached = false;
+
 };
 
 struct HWScaleLutInfo {
