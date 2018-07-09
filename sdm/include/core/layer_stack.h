@@ -35,6 +35,8 @@
 #include <utils/constants.h>
 
 #include <vector>
+#include <unordered_map>
+#include <memory>
 
 #include "layer_buffer.h"
 #include "sdm_types.h"
@@ -297,6 +299,10 @@ struct LayerRectArray {
   uint32_t count = 0;      //!< Number of elements in the array.
 };
 
+struct LayerBufferMap {
+  std::unordered_map<uint64_t, std::shared_ptr<LayerBufferObject>> buffer_map;
+};
+
 /*! @brief This structure defines display layer object which contains layer properties and a drawing
   buffer.
 
@@ -366,6 +372,7 @@ struct Layer {
 
   Lut3d lut_3d = {};                               //!< o/p - Populated by SDM when tone mapping is
                                                    //!< needed on this layer.
+  std::shared_ptr<LayerBufferMap> buffer_map = nullptr;  //!< Map of handle_id and fb_id.
 };
 
 /*! @brief This structure defines a layer stack that contains layers which need to be composed and
