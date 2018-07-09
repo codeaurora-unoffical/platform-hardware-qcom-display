@@ -150,6 +150,12 @@ enum struct DRMOps {
    */
   PLANE_SET_MULTIRECT_MODE,
   /*
+   * Op: CUST
+   * Arg: uint32_t - Plane ID
+   *      uint32_t - arg cust
+   */
+  PLANE_SET_CUST,
+  /*
    * Op: Activate or deactivate a CRTC
    * Arg: uint32_t - CRTC ID
    *      uint32_t - 1 to enable, 0 to disable
@@ -267,6 +273,12 @@ enum struct DRMOps {
    */
   CRTC_SET_IDLE_TIMEOUT,
   /*
+   * Op: CUST
+   * Arg: uint32_t - CRTC ID
+   * uint32_t - arg cust
+   */
+  CRTC_SET_CUST,
+  /*
    * Op: Returns retire fence for this commit. Should be called after Commit() on
    * DRMAtomicReqInterface.
    * Arg: uint32_t - Connector ID
@@ -321,7 +333,13 @@ enum struct DRMOps {
    * Arg: uint32_t - Connector ID
    * DRMPPFeatureInfo * - PP feature data pointer
    */
-   CONNECTOR_SET_POST_PROC,
+  CONNECTOR_SET_POST_PROC,
+  /*
+   * Op: CUST
+   * Arg: uint32_t - Connector ID
+   * uint32_t - arg 2
+   */
+  CONNECTOR_SET_CUST,
   /*
    * Op: Sets connector hdr metadata
    * Arg: uint32_t - Connector ID
