@@ -434,6 +434,8 @@ HWC2::Error HWCDisplay::CreateLayer(hwc2_layer_t *out_layer_id) {
   *out_layer_id = layer->GetId();
   geometry_changes_ |= GeometryChanges::kAdded;
   validated_ = false;
+  layer_stack_invalid_ = true;
+
   return HWC2::Error::None;
 }
 
@@ -466,6 +468,8 @@ HWC2::Error HWCDisplay::DestroyLayer(hwc2_layer_t layer_id) {
 
   geometry_changes_ |= GeometryChanges::kRemoved;
   validated_ = false;
+  layer_stack_invalid_ = true;
+
   return HWC2::Error::None;
 }
 
@@ -633,6 +637,8 @@ void HWCDisplay::BuildLayerStack() {
   }
   // set secure display
   SetSecureDisplay(secure_display_active);
+
+  layer_stack_invalid_ = false;
 }
 
 void HWCDisplay::BuildSolidFillStack() {
@@ -1224,10 +1230,6 @@ HWC2::Error HWCDisplay::GetHdrCapabilities(uint32_t *out_num_types, int32_t *out
 
 
 HWC2::Error HWCDisplay::CommitLayerStack(void) {
-  if (shutdown_pending_ || layer_set_.empty()) {
-    return HWC2::Error::None;
-  }
-
   if (skip_validate_ && !CanSkipValidate()) {
     validated_ = false;
   }
@@ -1235,6 +1237,10 @@ HWC2::Error HWCDisplay::CommitLayerStack(void) {
   if (!validated_) {
     DLOGV_IF(kTagClient, "Display %d is not validated", id_);
     return HWC2::Error::NotValidated;
+  }
+
+  if (shutdown_pending_ || layer_set_.empty()) {
+    return HWC2::Error::None;
   }
 
   DumpInputBuffers();
@@ -1326,8 +1332,11 @@ HWC2::Error HWCDisplay::PostCommitLayerStack(int32_t *out_retire_fence) {
       close(layer_buffer->acquire_fence_fd);
       layer_buffer->acquire_fence_fd = -1;
     }
+
+    layer->request.flags = {};
   }
 
+  client_target_->GetSDMLayer()->request.flags = {};
   *out_retire_fence = -1;
   if (!flush_) {
     // if swapinterval property is set to 0 then close and reset the list retire fence
@@ -1347,8 +1356,6 @@ HWC2::Error HWCDisplay::PostCommitLayerStack(int32_t *out_retire_fence) {
 
   geometry_changes_ = GeometryChanges::kNone;
   flush_ = false;
-
-  ClearRequestFlags();
 
   return status;
 }
@@ -2034,12 +2041,6 @@ DisplayClass HWCDisplay::GetDisplayClass() {
   return display_class_;
 }
 
-void HWCDisplay::ClearRequestFlags() {
-  for (Layer *layer : layer_stack_.layers) {
-    layer->request.flags = {};
-  }
-}
-
 std::string HWCDisplay::Dump() {
   std::ostringstream os;
   os << "\n------------HWC----------------\n";
@@ -2061,6 +2062,11 @@ std::string HWCDisplay::Dump() {
           "/"<< transform.flip_vertical;
     os << " buffer_id: " << std::hex << "0x" << sdm_layer->input_buffer.buffer_id << std::dec
        << std::endl;
+  }
+
+  if (layer_stack_invalid_) {
+    os << "\n Layers added or removed but not reflected to SDM's layer stack yet\n";
+    return os.str();
   }
 
   if (color_mode_) {
