@@ -147,6 +147,14 @@ enum SmartDMARevision {
   V2,
 };
 
+enum HwHdrEotf {
+  kHdrEOTFInvalid = 0,
+  kHdrEOTFSDR = 0x1,
+  kHdrEOTFHdrLumRange = 0x2,
+  kHdrEOTFHDR10 = 0x4,
+  kHdrEOTFHLG = 0x8,
+};
+
 struct HWResourceInfo {
   uint32_t hw_version = 0;
   uint32_t hw_revision = 0;
