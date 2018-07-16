@@ -572,8 +572,8 @@ int32_t HWCSession::RegisterCallback(hwc2_device_t *device, int32_t descriptor,
     SCOPE_LOCK(hwc_session->callbacks_lock_);
     auto desc = static_cast<HWC2::Callback>(descriptor);
     error = hwc_session->callbacks_.Register(desc, callback_data, pointer);
-    DLOGD("Registering callback: %s", to_string(desc).c_str());
     hwc_session->callbacks_lock_.Broadcast();
+    DLOGD("%s callback: %s", pointer ? "Registering" : "Deregistering", to_string(desc).c_str());
   }
   if (descriptor == HWC2_CALLBACK_HOTPLUG) {
     if (hwc_session->hwc_display_[HWC_DISPLAY_PRIMARY]) {
