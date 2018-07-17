@@ -46,6 +46,12 @@
 
 #define __CLASS__ "HWHDMIDRM"
 
+#define DRM_MODE_FLAG_PIC_AR_SHIFT 24
+
+#ifndef DRM_MODE_FLAG_PIC_AR_MASK
+#define DRM_MODE_FLAG_PIC_AR_MASK (0x0F<<DRM_MODE_FLAG_PIC_AR_SHIFT)
+#endif
+
 #ifndef DRM_MODE_FLAG_SUPPORTS_RGB
 #define DRM_MODE_FLAG_SUPPORTS_RGB (1<<20)
 #endif
@@ -244,9 +250,10 @@ DisplayError HWHDMIDRM::SetDisplayAttributes(uint32_t index) {
 DisplayError HWHDMIDRM::GetConfigIndex(char *mode, uint32_t *index) {
 
   uint32_t width = 0, height = 0, fps = 0, format = 0;
+  int32_t aspect_ratio = -1;
 
-  //mode should be in width:height:fps:format
-  if (sscanf(mode, "%u:%u:%u:%u", &width, &height, &fps, &format) != 4)
+  //mode should be in width:height:fps:format:aspect_ratio
+  if (sscanf(mode, "%u:%u:%u:%u:%d", &width, &height, &fps, &format, &aspect_ratio) != 5)
      return kErrorParameters;
 
   for (size_t idex = 0; idex < connector_info_.modes.size(); idex ++) {
@@ -256,6 +263,9 @@ DisplayError HWHDMIDRM::GetConfigIndex(char *mode, uint32_t *index) {
         (format & ((connector_info_.modes[idex].flags & DRM_MODE_FLAG_FMT_MASK)
                     >> DRM_MODE_FLAG_SUPPORTS_SHIFT)))
     {
+      if ((aspect_ratio >= 0) && ((aspect_ratio << DRM_MODE_FLAG_PIC_AR_SHIFT) !=
+          (connector_info_.modes[idex].flags & DRM_MODE_FLAG_PIC_AR_MASK)))
+        continue;
       *index = UINT32(idex);
       return kErrorNone;
     }
