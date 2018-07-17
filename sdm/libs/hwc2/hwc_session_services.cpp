@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017, The Linux Foundation. All rights reserved.
+* Copyright (c) 2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -98,7 +98,7 @@ Return<void> HWCSession::isDisplayConnected(IDisplayConfig::DisplayType dpy,
   bool connected = false;
 
   int disp_id = MapDisplayType(dpy);
-  if (disp_id >= 0) {
+  if (((disp_id >= HWC_DISPLAY_PRIMARY ) && (disp_id < MAX_TOTAL_DISPLAY_NUM))) {
     connected = hwc_display_[disp_id];
     error = 0;
   }
@@ -111,7 +111,7 @@ Return<void> HWCSession::isDisplayConnected(IDisplayConfig::DisplayType dpy,
 int32_t HWCSession::SetSecondaryDisplayStatus(int disp_id, HWCDisplay::DisplayStatus status) {
   SCOPE_LOCK(locker_);
 
-  if (disp_id < 0) {
+  if ((disp_id < HWC_DISPLAY_PRIMARY ) || (disp_id >= MAX_TOTAL_DISPLAY_NUM)) {
     return -EINVAL;
   }
 
@@ -160,7 +160,7 @@ Return<int32_t> HWCSession::configureDynRefeshRate(IDisplayConfig::DisplayDynRef
 int32_t HWCSession::GetConfigCount(int disp_id, uint32_t *count) {
   SCOPE_LOCK(locker_);
 
-  if (disp_id >= 0 && hwc_display_[disp_id]) {
+  if (((disp_id >= HWC_DISPLAY_PRIMARY ) && (disp_id < MAX_TOTAL_DISPLAY_NUM)) && hwc_display_[disp_id]) {
     return hwc_display_[disp_id]->GetDisplayConfigCount(count);
   }
 
@@ -180,7 +180,7 @@ Return<void> HWCSession::getConfigCount(IDisplayConfig::DisplayType dpy,
 int32_t HWCSession::GetActiveConfigIndex(int disp_id, uint32_t *config) {
   SCOPE_LOCK(locker_);
 
-  if (disp_id >= 0 && hwc_display_[disp_id]) {
+  if (((disp_id >= HWC_DISPLAY_PRIMARY ) && (disp_id < MAX_TOTAL_DISPLAY_NUM)) && hwc_display_[disp_id]) {
     return hwc_display_[disp_id]->GetActiveDisplayConfig(config);
   }
 
@@ -200,7 +200,7 @@ Return<void> HWCSession::getActiveConfig(IDisplayConfig::DisplayType dpy,
 int32_t HWCSession::SetActiveConfigIndex(int disp_id, uint32_t config) {
   SCOPE_LOCK(locker_);
 
-  if (disp_id < 0) {
+  if ((disp_id < HWC_DISPLAY_PRIMARY) || (disp_id >= MAX_TOTAL_DISPLAY_NUM)) {
     return -EINVAL;
   }
 
@@ -228,7 +228,7 @@ Return<void> HWCSession::getDisplayAttributes(uint32_t configIndex,
   IDisplayConfig::DisplayAttributes display_attributes = {};
 
   int disp_id = MapDisplayType(dpy);
-  if (disp_id >= 0 && hwc_display_[disp_id]) {
+  if (((disp_id >= HWC_DISPLAY_PRIMARY ) && (disp_id < MAX_TOTAL_DISPLAY_NUM)) && hwc_display_[disp_id] ) {
     DisplayConfigVariableInfo hwc_display_attributes;
     error = hwc_display_[disp_id]->GetDisplayAttributesForConfig(static_cast<int>(configIndex),
                                                                  &hwc_display_attributes);
@@ -395,7 +395,7 @@ Return<void> HWCSession::getHDRCapabilities(IDisplayConfig::DisplayType dpy,
 
   do {
     int disp_id = MapDisplayType(dpy);
-    if (disp_id < 0) {
+    if ((disp_id < HWC_DISPLAY_PRIMARY ) || (disp_id >= MAX_TOTAL_DISPLAY_NUM)) {
       DLOGE("Invalid display id = %d", disp_id);
       break;
     }
