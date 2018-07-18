@@ -221,6 +221,7 @@ class HWCSession : hwc2_device_t, public IDisplayConfig, public qClient::BnQClie
   bool external_pending_connect_ = false;
   bool new_bw_mode_ = false;
   bool need_invalidate_ = false;
+  bool notify_displays_ = false;
   int bw_mode_release_fd_ = -1;
   qService::QService *qservice_ = NULL;
   HWCSocketHandler socket_handler_;
