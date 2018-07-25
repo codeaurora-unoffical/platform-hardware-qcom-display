@@ -572,8 +572,9 @@ int32_t HWCSession::RegisterCallback(hwc2_device_t *device, int32_t descriptor,
   DLOGD("Registering callback: %s", to_string(desc).c_str());
 
   if (descriptor == HWC2_CALLBACK_HOTPLUG) {
-     DLOGE("Notify SurfaceFlinger for HWC_DISPLAY_PRIMARY\n");
+     DLOGE("Notify SurfaceFlinger for display %d\n", HWC_DISPLAY_PRIMARY);
      hwc_session->callbacks_.Hotplug(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected);
+     hwc_session->notify_displays_ = true;
   }
   hwc_session->callbacks_lock_.Broadcast();
   return INT32(error);
@@ -711,18 +712,16 @@ int32_t HWCSession::SetOutputBuffer(hwc2_device_t *device, hwc2_display_t displa
 int32_t HWCSession::SetPowerMode(hwc2_device_t *device, hwc2_display_t display, int32_t int_mode) {
   auto mode = static_cast<HWC2::PowerMode>(int_mode);
   int32_t ret;
-  static int32_t notify = 1;
   HWCSession *hwc_session = static_cast<HWCSession *>(device);
 
   SCOPE_LOCK(locker_);
+
   ret = CallDisplayFunction(device, display, &HWCDisplay::SetPowerMode, mode);
-//ToDo: Notify SF about secondary & tertiary display from right place
-// this is a  workaround to fix an issue where SF couldn't allocate
-// framebuffersurface & bufferqueue for external & tertiary display
-  if(display == kFirst && notify == 1) {
-     notify = 0;
+
+  if(display == kFirst && hwc_session->notify_displays_ == true) {
+     hwc_session->notify_displays_ = false;
      if (hwc_session->hwc_display_[HWC_DISPLAY_EXTERNAL] != NULL) {
-       DLOGE("Notify SurfaceFlinger for display kSecondary\n");
+       DLOGE("Notify SurfaceFlinger for display %d\n", kSecondary);
        hwc_session->callbacks_.Hotplug(HWC_DISPLAY_EXTERNAL, HWC2::Connection::Connected);
      }
 
@@ -730,12 +729,13 @@ int32_t HWCSession::SetPowerMode(hwc2_device_t *device, hwc2_display_t display, 
      for (uint32_t i = qdutils::DISPLAY_VIRTUAL + MAX_VIRTUAL_DISPLAY_NUM;
           i < MAX_TOTAL_DISPLAY_NUM; i++) {
          if (hwc_session->hwc_display_[i] != NULL) {
-           DLOGE("Notify SurfaceFlinger for display kTertiary\n");
+           DLOGE("Notify SurfaceFlinger for display %d\n", i);
            hwc_session->callbacks_.Hotplug(i, HWC2::Connection::Connected);
          }
      }
 #endif
   }
+
   return ret;
 }
 
