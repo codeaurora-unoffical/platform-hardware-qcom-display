@@ -47,6 +47,7 @@ class DisplayHDMI : public DisplayBase, HWEventHandler {
   virtual DisplayError GetRefreshRateRange(uint32_t *min_refresh_rate, uint32_t *max_refresh_rate);
   virtual DisplayError SetVSyncState(bool enable);
   virtual DisplayError SetRefreshRate(uint32_t refresh_rate);
+  virtual DisplayError SetActiveConfig(DisplayConfigVariableInfo *variable_info);
   virtual bool IsUnderscanSupported();
   virtual DisplayError OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level);
 
