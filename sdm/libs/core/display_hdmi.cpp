@@ -187,6 +187,29 @@ DisplayError DisplayHDMI::OnMinHdcpEncryptionLevelChange(uint32_t min_enc_level)
   return hw_intf_->OnMinHdcpEncryptionLevelChange(min_enc_level);
 }
 
+DisplayError DisplayHDMI::SetActiveConfig(DisplayConfigVariableInfo *variable_info) {
+  DisplayError error = kErrorNone;
+  char mode[32] = {0};
+  uint32_t index = 0;
+
+  snprintf(mode, sizeof(mode), "%u:%u:%u:%u:%d",
+                               variable_info->x_pixels,
+                               variable_info->y_pixels,
+                               variable_info->fps,
+                               3,
+                               variable_info->aspect_ratio);
+
+  error = hw_intf_->GetConfigIndex(mode, &index);
+
+  if (kErrorNone != error)
+  {
+    DLOGE("Failed to find the specified Config. Error = %d", error);
+    return error;
+  }
+
+  return DisplayBase::SetActiveConfig(index);
+}
+
 uint32_t DisplayHDMI::GetBestConfig(HWS3DMode s3d_mode) {
   uint32_t best_index = 0, index;
   uint32_t num_modes = 0;
