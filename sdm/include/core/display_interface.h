@@ -64,6 +64,11 @@ enum DisplayOrder {
   kFirst,         //!< The first display.
   kSecondary,     //!< The second display.
   kTertiary,      //!< The third display.
+  kQuaternary,    //!< The fourth display.
+  kQuinary,       //!< The fifth display.
+  kSenary,        //!< The sizth display.
+  kSeptenary,     //!< The seventh display.
+  kOctonary,      //!< The eighth display.
   kOrderMax,
 };
 

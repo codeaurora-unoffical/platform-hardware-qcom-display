@@ -645,7 +645,12 @@ DisplayError HWInfoDRM::GetDisplayCount(uint32_t *count) {
 DisplayError HWInfoDRM::GetDisplayInterfaceTypeByOrder(HWDisplayInterfaceInfo *hw_disp_info_array) {
   DRMDisplayOrder supported_orders[DRMDisplayOrder::kDRMMaxOrder] = { DRMDisplayOrder::kDRMPrimary,
                                                                       DRMDisplayOrder::kDRMSecondary,
-                                                                      DRMDisplayOrder::kDRMTertiary };
+                                                                      DRMDisplayOrder::kDRMTertiary,
+                                                                      DRMDisplayOrder::kDRMQuaternary,
+                                                                      DRMDisplayOrder::kDRMQuinary,
+                                                                      DRMDisplayOrder::kDRMSenary,
+                                                                      DRMDisplayOrder::kDRMSeptenary,
+                                                                      DRMDisplayOrder::kDRMOctonary};
   uint32_t conn_count = drm_mgr_intf_->GetConnectorCount();
   sde_drm::DRMConnectorInfo info;
   std::map<uint32_t, const char*>::iterator it;
@@ -701,6 +706,21 @@ DisplayError HWInfoDRM::GetDisplayInterfaceTypeByOrder(HWDisplayInterfaceInfo *h
         break;
       case DRMDisplayOrder::kDRMTertiary:
         order = kTertiary;
+        break;
+      case DRMDisplayOrder::kDRMQuaternary:
+        order = kQuaternary;
+        break;
+      case DRMDisplayOrder::kDRMQuinary:
+        order = kQuinary;
+        break;
+      case DRMDisplayOrder::kDRMSenary:
+        order = kSenary;
+        break;
+      case DRMDisplayOrder::kDRMSeptenary:
+        order = kSeptenary;
+        break;
+      case DRMDisplayOrder::kDRMOctonary:
+        order = kOctonary;
         break;
       default:
         break;

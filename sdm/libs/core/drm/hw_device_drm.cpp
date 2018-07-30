@@ -238,6 +238,21 @@ static DRMDisplayOrder GetDRMDisplayOrder(DisplayOrder order) {
     case kTertiary:
       drm_disp_order = DRMDisplayOrder::kDRMTertiary;
       break;
+    case kQuaternary:
+      drm_disp_order = DRMDisplayOrder::kDRMQuaternary;
+      break;
+    case kQuinary:
+      drm_disp_order = DRMDisplayOrder::kDRMQuinary;
+      break;
+    case kSenary:
+      drm_disp_order = DRMDisplayOrder::kDRMSenary;
+      break;
+    case kSeptenary:
+      drm_disp_order = DRMDisplayOrder::kDRMSeptenary;
+      break;
+    case kOctonary:
+      drm_disp_order = DRMDisplayOrder::kDRMOctonary;
+      break;
     default:
       DLOGW("Unsupported order %d", order);
       break;
