@@ -28,6 +28,7 @@
  */
 
 #include <cutils/log.h>
+#include <cutils/properties.h>
 #include <algorithm>
 #include <vector>
 
@@ -80,6 +81,11 @@ Allocator::Allocator() : ion_allocator_(NULL) {
 
 bool Allocator::Init() {
   ion_allocator_ = new IonAlloc();
+  char property[PROPERTY_VALUE_MAX];
+  property_get("debug.gralloc.use_system_heap", property, "0");
+  if (!(strncmp(property, "1", PROPERTY_VALUE_MAX)))
+    use_system_heap_for_sensors_ = true;
+
   if (!ion_allocator_->Init()) {
     return false;
   }
@@ -305,8 +311,13 @@ void Allocator::GetIonHeapInfo(gralloc1_producer_usage_t prod_usage,
   }
 
   if (prod_usage & GRALLOC1_PRODUCER_USAGE_SENSOR_DIRECT_DATA) {
-    heap_id |= ION_HEAP(ION_ADSP_HEAP_ID);
-    heap_id |= ION_HEAP(ION_SYSTEM_HEAP_ID);
+      if (use_system_heap_for_sensors_) {
+        ALOGI("gralloc::sns_direct_data with system heap");
+        heap_id |= ION_HEAP(ION_SYSTEM_HEAP_ID);
+      } else {
+        ALOGI("gralloc::sns_direct_data with adsp_heap");
+        heap_id |= ION_HEAP(ION_ADSP_HEAP_ID);
+      }
   }
 
   if (flags & UINT(ION_SECURE)) {
