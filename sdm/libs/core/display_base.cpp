@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2017, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -552,18 +552,18 @@ std::string DisplayBase::Dump() {
 
   DisplayConfigVariableInfo &info = attrib;
 
-  uint32_t num_hw_layers = 0;
-  if (hw_layers_.info.stack) {
-    num_hw_layers = UINT32(hw_layers_.info.hw_layers.size());
-  }
+  uint32_t num_hw_layers = UINT32(hw_layers_.info.hw_layers.size());
 
   if (num_hw_layers == 0) {
     os << "\nNo hardware layers programmed";
     return os.str();
   }
 
-  LayerBuffer *out_buffer = hw_layers_.info.stack->output_buffer;
-  if (out_buffer) {
+  LayerBuffer *out_buffer = nullptr;
+  if (hw_layers_.info.stack) {
+    out_buffer = hw_layers_.info.stack->output_buffer;
+  }
+  if (out_buffer != nullptr) {
     os << "\nres: " << out_buffer->width << "x" << out_buffer->height << " format: "
       << GetFormatString(out_buffer->format);
   } else {
@@ -603,15 +603,13 @@ std::string DisplayBase::Dump() {
 
   for (uint32_t i = 0; i < num_hw_layers; i++) {
     uint32_t layer_index = hw_layers_.info.index.at(i);
-    // sdm-layer from client layer stack
-    Layer *sdm_layer = hw_layers_.info.stack->layers.at(layer_index);
     // hw-layer from hw layers info
     Layer &hw_layer = hw_layers_.info.hw_layers.at(i);
     LayerBuffer *input_buffer = &hw_layer.input_buffer;
     HWLayerConfig &layer_config = hw_layers_.config[i];
     HWRotatorSession &hw_rotator_session = layer_config.hw_rotator_session;
 
-    const char *comp_type = GetName(sdm_layer->composition);
+    const char *comp_type = GetName(hw_layer.composition);
     const char *buffer_format = GetFormatString(input_buffer->format);
     const char *pipe_split[2] = { "Pipe-1", "Pipe-2" };
     char idx[8];
