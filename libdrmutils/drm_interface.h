@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -128,6 +128,12 @@ enum struct DRMOps {
    *      uint64_t - Value of the FB Secure mode.
    */
   PLANE_SET_FB_SECURE_MODE,
+  /*
+   * Op: Sets csc config on this plane.
+   * Arg: uint32_t - Plane ID
+   * uint32_t* - pointer to csc type
+   */
+  PLANE_SET_CSC_CONFIG,
   /*
    * Op: Activate or deactivate a CRTC
    * Arg: uint32_t - CRTC ID
@@ -377,6 +383,12 @@ struct DRMPPFeatureInfo {
   void *payload;
 };
 
+enum DRMCscType {
+  kCscYuv2Rgb601L,
+  kCscUserConfig,
+  kCscTypeMax,
+};
+
 struct DRMScalerLUTInfo {
   uint32_t dir_lut_size = 0;
   uint32_t cir_lut_size = 0;
@@ -517,6 +529,15 @@ class DRMManagerInterface {
    * [return]: Error code if the API fails, 0 on success.
    */
   virtual int SetScalerLUT(const DRMScalerLUTInfo &lut_info) = 0;
+  /*
+   * Update layer CSC matrix.
+   * [Input]: out_csc_coeff - Csc coeffcients array
+   * [Input]: len_of_out_csc_coeff - array size of out_csc_coeff
+   * [Input]: out_pre_bias - Csc output pre bias array
+   * [Input]: len_of_out_pre_bias - array size of out_pre_bias
+   */
+  virtual void UpdatePlaneCscMatrix(const float *out_csc_coeff, uint32_t len_of_out_csc_coeff,
+                                    const float *out_pre_bias, uint32_t len_of_out_pre_bias) = 0;
 };
 
 }  // namespace sde_drm

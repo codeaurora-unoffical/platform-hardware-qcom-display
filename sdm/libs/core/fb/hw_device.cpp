@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2017, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -1361,6 +1361,13 @@ DisplayError HWDevice::GetMixerAttributes(HWMixerAttributes *mixer_attributes) {
   *mixer_attributes = mixer_attributes_;
 
   return kErrorNone;
+}
+
+void HWDevice::SetLayerCscUserConfig(const float *out_csc_coeff,
+                                     uint32_t len_of_out_csc_coeff,
+                                     const float *out_pre_bias,
+                                     uint32_t len_of_out_pre_bias) {
+// Not supported.
 }
 
 }  // namespace sdm
