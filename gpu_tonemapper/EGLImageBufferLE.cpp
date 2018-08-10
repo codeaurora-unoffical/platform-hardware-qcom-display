@@ -30,6 +30,7 @@ using namespace drm_utils;
 EGLImageKHR EGLImageBufferLE::create_eglImage(struct gbm_buf_info *gbo_info, void *userdata)
 //-----------------------------------------------------------------------------
 {
+  struct wl_resource resource;
   unsigned int gbm_ret;
   unsigned int secure_status = 0;
   EGLImageKHR eglImage;
@@ -48,16 +49,32 @@ EGLImageKHR EGLImageBufferLE::create_eglImage(struct gbm_buf_info *gbo_info, voi
   //We need to pass wl_resource to create egl image to support TP10_UBWC and NV12 formats in
   // Forward tone mapper
   if(gbo_info->format == GBM_FORMAT_YCbCr_420_TP10_UBWC || gbo_info->format == GBM_FORMAT_NV12) {
+   if (userdata != NULL)
+    memcpy(&resource, userdata, sizeof(wl_resource));
+   else {
+    fprintf(stderr, "create_eglImage: Invalid wl_resource\n");
+    return NULL;
+   }
    attribs[i++] = EGL_WAYLAND_PLANE_WL;
    attribs[i++] = 0;
    attribs[i++] = EGL_PROTECTED_CONTENT_EXT;
    attribs[i++] = secure_status;
    attribs[i++] = EGL_NONE;
+   //TODO: we need to get the wl_resource handle from SdmDisplay::PrepareNormalLayerGeometry
+   //to create egl image
+   gbm_ret = gbm_perform(GBM_PERFORM_GET_WL_RESOURCE_FROM_GBM_BUF_INFO, gbo_info, &resource);
+   EGLClientBuffer buffer = reinterpret_cast<EGLClientBuffer>(&resource);
 
-   EGLClientBuffer buffer = reinterpret_cast<EGLClientBuffer>(userdata);
-   eglImage = create_image(eglGetCurrentDisplay(), (EGLContext)EGL_NO_CONTEXT,
+   if (gbm_ret == GBM_ERROR_NONE) {
+
+    eglImage = create_image(eglGetCurrentDisplay(), (EGLContext)EGL_NO_CONTEXT,
                                       EGL_WAYLAND_BUFFER_WL, buffer, attribs);
    }
+   else {
+    fprintf(stderr, "create_eglImage: Failed at gbm_perform = %d\n", gbm_ret);
+    return NULL;
+   }
+  }
   else {
    attribs[i++] = EGL_WIDTH;
    attribs[i++] = gbm_bo_get_width(bo);
