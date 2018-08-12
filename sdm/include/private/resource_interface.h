@@ -68,6 +68,7 @@ class ResourceInterface {
                                              const DisplayDetailEnhancerData &de_data) = 0;
   virtual DisplayError Perform(int cmd, ...) = 0;
   virtual DisplayError UpdateResourceInfo(Handle display_ctx) = 0;
+  virtual DisplayError SetPlaneAvailable(uint32_t plane_id, bool is_available) = 0;
 
  protected:
   virtual ~ResourceInterface() { }

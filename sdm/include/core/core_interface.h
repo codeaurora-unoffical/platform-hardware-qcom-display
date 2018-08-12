@@ -247,6 +247,16 @@ class CoreInterface {
    */
     virtual DisplayError GetDisplayInterfaceTypeByOrder(HWDisplayInterfaceInfo *hw_disp_info_array) = 0;
 
+  /*! @brief Method to set hardware pipe available or unavailable.
+
+    @param[in]plane_id hardware pipe id
+    @param[in]is_available whether available
+
+    @return \link DisplayError \endlink
+
+    */
+    virtual DisplayError SetPlaneAvailable(uint32_t plane_id, bool is_available) = 0;
+
  protected:
   virtual ~CoreInterface() { }
 };
