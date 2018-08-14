@@ -50,6 +50,7 @@
 #include <utils/sys.h>
 #include <drm/sde_drm.h>
 #include <private/color_params.h>
+#include <utils/utils.h>
 
 #include <algorithm>
 #include <string>
@@ -878,13 +879,19 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
   SetupAtomic(hw_layers, false /* validate */);
 
   int ret = drm_atomic_intf_->Commit(false /* synchronous */, pflip_user_data_);
+  int release_fence = INT(release_fence_);
+  int retire_fence = INT(retire_fence_);
   if (ret) {
     DLOGE("%s failed with error %d", __FUNCTION__, ret);
+    CloseFd(&release_fence);
+    CloseFd(&retire_fence);
+    release_fence_ = -1;
+    retire_fence_ = -1;
     return kErrorHardware;
   }
 
-  int release_fence = static_cast<int>(release_fence_);
-  int retire_fence = static_cast<int>(retire_fence_);
+  DLOGD_IF(kTagDriverConfig, "RELEASE fence created: fd:%d", release_fence);
+  DLOGD_IF(kTagDriverConfig, "RETIRE fence created: fd:%d", retire_fence);
 
   HWLayersInfo &hw_layer_info = hw_layers->info;
   LayerStack *stack = hw_layer_info.stack;
