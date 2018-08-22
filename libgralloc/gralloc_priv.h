@@ -33,6 +33,10 @@
 #define ROUND_UP_PAGESIZE(x) (unsigned int)( ((x) + getpagesize()-1)  & \
                                              (~(getpagesize()-1)) )
 
+#define GRALLOC1_CONSUMER_USAGE_PRIVATE_10BIT_TP  0x08000000
+#define HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS  0x7FA30C0A
+#define GRALLOC1_CONSUMER_USAGE_PRIVATE_0  1ULL << 28
+
 /* Gralloc usage bits indicating the type of allocation that should be used */
 /* SYSTEM heap comes from kernel vmalloc (ION_SYSTEM_HEAP_ID)
  * is cached by default and
