@@ -9,7 +9,7 @@ SUBDIRS += gpu_tonemapper
 else
 SUBDIRS += libqservice
 SUBDIRS += libqdutils
-SUBDIRS += libgralloc
+SUBDIRS += libgralloc1
 endif
 SUBDIRS += sdm/libs/core
 

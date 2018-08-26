@@ -39,6 +39,9 @@ struct private_module_t {
 };
 
 #define GRALLOC_IMPL(exp) reinterpret_cast<GrallocImpl const *>(exp)
+#ifndef __unused
+#define __unused  __attribute__((__unused__))
+#endif
 
 namespace gralloc1 {
 
