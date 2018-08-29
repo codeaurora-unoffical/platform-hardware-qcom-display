@@ -690,6 +690,7 @@ const char * DisplayBase::GetName(const LayerComposition &composition) {
   case kCompositionBlit:        return "BLIT";
   case kCompositionGPUTarget:   return "GPU_TARGET";
   case kCompositionBlitTarget:  return "BLIT_TARGET";
+  case kCompositionSideband:    return "SIDEBAND";
   default:                      return "UNKNOWN";
   }
 }
