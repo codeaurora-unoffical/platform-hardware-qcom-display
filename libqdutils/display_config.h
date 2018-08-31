@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 - 2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 - 2016, 2018 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -50,9 +50,9 @@ enum {
     DISPLAY_PRIMARY = HWC_DISPLAY_PRIMARY,
     DISPLAY_EXTERNAL = HWC_DISPLAY_EXTERNAL,
 #ifdef QTI_BSP
-    DISPLAY_TERTIARY = HWC_DISPLAY_TERTIARY,
+    DISPLAY_TERTIARY = 3,
 #endif
-    DISPLAY_VIRTUAL = HWC_DISPLAY_VIRTUAL,
+    DISPLAY_VIRTUAL = 2,
 };
 
 // External Display states - used in setSecondaryDisplayStatus()

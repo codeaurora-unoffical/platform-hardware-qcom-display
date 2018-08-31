@@ -716,6 +716,12 @@ class DisplayInterface {
   */
   virtual DisplayError UpdateDisplayPll(int32_t ppm) = 0;
 
+  /*! @brief method to update resource info to sdm
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError UpdateResourceInfo() = 0;
+
  protected:
   virtual ~DisplayInterface() { }
 };

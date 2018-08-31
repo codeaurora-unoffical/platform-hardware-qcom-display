@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -42,12 +42,14 @@
 #include "hwc_debugger.h"
 #include "hwc_display_primary.h"
 #include "hwc_display_virtual.h"
+#include "hwc_sideband.h"
 
 #define __CLASS__ "HWCSession"
 
 #define HWC_UEVENT_SWITCH_HDMI "change@/devices/virtual/switch/hdmi"
 #define HWC_UEVENT_GRAPHICS_FB0 "change@/devices/virtual/graphics/fb0"
 #define HWC_UEVENT_DRM_EXT_HOTPLUG "mdss_mdp/drm/card"
+#define HWC_UEVENT_DRM_SPLASH_RESOURCE_UPDATE "sde_kms/drm/card0"
 
 static sdm::HWCSession::HWCModuleMethods g_hwc_module_methods;
 
@@ -97,9 +99,10 @@ int HWCSession::GetDisplayInfos(void) {
 }
 
 DisplayOrder HWCSession::GetDisplayOrder(uint32_t display_id) {
-    if (display_id < HWC_DISPLAY_VIRTUAL)
+    if (display_id < qdutils::DISPLAY_VIRTUAL)
         return hw_disp_info_[display_id].order;
-    else if (display_id >= HWC_DISPLAY_VIRTUAL && display_id < HWC_DISPLAY_VIRTUAL + MAX_VIRTUAL_DISPLAY_NUM)
+    else if (display_id >= qdutils::DISPLAY_VIRTUAL &&
+             display_id < qdutils::DISPLAY_VIRTUAL + MAX_VIRTUAL_DISPLAY_NUM)
         return kOrderMax;
     else if (display_id - MAX_VIRTUAL_DISPLAY_NUM < kOrderMax)
         return hw_disp_info_[display_id - MAX_VIRTUAL_DISPLAY_NUM].order;
@@ -179,6 +182,8 @@ int HWCSession::Init() {
     DLOGW("Failed to load HWCColorManager.");
   }
 
+  sideband_stream_.Init(this);
+
 //fix: Now we are creating number of displays configured in kernel.
 //if ENABLE_THREE_DISPLAYS is not enabled, still we will be creating
 //displays but will not send notification to SurfaceFlinger
@@ -193,7 +198,7 @@ int HWCSession::Init() {
         break;
     }
 
-    if (i >= HWC_DISPLAY_VIRTUAL && i < HWC_DISPLAY_VIRTUAL + MAX_VIRTUAL_DISPLAY_NUM) {
+    if (i >= qdutils::DISPLAY_VIRTUAL && i < qdutils::DISPLAY_VIRTUAL + MAX_VIRTUAL_DISPLAY_NUM) {
         continue;
     }
 
@@ -326,10 +331,11 @@ void HWCSession::GetCapabilities(struct hwc2_device *device, uint32_t *outCount,
     return;
   }
 
-  if (outCapabilities != nullptr && *outCount >= 1) {
+  if (outCapabilities != nullptr && *outCount >= 2) {
     outCapabilities[0] = HWC2_CAPABILITY_SKIP_CLIENT_COLOR_TRANSFORM;
+    outCapabilities[1] = HWC2_CAPABILITY_SIDEBAND_STREAM;
   }
-  *outCount = 1;
+  *outCount = 2;
 }
 
 template <typename PFN, typename T>
@@ -370,7 +376,7 @@ int32_t HWCSession::CreateVirtualDisplay(hwc2_device_t *device, uint32_t width, 
   HWCSession *hwc_session = static_cast<HWCSession *>(device);
   auto status = hwc_session->CreateVirtualDisplayObject(width, height, format);
   if (status == HWC2::Error::None) {
-    *out_display_id = HWC_DISPLAY_VIRTUAL;
+    *out_display_id = qdutils::DISPLAY_VIRTUAL;
     DLOGI("Created virtual display id:% " PRIu64 " with res: %dx%d",
           *out_display_id, width, height);
   } else {
@@ -382,7 +388,13 @@ int32_t HWCSession::CreateVirtualDisplay(hwc2_device_t *device, uint32_t width, 
 int32_t HWCSession::DestroyLayer(hwc2_device_t *device, hwc2_display_t display,
                                  hwc2_layer_t layer) {
   SCOPE_LOCK(locker_);
-  return CallDisplayFunction(device, display, &HWCDisplay::DestroyLayer, layer);
+  if (!device)
+    return HWC2_ERROR_BAD_DISPLAY;
+
+  HWCSession *hwc_session = static_cast<HWCSession *>(device);
+  int32_t ret = CallDisplayFunction(device, display, &HWCDisplay::DestroyLayer, layer);
+  hwc_session->sideband_stream_.DestroyLayer(display, layer);
+  return ret;
 }
 
 int32_t HWCSession::DestroyVirtualDisplay(hwc2_device_t *device, hwc2_display_t display) {
@@ -526,6 +538,8 @@ int32_t HWCSession::PresentDisplay(hwc2_device_t *device, hwc2_display_t display
                                    int32_t *out_retire_fence) {
   HWCSession *hwc_session = static_cast<HWCSession *>(device);
   DTRACE_SCOPED();
+  SCOPE_LOCK(locker_);
+
   if (!device) {
     return HWC2_ERROR_BAD_DISPLAY;
   }
@@ -539,6 +553,7 @@ int32_t HWCSession::PresentDisplay(hwc2_device_t *device, hwc2_display_t display
     CALC_FPS();
   }
 
+  hwc_session->sideband_stream_.StopPresentation(display);
   return INT32(status);
 }
 
@@ -557,8 +572,9 @@ int32_t HWCSession::RegisterCallback(hwc2_device_t *device, int32_t descriptor,
   DLOGD("Registering callback: %s", to_string(desc).c_str());
 
   if (descriptor == HWC2_CALLBACK_HOTPLUG) {
-     DLOGE("Notify SurfaceFlinger for HWC_DISPLAY_PRIMARY\n");
+     DLOGE("Notify SurfaceFlinger for display %d\n", HWC_DISPLAY_PRIMARY);
      hwc_session->callbacks_.Hotplug(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected);
+     hwc_session->notify_displays_ = true;
   }
   hwc_session->callbacks_lock_.Broadcast();
   return INT32(error);
@@ -640,6 +656,13 @@ static int32_t SetLayerPlaneAlpha(hwc2_device_t *device, hwc2_display_t display,
                                        alpha);
 }
 
+int32_t HWCSession::SetLayerSidebandStream(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
+                                  buffer_handle_t stream) {
+  HWCSession *hwc_session = static_cast<HWCSession *>(device);
+  SCOPE_LOCK(locker_);
+  return hwc_session->sideband_stream_.SetLayerSidebandStream(display, layer, stream);
+}
+
 static int32_t SetLayerSourceCrop(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
                                   hwc_frect_t crop) {
   return HWCSession::CallLayerFunction(device, display, layer, &HWCLayer::SetLayerSourceCrop, crop);
@@ -677,7 +700,7 @@ int32_t HWCSession::SetOutputBuffer(hwc2_device_t *device, hwc2_display_t displa
   }
 
   auto *hwc_session = static_cast<HWCSession *>(device);
-  if (display == HWC_DISPLAY_VIRTUAL && hwc_session->hwc_display_[display]) {
+  if (display == qdutils::DISPLAY_VIRTUAL && hwc_session->hwc_display_[display]) {
     auto vds = reinterpret_cast<HWCDisplayVirtual *>(hwc_session->hwc_display_[display]);
     auto status = vds->SetOutputBuffer(buffer, releaseFence);
     return INT32(status);
@@ -689,30 +712,30 @@ int32_t HWCSession::SetOutputBuffer(hwc2_device_t *device, hwc2_display_t displa
 int32_t HWCSession::SetPowerMode(hwc2_device_t *device, hwc2_display_t display, int32_t int_mode) {
   auto mode = static_cast<HWC2::PowerMode>(int_mode);
   int32_t ret;
-  static int32_t notify = 1;
   HWCSession *hwc_session = static_cast<HWCSession *>(device);
 
   SCOPE_LOCK(locker_);
+
   ret = CallDisplayFunction(device, display, &HWCDisplay::SetPowerMode, mode);
-//ToDo: Notify SF about secondary & tertiary display from right place
-// this is a  workaround to fix an issue where SF couldn't allocate
-// framebuffersurface & bufferqueue for external & tertiary display
-  if(display == kFirst && notify == 1) {
-     notify = 0;
+
+  if(display == kFirst && hwc_session->notify_displays_ == true) {
+     hwc_session->notify_displays_ = false;
      if (hwc_session->hwc_display_[HWC_DISPLAY_EXTERNAL] != NULL) {
-       DLOGE("Notify SurfaceFlinger for display kSecondary\n");
+       DLOGE("Notify SurfaceFlinger for display %d\n", kSecondary);
        hwc_session->callbacks_.Hotplug(HWC_DISPLAY_EXTERNAL, HWC2::Connection::Connected);
      }
 
 #ifdef ENABLE_THREE_DISPLAYS
-     for (uint32_t i = HWC_DISPLAY_VIRTUAL + MAX_VIRTUAL_DISPLAY_NUM; i < MAX_TOTAL_DISPLAY_NUM; i++) {
+     for (uint32_t i = qdutils::DISPLAY_VIRTUAL + MAX_VIRTUAL_DISPLAY_NUM;
+          i < MAX_TOTAL_DISPLAY_NUM; i++) {
          if (hwc_session->hwc_display_[i] != NULL) {
-           DLOGE("Notify SurfaceFlinger for display kTertiary\n");
+           DLOGE("Notify SurfaceFlinger for display %d\n", i);
            hwc_session->callbacks_.Hotplug(i, HWC2::Connection::Connected);
          }
      }
 #endif
   }
+
   return ret;
 }
 
@@ -751,6 +774,8 @@ int32_t HWCSession::ValidateDisplay(hwc2_device_t *device, hwc2_display_t displa
     }
 
     status = hwc_session->hwc_display_[display]->Validate(out_num_types, out_num_requests);
+
+    hwc_session->sideband_stream_.StartPresentation(display);
   }
   return INT32(status);
 }
@@ -826,8 +851,8 @@ hwc2_function_pointer_t HWCSession::GetFunction(struct hwc2_device *device,
       return AsFP<HWC2_PFN_SET_LAYER_DISPLAY_FRAME>(SetLayerDisplayFrame);
     case HWC2::FunctionDescriptor::SetLayerPlaneAlpha:
       return AsFP<HWC2_PFN_SET_LAYER_PLANE_ALPHA>(SetLayerPlaneAlpha);
-    // Sideband stream is not supported
-    // case HWC2::FunctionDescriptor::SetLayerSidebandStream:
+    case HWC2::FunctionDescriptor::SetLayerSidebandStream:
+      return AsFP<HWC2_PFN_SET_LAYER_SIDEBAND_STREAM>(SetLayerSidebandStream);
     case HWC2::FunctionDescriptor::SetLayerSourceCrop:
       return AsFP<HWC2_PFN_SET_LAYER_SOURCE_CROP>(SetLayerSourceCrop);
     case HWC2::FunctionDescriptor::SetLayerSurfaceDamage:
@@ -858,14 +883,15 @@ hwc2_function_pointer_t HWCSession::GetFunction(struct hwc2_device *device,
 
 HWC2::Error HWCSession::CreateVirtualDisplayObject(uint32_t width, uint32_t height,
                                                    int32_t *format) {
-  if (hwc_display_[HWC_DISPLAY_VIRTUAL]) {
+  if (hwc_display_[qdutils::DISPLAY_VIRTUAL]) {
     return HWC2::Error::NoResources;
   }
 
-  DisplayOrder display_order = GetDisplayOrder(HWC_DISPLAY_VIRTUAL);
+  DisplayOrder display_order = GetDisplayOrder(qdutils::DISPLAY_VIRTUAL);
 
-  auto status = HWCDisplayVirtual::Create(core_intf_, buffer_allocator_, &callbacks_, width,
-                                          height, format, display_order, &hwc_display_[HWC_DISPLAY_VIRTUAL]);
+  auto status = HWCDisplayVirtual::Create(core_intf_, buffer_allocator_, &callbacks_,
+                                          width, height, format, display_order,
+                                          &hwc_display_[qdutils::DISPLAY_VIRTUAL]);
   // TODO(user): validate width and height support
   if (status)
     return HWC2::Error::Unsupported;
@@ -904,7 +930,7 @@ int HWCSession::DisconnectDisplay(int disp) {
 
   if (disp == HWC_DISPLAY_EXTERNAL) {
     HWCDisplayExternal::Destroy(hwc_display_[disp]);
-  } else if (disp == HWC_DISPLAY_VIRTUAL) {
+  } else if (disp == qdutils::DISPLAY_VIRTUAL) {
     HWCDisplayVirtual::Destroy(hwc_display_[disp]);
   } else {
     DLOGE("Invalid display type");
@@ -1379,6 +1405,9 @@ void *HWCSession::HWCUeventThreadHandler() {
       }
     } else if (strcasestr(uevent_data, HWC_UEVENT_DRM_EXT_HOTPLUG)) {
       HandleExtHPD(uevent_data, length);
+    } else if (strcasestr(uevent_data, HWC_UEVENT_DRM_SPLASH_RESOURCE_UPDATE)) {
+      DLOGI("find change in sde_kms");
+      HWCUpdateResourceInfo(uevent_data, length);
     }
   }
   pthread_exit(0);
@@ -1405,6 +1434,31 @@ void HWCSession::HandleExtHPD(const char *uevent_data, int length) {
      DLOGE("Failed handling Hotplug = %s", connected ? "connected" : "disconnected");
     }
   }
+}
+
+int HWCSession::HWCUpdateResourceInfo(const char *uevent_data, int length) {
+  int pipe_released = 0;
+
+  pipe_released = GetEventValue(uevent_data, length, "pipe");
+
+  if (pipe_released >= 0) {
+    DLOGI("start to restore unavailable pipes to idle status");
+    UpdateResourceInfo();
+  }
+
+  return 0;
+}
+
+int HWCSession::UpdateResourceInfo()
+{
+  SCOPE_LOCK(locker_);
+
+  for (uint32_t i = HWC_DISPLAY_PRIMARY; i < MAX_TOTAL_DISPLAY_NUM; i++) {
+    if (hwc_display_[i])
+      hwc_display_[i]->UpdateResourceInfo();
+  }
+
+  return 0;
 }
 
 int HWCSession::GetEventValue(const char *uevent_data, int length, const char *event_info) {
@@ -1478,7 +1532,7 @@ int HWCSession::HotPlugHandler(bool connected) {
       // Connect external display if virtual display is not connected.
       // Else, defer external display connection and process it when virtual display
       // tears down; Do not notify SurfaceFlinger since connection is deferred now.
-      if (!hwc_display_[HWC_DISPLAY_VIRTUAL]) {
+      if (!hwc_display_[qdutils::DISPLAY_VIRTUAL]) {
         status = ConnectDisplay(HWC_DISPLAY_EXTERNAL);
         if (status) {
           return status;

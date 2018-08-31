@@ -480,6 +480,20 @@ DisplayError CompManager::SetMaxMixerStages(Handle display_ctx, uint32_t max_mix
   return error;
 }
 
+DisplayError CompManager::UpdateResourceInfo(Handle display_ctx) {
+  SCOPE_LOCK(locker_);
+
+  DisplayError error = kErrorNone;
+  DisplayCompositionContext *display_comp_ctx =
+                            reinterpret_cast<DisplayCompositionContext *>(display_ctx);
+
+  if (display_comp_ctx) {
+    error = resource_intf_->UpdateResourceInfo(display_comp_ctx->display_resource_ctx);
+  }
+
+  return error;
+}
+
 void CompManager::ControlPartialUpdate(Handle display_ctx, bool enable) {
   SCOPE_LOCK(locker_);
 
@@ -603,6 +617,11 @@ bool CompManager::SetDisplayState(Handle display_ctx,
   }
 
   return true;
+}
+
+DisplayError CompManager::SetPlaneAvailable(uint32_t pipe_id, bool is_available) {
+
+  return resource_intf_->SetPlaneAvailable(pipe_id, is_available);
 }
 
 }  // namespace sdm

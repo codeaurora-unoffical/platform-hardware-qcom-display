@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -23,6 +23,9 @@
 #include <vendor/display/config/1.0/IDisplayConfig.h>
 #include <core/core_interface.h>
 #include <utils/locker.h>
+
+#include <qd_utils.h>
+#include <display_config.h>
 
 #include "hwc_callbacks.h"
 #include "hwc_layers.h"
@@ -117,6 +120,8 @@ class HWCSession : hwc2_device_t, public IDisplayConfig, public qClient::BnQClie
                               int32_t /*android_color_mode_t*/ int_mode);
   static int32_t SetColorTransform(hwc2_device_t *device, hwc2_display_t display,
                                    const float *matrix, int32_t /*android_color_transform_t*/ hint);
+  static int32_t SetLayerSidebandStream(hwc2_device_t *device, hwc2_display_t display, hwc2_layer_t layer,
+                                  buffer_handle_t stream);
 
  private:
   static const int kExternalConnectionTimeoutMs = 500;
@@ -147,6 +152,8 @@ class HWCSession : hwc2_device_t, public IDisplayConfig, public qClient::BnQClie
   int32_t SetSecondaryDisplayStatus(int disp_id, HWCDisplay::DisplayStatus status);
   int32_t GetPanelBrightness(int *level);
   int32_t MinHdcpEncryptionLevelChanged(int disp_id, uint32_t min_enc_level);
+  int32_t HWCUpdateResourceInfo(const char *uevent_data, int length);
+  int32_t UpdateResourceInfo();
 
   // service methods
   void StartServices();
@@ -214,10 +221,13 @@ class HWCSession : hwc2_device_t, public IDisplayConfig, public qClient::BnQClie
   bool external_pending_connect_ = false;
   bool new_bw_mode_ = false;
   bool need_invalidate_ = false;
+  bool notify_displays_ = false;
   int bw_mode_release_fd_ = -1;
   qService::QService *qservice_ = NULL;
   HWCSocketHandler socket_handler_;
   Locker callbacks_lock_;
+  friend class HWCSidebandStreamSession;
+  HWCSidebandStreamSession sideband_stream_;
 };
 
 }  // namespace sdm

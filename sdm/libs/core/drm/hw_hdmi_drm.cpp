@@ -116,6 +116,11 @@ DisplayError HWHDMIDRM::Init() {
       return kErrorResources;
     }
 
+    if (!drm_lib_loader->FuncGetDRMManager()) {
+      DLOGE("DRMLibLoader::GetInstance failed");
+      return kErrorResources;
+    }
+
     drm_lib_loader->FuncGetDRMManager()(dev_fd, &drm_mgr_intf_);
     if (drm_mgr_intf_->RegisterDisplay(drm_disp_order, DRMDisplayType::TV, &token_)) {
       DLOGE("RegisterDisplay failed");
@@ -185,8 +190,8 @@ DisplayError HWHDMIDRM::GetDisplayAttributes(uint32_t index,
     res_mgr->GetDisplayDimInMM(&mm_width, &mm_height);
   } else {
     mode = connector_info_.modes[index];
-    mm_width = mode.hdisplay;
-    mm_height = mode.vdisplay;
+    mm_width = connector_info_.mmWidth == 0 ? 160 : connector_info_.mmWidth;
+    mm_height = connector_info_.mmHeight == 0 ? 90 : connector_info_.mmHeight;
     topology = connector_info_.topology;
   }
 
@@ -237,7 +242,6 @@ DisplayError HWHDMIDRM::SetDisplayAttributes(uint32_t index) {
 
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_MODE, token_.crtc_id, &connector_info_.modes[index]);
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 1);
-  drm_atomic_intf_->Perform(DRMOps::CRTC_SET_OUTPUT_FENCE_OFFSET, token_.crtc_id, 1);
 
   if (drm_atomic_intf_->Commit(true /* synchronous */, NULL)) {
     DLOGE("Setting up CRTC %d, Connector %d for %s failed", token_.crtc_id, token_.conn_id,

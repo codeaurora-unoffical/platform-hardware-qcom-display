@@ -387,6 +387,12 @@ DisplayError ResourceDefault::SetMaxMixerStages(Handle display_ctx, uint32_t max
   return kErrorNone;
 }
 
+DisplayError ResourceDefault::UpdateResourceInfo(Handle display_ctx) {
+  SCOPE_LOCK(locker_);
+
+  return kErrorNone;
+}
+
 uint32_t ResourceDefault::SearchPipe(HWBlockType hw_block_id, SourcePipe *src_pipes,
                                 uint32_t num_pipe) {
   uint32_t index = num_pipe_;
@@ -949,6 +955,10 @@ DisplayError ResourceDefault::GetScaleLutConfig(HWScaleLutInfo *lut_info) {
 
 DisplayError ResourceDefault::SetDetailEnhancerData(Handle display_ctx,
                                                     const DisplayDetailEnhancerData &de_data) {
+  return kErrorNotSupported;
+}
+
+DisplayError ResourceDefault::SetPlaneAvailable(uint32_t plane_id, bool is_available) {
   return kErrorNotSupported;
 }
 

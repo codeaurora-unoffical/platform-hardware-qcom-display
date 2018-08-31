@@ -112,8 +112,11 @@ int HWCDisplayPrimary::Init() {
     return status;
   }
   color_mode_ = new HWCColorMode(display_intf_);
+  color_mode_->Init();
+  HWCDebugHandler::Get()->GetProperty("vendor.display.enable_default_color_mode",
+                                      &default_mode_status_);
 
-  return INT(color_mode_->Init());
+  return status;
 }
 
 void HWCDisplayPrimary::ProcessBootAnimCompleted() {
@@ -159,6 +162,10 @@ HWC2::Error HWCDisplayPrimary::Validate(uint32_t *out_num_types, uint32_t *out_n
   auto status = HWC2::Error::None;
   DisplayError error = kErrorNone;
 
+  if (default_mode_status_ && !boot_animation_completed_) {
+    ProcessBootAnimCompleted();
+  }
+
   if (display_paused_) {
     MarkLayersForGPUBypass();
     return status;
@@ -201,6 +208,7 @@ HWC2::Error HWCDisplayPrimary::Validate(uint32_t *out_num_types, uint32_t *out_n
   }
 
   if (layer_set_.empty()) {
+    validated_ = true;
     flush_ = true;
     return status;
   }

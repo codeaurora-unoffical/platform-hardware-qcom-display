@@ -751,6 +751,12 @@ gralloc1_error_t BufferManager::Perform(int operation, va_list args) {
       }
 
       *flag = hnd->flags &private_handle_t::PRIV_FLAGS_UBWC_ALIGNED;
+      int linear_format = 0;
+      if (getMetaData(hnd, GET_LINEAR_FORMAT, &linear_format) == 0) {
+        if (linear_format) {
+         *flag = 0;
+        }
+      }
     } break;
 
     case GRALLOC_MODULE_PERFORM_GET_RGB_DATA_ADDRESS: {
@@ -808,6 +814,17 @@ gralloc1_error_t BufferManager::Perform(int operation, va_list args) {
       unsigned int alignedw, alignedh;
       GetBufferSizeAndDimensions(GetBufferInfo(descriptor), &size, &alignedw, &alignedh);
       AllocateBuffer(descriptor, hnd, size);
+    } break;
+
+    case GRALLOC1_MODULE_PERFORM_GET_INTERLACE_FLAG: {
+      private_handle_t *hnd = va_arg(args, private_handle_t *);
+      int *flag = va_arg(args, int *);
+      if (private_handle_t::validate(hnd) != 0) {
+        return GRALLOC1_ERROR_BAD_HANDLE;
+      }
+      if (getMetaData(hnd, GET_PP_PARAM_INTERLACED, flag) != 0) {
+        *flag = 0;
+      }
     } break;
 
     default:

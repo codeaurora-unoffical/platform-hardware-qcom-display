@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -114,6 +114,7 @@ class DisplayBase : public DisplayInterface, DumpImpl {
   virtual DisplayError SetCompositionState(LayerComposition composition_type, bool enable);
   virtual DisplayError EnablePllUpdate(int32_t enable) { return kErrorNotSupported; };
   virtual DisplayError UpdateDisplayPll(int32_t ppm) { return kErrorNotSupported; };
+  virtual DisplayError UpdateResourceInfo();
 
  protected:
   DisplayError BuildLayerStackStats(LayerStack *layer_stack);
@@ -151,6 +152,7 @@ class DisplayBase : public DisplayInterface, DumpImpl {
   Handle display_comp_ctx_ = 0;
   HWLayers hw_layers_;
   bool pending_commit_ = false;
+  bool layer_none_ = false;
   bool vsync_enable_ = false;
   bool pflip_enable_ = false;
   uint32_t max_mixer_stages_ = 0;

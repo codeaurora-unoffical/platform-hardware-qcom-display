@@ -102,6 +102,7 @@ class HWCDisplay : public DisplayEventHandler {
   virtual void SetIdleTimeoutMs(uint32_t timeout_ms);
   virtual void SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type);
   virtual DisplayError SetMaxMixerStages(uint32_t max_mixer_stages);
+  virtual DisplayError UpdateResourceInfo();
   virtual DisplayError ControlPartialUpdate(bool enable, uint32_t *pending) {
     return kErrorNotSupported;
   }
@@ -294,6 +295,7 @@ class HWCDisplay : public DisplayEventHandler {
   bool validated_ = false;
   bool color_tranform_failed_ = false;
   HWCColorMode *color_mode_ = NULL;
+  bool layer_stack_invalid_ = true;
 
  private:
   void DumpInputBuffers(void);

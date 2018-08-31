@@ -311,6 +311,28 @@ void GetYuvUbwcSPPlaneInfo(uint64_t base, uint32_t width, uint32_t height,
   ycbcr->cstride = VENUS_UV_STRIDE(color_format, INT(width));
 }
 
+void GetYuvUbwcInterlacedSPPlaneInfo(uint64_t base, uint32_t width, uint32_t height,
+                                     int color_format, struct android_ycbcr *ycbcr) {
+  unsigned int uv_stride, uv_height, uv_size;
+  unsigned int alignment = 4096;
+  uint64_t field_base;
+
+  // UBWC interlaced has top-bottom field layout with each field as
+  // 4-plane NV12_UBWC with width = image_width & height = image_height / 2.
+  // Client passed ycbcr argument is ptr to struct android_ycbcr[2].
+  // Plane info to be filled for each field separately.
+  height = (height + 1) >> 1;
+  uv_stride = VENUS_UV_STRIDE(color_format, INT(width));
+  uv_height = VENUS_UV_SCANLINES(color_format, INT(height));
+  uv_size = ALIGN((uv_stride * uv_height), alignment);
+
+  field_base = base;
+  GetYuvUbwcSPPlaneInfo(field_base, width, height, COLOR_FMT_NV12_UBWC, &ycbcr[0]);
+
+  field_base = reinterpret_cast<uint64_t>(ycbcr[0].cb) + uv_size;
+  GetYuvUbwcSPPlaneInfo(field_base, width, height, COLOR_FMT_NV12_UBWC, &ycbcr[1]);
+}
+
 void GetYuvSPPlaneInfo(uint64_t base, uint32_t width, uint32_t height, uint32_t bpp,
                        struct android_ycbcr *ycbcr) {
   unsigned int ystride, cstride;
@@ -332,26 +354,36 @@ int GetYUVPlaneInfo(const private_handle_t *hnd, struct android_ycbcr *ycbcr) {
   gralloc1_producer_usage_t prod_usage = hnd->GetProducerUsage();
   gralloc1_consumer_usage_t cons_usage = hnd->GetConsumerUsage();
   unsigned int ystride, cstride;
+  bool interlaced = false;
 
   memset(ycbcr->reserved, 0, sizeof(ycbcr->reserved));
-  MetaData_t *metadata = reinterpret_cast<MetaData_t *>(hnd->base_metadata);
 
   // Check if UBWC buffer has been rendered in linear format.
-  if (metadata && (metadata->operation & LINEAR_FORMAT)) {
-    format = INT(metadata->linearFormat);
+  int linear_format = 0;
+  if (getMetaData(const_cast<private_handle_t *>(hnd),
+                  GET_LINEAR_FORMAT, &linear_format) == 0) {
+      format = INT(linear_format);
   }
 
   // Check metadata if the geometry has been updated.
-  if (metadata && metadata->operation & UPDATE_BUFFER_GEOMETRY) {
+  BufferDim_t buffer_dim;
+  if (getMetaData(const_cast<private_handle_t *>(hnd),
+                  GET_BUFFER_GEOMETRY, &buffer_dim) == 0) {
     int usage = 0;
-
     if (hnd->flags & private_handle_t::PRIV_FLAGS_UBWC_ALIGNED) {
       usage = GRALLOC1_PRODUCER_USAGE_PRIVATE_ALLOC_UBWC;
     }
 
-    BufferInfo info(metadata->bufferDim.sliceWidth, metadata->bufferDim.sliceHeight, format,
+    BufferInfo info(buffer_dim.sliceWidth, buffer_dim.sliceHeight, format,
                     prod_usage, cons_usage);
     GetAlignedWidthAndHeight(info, &width, &height);
+  }
+
+  // Check metadata for interlaced content.
+  int interlace_flag = 0;
+  if (getMetaData(const_cast<private_handle_t *>(hnd),
+                  GET_PP_PARAM_INTERLACED, &interlace_flag) != 0) {
+    interlaced = interlace_flag;
   }
 
   // Get the chroma offsets from the handle width/height. We take advantage
@@ -371,7 +403,11 @@ int GetYUVPlaneInfo(const private_handle_t *hnd, struct android_ycbcr *ycbcr) {
       break;
 
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC:
-      GetYuvUbwcSPPlaneInfo(hnd->base, width, height, COLOR_FMT_NV12_UBWC, ycbcr);
+      if (!interlaced) {
+        GetYuvUbwcSPPlaneInfo(hnd->base, width, height, COLOR_FMT_NV12_UBWC, ycbcr);
+      } else {
+        GetYuvUbwcInterlacedSPPlaneInfo(hnd->base, width, height, COLOR_FMT_NV12_UBWC, ycbcr);
+      }
       ycbcr->chroma_step = 2;
       break;
 

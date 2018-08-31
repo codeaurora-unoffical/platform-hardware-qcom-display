@@ -71,6 +71,9 @@ class DRMMaster {
    *   fd: Pointer to store master fd into
    */
   void GetHandle(int *fd) { *fd = dev_fd_; }
+  /* Update GEM handle mode.
+   */
+  void UseExternalGemHandle() { is_external_handle_ = true; }
 
   /* Creates an instance of DRMMaster if it doesn't exist and initializes it. Threadsafe.
    * Input:
@@ -87,6 +90,8 @@ class DRMMaster {
 
   int dev_fd_ = -1;              // Master fd for DRM
   static DRMMaster *s_instance;  // Singleton instance
+  bool is_external_handle_ = false;  // Indicate if gem handle is already created outside of SDM.
+                                     // Do not close an external handle in SDM.
   static std::mutex s_lock;
 };
 

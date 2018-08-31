@@ -186,5 +186,9 @@ DisplayError CoreImpl::GetDisplayInterfaceTypeByOrder(HWDisplayInterfaceInfo *hw
   return hw_info_intf_->GetDisplayInterfaceTypeByOrder(hw_disp_info_array);
 }
 
+DisplayError CoreImpl::SetPlaneAvailable(uint32_t plane_id, bool is_available) {
+  return comp_mgr_.SetPlaneAvailable(plane_id,is_available);
+}
+
 }  // namespace sdm
 

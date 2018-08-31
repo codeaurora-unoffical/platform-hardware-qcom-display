@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -111,6 +111,10 @@ HWC2::Error HWCColorMode::GetColorModes(uint32_t *out_num_modes,
 
 HWC2::Error HWCColorMode::SetColorMode(android_color_mode_t mode) {
   // first mode in 2D matrix is the mode (identity)
+  if (color_mode_transform_map_.find(mode) == color_mode_transform_map_.end()) {
+    DLOGE("Could not find mode: %d", mode);
+    return HWC2::Error::BadParameter;
+  }
   auto status = HandleColorModeTransform(mode, current_color_transform_, color_matrix_);
   if (status != HWC2::Error::None) {
     DLOGE("failed for mode = %d", mode);
@@ -315,6 +319,7 @@ HWC2::Error HWCDisplay::CreateLayer(hwc2_layer_t *out_layer_id) {
   layer_map_.emplace(std::make_pair(layer->GetId(), layer));
   *out_layer_id = layer->GetId();
   validated_ = false;
+  layer_stack_invalid_ = true;
   geometry_changes_ |= GeometryChanges::kAdded;
   return HWC2::Error::None;
 }
@@ -346,6 +351,7 @@ HWC2::Error HWCDisplay::DestroyLayer(hwc2_layer_t layer_id) {
     }
   }
   validated_ = false;
+  layer_stack_invalid_ = true;
 
   geometry_changes_ |= GeometryChanges::kRemoved;
   return HWC2::Error::None;
@@ -367,11 +373,14 @@ void HWCDisplay::BuildLayerStack() {
       layer->flags.skip = true;
     } else if (hwc_layer->GetClientRequestedCompositionType() == HWC2::Composition::SolidColor) {
       layer->flags.solid_fill = true;
+    } else if (hwc_layer->GetClientRequestedCompositionType() == HWC2::Composition::Sideband) {
+      layer->flags.sideband = true;
     }
 
-    if (!hwc_layer->SupportedDataspace()) {
-        layer->flags.skip = true;
-        DLOGW_IF(kTagStrategy, "Unsupported dataspace: 0x%x", hwc_layer->GetLayerDataspace());
+    if (!hwc_layer->ValidateAndSetCSC()) {
+#ifdef FEATURE_WIDE_COLOR
+      layer->flags.skip = true;
+#endif
     }
 
     working_primaries = WidestPrimaries(working_primaries,
@@ -409,6 +418,10 @@ void HWCDisplay::BuildLayerStack() {
 
     if (layer->flags.skip) {
       layer_stack_.flags.skip_present = true;
+    }
+
+    if (layer->flags.sideband) {
+      layer_stack_.flags.sideband_present = true;
     }
 
     if (hwc_layer->GetClientRequestedCompositionType() == HWC2::Composition::Cursor) {
@@ -457,6 +470,7 @@ void HWCDisplay::BuildLayerStack() {
   }
 
 
+#ifdef FEATURE_WIDE_COLOR
   for (auto hwc_layer : layer_set_) {
     auto layer = hwc_layer->GetSDMLayer();
     if (layer->input_buffer.color_metadata.colorPrimaries != working_primaries &&
@@ -467,11 +481,13 @@ void HWCDisplay::BuildLayerStack() {
       layer_stack_.flags.skip_present = true;
     }
   }
+#endif
 
   // TODO(user): Set correctly when SDM supports geometry_changes as bitmask
   layer_stack_.flags.geometry_changed = UINT32(geometry_changes_ > 0);
   // Append client target to the layer stack
   layer_stack_.layers.push_back(client_target_->GetSDMLayer());
+  layer_stack_invalid_ = false;
 }
 
 void HWCDisplay::BuildSolidFillStack() {
@@ -969,13 +985,14 @@ HWC2::Error HWCDisplay::GetHdrCapabilities(uint32_t *out_num_types, int32_t *out
 
 
 HWC2::Error HWCDisplay::CommitLayerStack(void) {
-  if (shutdown_pending_ || layer_set_.empty()) {
-    return HWC2::Error::None;
-  }
 
   if (!validated_) {
     DLOGW("Display is not validated");
     return HWC2::Error::NotValidated;
+  }
+
+  if (shutdown_pending_ || layer_set_.empty()) {
+    return HWC2::Error::None;
   }
 
   DumpInputBuffers();
@@ -1028,7 +1045,7 @@ HWC2::Error HWCDisplay::PostCommitLayerStack(int32_t *out_retire_fence) {
     if (!flush_) {
       // If swapinterval property is set to 0 or for single buffer layers, do not update f/w
       // release fences and discard fences from driver
-      if (swap_interval_zero_ || layer->flags.single_buffer) {
+      if (swap_interval_zero_ || layer->flags.single_buffer || layer->flags.sideband) {
         close(layer_buffer->release_fence_fd);
         layer_buffer->release_fence_fd = -1;
       } else if (layer->composition != kCompositionGPU) {
@@ -1043,8 +1060,11 @@ HWC2::Error HWCDisplay::PostCommitLayerStack(int32_t *out_retire_fence) {
       close(layer_buffer->acquire_fence_fd);
       layer_buffer->acquire_fence_fd = -1;
     }
+
+    layer->request.flags = {};
   }
 
+  client_target_->GetSDMLayer()->request.flags = {};
   *out_retire_fence = -1;
   if (!flush_) {
     // if swapinterval property is set to 0 then close and reset the list retire fence
@@ -1075,6 +1095,16 @@ DisplayError HWCDisplay::SetMaxMixerStages(uint32_t max_mixer_stages) {
 
   if (display_intf_) {
     error = display_intf_->SetMaxMixerStages(max_mixer_stages);
+  }
+
+  return error;
+}
+
+DisplayError HWCDisplay::UpdateResourceInfo() {
+  DisplayError error = kErrorNone;
+
+  if (display_intf_) {
+    error = display_intf_->UpdateResourceInfo();
   }
 
   return error;
@@ -1719,6 +1749,12 @@ std::string HWCDisplay::Dump() {
     os << " buffer_id: " << std::hex << "0x" << sdm_layer->input_buffer.buffer_id << std::dec
        << std::endl;
   }
+
+  if (layer_stack_invalid_) {
+    os << "\n Layers added or removed but not reflected to SDM's layer stack yet\n";
+    return os.str();
+  }
+
   if (color_mode_) {
     color_mode_->Dump(&os);
   }
