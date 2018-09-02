@@ -171,9 +171,9 @@ void HWCSidebandStream::MatrixMultiplication(float *pArray1, int pArrary1_row_nu
  * Color space conversion formulas
  *
  * The default YUV2RGB transformation CSC matrix is:
- * YUV2RGB = [1.16408, 0.0000, 1.59572,
- *            1.16408, -0.39256, -0.81249,
- *            1.16408, 2.0176, 0.0000,]
+ * YUV2RGB = [1.1644, 0.0000, 1.596,
+ *            1.1644, -0.3918, -0.813,
+ *            1.1644, 2.0172, 0.0000,]
  *
  * 1) For the general input case, Hue(H), Contrast(C), Brightness(B), Saturation(S),
  *    the calculated CSC coeffcients is:
@@ -187,21 +187,20 @@ void HWCSidebandStream::MatrixMultiplication(float *pArray1, int pArrary1_row_nu
  *              0, S*Cb, 0,
  *              0, 0,    S*Cr,].
  *
- * The output pre basis matrix(3*1 matrix) is from:
- *    YUV2RGB * [B - 512 *(C - 1)
- *                     0,
- *                     0,].
+ * 3) The offset of output pre basis matrix(3*1 matrix) is from:
+ *    [B - 128 *(C - 1), 0, 0,].
  */
 int32_t HWCSidebandStream::CalcCscInputData(color_data_pack *color_data_pack_, csc_mat *csc_mat) {
-  float default_coeff_matrix[CSC_MATRIX_COEFF_SIZE] = {(float)1.16408, (float)0.0000, (float)1.59572,
-                                                       (float)1.16408, (float)-0.39256, (float)-0.81249,
-                                                       (float)1.16408, (float)2.0176, (float)0.0000,};
+  float default_yuv2rgb_matrix[CSC_MATRIX_COEFF_SIZE] = {(float)1.1644, (float)0.0000, (float)1.596,
+                                                       (float)1.1644, (float)-0.3918, (float)-0.813,
+                                                       (float)1.1644, (float)2.0172, (float)0.0000,};
   float coeff_adj_matrix[CSC_MATRIX_COEFF_SIZE] = {(float)1.0, (float)0.0, (float)0.0,
                                                    (float)0.0, (float)1.0, (float)0.0,
                                                    (float)0.0, (float)0.0, (float)1.0};
-  float bias_adj_matrix[CSC_BIAS_SIZE] = {(float)0.0};
   float new_coeff_matrix[CSC_MATRIX_COEFF_SIZE] = {(float(0.0))};
-  float new_bias_matrix[CSC_BIAS_SIZE] = {(float(0.0))};
+  float new_post_bias_matrix[CSC_BIAS_SIZE] = {(float)0.0};
+  float bias_adj_matrix[CSC_BIAS_SIZE] = {(float)0.0};
+  int32_t i = 0, temp;
 
   SCOPE_LOCK(mSidebandLock_);
 
@@ -228,24 +227,25 @@ int32_t HWCSidebandStream::CalcCscInputData(color_data_pack *color_data_pack_, c
     coeff_adj_matrix[8] = color_data_pack_->saturation * color_data_pack_->tone_cr;
   }
 
-  /* Update output bias adj matrix */
+  /* Update output bias offset matrix */
   bias_adj_matrix[0] = color_data_pack_->brightness -
-                                          512 * (color_data_pack_->contrast - 1);
+                                          128 * (color_data_pack_->contrast - 1);
+
+  MatrixMultiplication(default_yuv2rgb_matrix, 3, 3, bias_adj_matrix, 1,
+                       new_post_bias_matrix);
+  for (i = 0; i < CSC_BIAS_SIZE; i++) {
+    temp = (int32_t)(new_post_bias_matrix[i] + 0.5); //round
+    csc_mat->post_bias[i] = (uint32_t)temp;
+  }
 
   /* final coeff matrix = default_coeff_matrix * coeff_adj_matrix */
-  MatrixMultiplication(default_coeff_matrix, 3, 3, coeff_adj_matrix, 3,
+  MatrixMultiplication(default_yuv2rgb_matrix, 3, 3, coeff_adj_matrix, 3,
                        new_coeff_matrix);
 
-  /* intermediate bias matrix = default_coeff_matrix * bias_adj_matrix */
-  MatrixMultiplication(default_coeff_matrix, 3, 3, bias_adj_matrix, 1, new_bias_matrix);
-
-  /* final bias matrix = intermediate bias matrix * default bias matrix */
-  for (int i = 0; i < CSC_BIAS_SIZE; i++)
-    new_bias_matrix[i] *= csc_mat->pre_bias[i];
-
-  /* data copy */
-  memcpy(csc_mat->ctm_coeff, new_coeff_matrix, sizeof(new_coeff_matrix));
-  memcpy(csc_mat->pre_bias, new_bias_matrix, sizeof(new_bias_matrix));
+  /* round by multiply 65536 */
+  for (i = 0; i < CSC_MATRIX_COEFF_SIZE; i++) {
+    csc_mat->ctm_coeff[i] = static_cast<int64_t>((new_coeff_matrix[i] * 65536.0));
+  }
 
   return HWC2_ERROR_NONE;
 }
@@ -267,7 +267,6 @@ void *HWCSidebandStream::SidebandThreadHandler(void) {
   width = sb_nativeHandle_->getBufferWidth();
   height = sb_nativeHandle_->getBufferHeight();
   size = (unsigned int)sb_nativeHandle_->getBufferSize();
-  memcpy(&legacy_csc_usr_config_, &csc_usr_config_, sizeof(csc_usr_config_));
 
   while (!sideband_thread_exit_) {
     if (CheckBuffer() == HWC2_ERROR_NOT_VALIDATED) {
@@ -444,19 +443,20 @@ int32_t HWCSidebandStreamSession::UpdateSidebandStream(HWCSidebandStream * stm) 
   SCOPE_LOCK(hwc_session->locker_);
 
   memcpy(&color_data_pack_, &stm->color_data_pack_, sizeof(color_data_pack_));
-  memcpy(&csc_mat, &stm->legacy_csc_usr_config_, sizeof(csc_mat));
 
   /* only calculate when color data is changed */
-  if (color_data_pack_.color_dirty)
+  if (color_data_pack_.color_dirty) {
     stm->CalcCscInputData(&color_data_pack_, &csc_mat);
 
-  for (auto & display : stm->mDisplays) {
-    hwc_session->hwc_display_[display]->SetLayerCscUserConfig(csc_mat.ctm_coeff,
-                                                              CSC_MATRIX_COEFF_SIZE,
-                                                              csc_mat.pre_bias,
-                                                              CSC_BIAS_SIZE);
-    /* save latest coeffcients */
-    memcpy(&stm->legacy_csc_usr_config_, &csc_mat, sizeof(csc_mat));
+    for (auto & pair : stm->mLayers) {
+      hwc2_layer_t layer = pair.first;
+      hwc2_display_t display = pair.second;
+      hwc_session->hwc_display_[display]->SetLayerCscData(layer,
+                                                          csc_mat.ctm_coeff,
+                                                          CSC_MATRIX_COEFF_SIZE,
+                                                          csc_mat.post_bias,
+                                                          CSC_BIAS_SIZE);
+    }
   }
 
   // if there are more than one streams, go back to surfaceflinger

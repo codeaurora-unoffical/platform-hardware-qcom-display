@@ -724,8 +724,13 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
         }
 
         if (input_buffer->flags.sideband) {
-          sde_drm::DRMCscType csc_type = sde_drm::DRMCscType::kCscUserConfig;
-          drm_atomic_intf_->Perform(DRMOps::PLANE_SET_CSC_CONFIG, pipe_id, &csc_type);
+          sde_drm_csc_v1 csc_mat = {};
+          //copy new CSC data from layer_buffer
+          SetUsrCscConfig(layer.input_buffer, &csc_mat);
+
+          //select CSC type and update new CSC data
+          sde_drm::DRMCscType csc_type = sde_drm::DRMCscType::kCscYuv2Rgb601L;
+          drm_atomic_intf_->Perform(DRMOps::PLANE_SET_CSC_CONFIG, pipe_id, &csc_type, &csc_mat);
         }
       }
     }
@@ -878,6 +883,11 @@ void HWDeviceDRM::SetSrcConfig(const LayerBuffer &input_buffer, uint32_t *config
   if (input_buffer.flags.interlace) {
     *config |= (0x01 << UINT32(DRMSrcConfig::DEINTERLACE));
   }
+}
+
+void HWDeviceDRM::SetUsrCscConfig(LayerBuffer &input_buffer, sde_drm_csc_v1 *csc) {
+  memcpy(csc->ctm_coeff, input_buffer.color_metadata.cscData.ctm_coeff, sizeof(csc->ctm_coeff));
+  memcpy(csc->post_bias, input_buffer.color_metadata.cscData.post_bias, sizeof(csc->post_bias));
 }
 
 void HWDeviceDRM::SetRect(const LayerRect &source, DRMRect *target) {
@@ -1130,14 +1140,6 @@ void HWDeviceDRM::UpdateMixerAttributes() {
   mixer_attributes_.split_left = display_attributes_.is_device_split
                                      ? hw_panel_info_.split_info.left_split
                                      : mixer_attributes_.width;
-}
-
-void HWDeviceDRM::SetLayerCscUserConfig(const float *out_csc_coeff,
-                                        uint32_t len_of_out_csc_coeff,
-                                        const float *out_pre_bias,
-                                        uint32_t len_of_out_pre_bias) {
-  drm_mgr_intf_->UpdatePlaneCscMatrix(out_csc_coeff, len_of_out_csc_coeff,
-                                      out_pre_bias, len_of_out_pre_bias);
 }
 
 }  // namespace sdm

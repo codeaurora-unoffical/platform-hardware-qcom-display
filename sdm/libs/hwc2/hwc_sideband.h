@@ -40,10 +40,6 @@
 
 namespace sdm {
 
-#define CSC_MATRIX_COEFF_SIZE   9
-#define CSC_CLAMP_SIZE          6
-#define CSC_BIAS_SIZE           3
-
 #define CSC_HUE_TAG             1 << 1
 #define CSC_BRIGHTNESS_TAG      1 << 2
 #define CSC_CONTRAST_TAG        1 << 3
@@ -63,18 +59,12 @@ struct color_data_pack {
 
 /**
  * struct csc_mat:    csc matrix structure
- * @ctm_coeff:        Matrix coefficients
- * @pre_bias:         Pre-bias array values
- * @post_bias:        Post-bias array values
- * @pre_clamp:        Pre-clamp array values
- * @post_clamp:       Post-clamp array values
+ * @ctm_coeff:        New main matrix coefficients
+ * @post_biast:        New post-bias offset values
  */
   struct csc_mat {
-    float ctm_coeff[CSC_MATRIX_COEFF_SIZE];
-    float pre_bias[CSC_BIAS_SIZE];
-    float post_bias[CSC_BIAS_SIZE];
-    float pre_clamp[CSC_CLAMP_SIZE];
-    float post_clamp[CSC_CLAMP_SIZE];
+    int64_t ctm_coeff[CSC_MATRIX_COEFF_SIZE];
+    uint32_t post_bias[CSC_BIAS_SIZE];
   };
 
   struct SidebandStreamBuf : public android::LightRefBase<SidebandStreamBuf> {
@@ -121,18 +111,6 @@ struct color_data_pack {
     pthread_t sideband_thread_ = {};
     bool sideband_thread_exit_ = false;
     bool new_bufffer_ = false;
-    csc_mat csc_usr_config_ = {
-                               {(float)1.16408, (float)0.0000, (float)1.59572,
-                                (float)1.16408, (float)-0.39256, (float) -0.81249,
-                                (float)1.16408, (float)2.0176, (float)0.0000,},
-                               {(float)0.99864, (float)0.99694, (float)0.99694,},
-                               {(float)0, (float)0, (float)0,},
-                               {(float)0.00097, (float)0.01465, (float)0.00097,
-                                (float)0.01465, (float)0.00097, (float)0.01465,},
-                               {(float)0, (float)0.0156, (float)0,
-                                (float)0.0156, (float)0, (float)0.0156,},
-                             };
-    csc_mat legacy_csc_usr_config_ = {};
     color_data_pack color_data_pack_ = {};
   };
 

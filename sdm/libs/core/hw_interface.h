@@ -120,10 +120,6 @@ class HWInterface {
   virtual DisplayError GetMixerAttributes(HWMixerAttributes *mixer_attributes) = 0;
   virtual DisplayError EnablePllUpdate(int32_t enable) = 0;
   virtual DisplayError UpdateDisplayPll(int32_t ppm) = 0;
-  virtual void SetLayerCscUserConfig(const float *out_csc_coeff,
-                                             uint32_t len_of_out_csc_coeff,
-                                             const float *out_pre_bias,
-                                             uint32_t len_of_out_pre_bias) = 0;
 
  protected:
   virtual ~HWInterface() { }

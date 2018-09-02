@@ -77,6 +77,10 @@ class HWCLayer {
   HWC2::Error SetLayerVisibleRegion(hwc_region_t visible);
   HWC2::Error SetLayerZOrder(uint32_t z);
   HWC2::Error SetLayerSidebandStream(android::sp<SidebandStreamBuf> buf);
+  HWC2::Error SetLayerCscData(const int64_t *out_csc_coeff,
+                              uint32_t len_of_out_csc_coef,
+                              const uint32_t *out_post_bias,
+                              uint32_t len_of_out_post_bias);
   void SetComposition(const LayerComposition &sdm_composition);
   HWC2::Composition GetClientRequestedCompositionType() { return client_requested_; }
   void UpdateClientCompositionType(HWC2::Composition type) { client_requested_ = type; }

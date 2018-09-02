@@ -132,6 +132,7 @@ enum struct DRMOps {
    * Op: Sets csc config on this plane.
    * Arg: uint32_t - Plane ID
    * uint32_t* - pointer to csc type
+   * sde_drm_csc_v1* - pointer to csc data matrix
    */
   PLANE_SET_CSC_CONFIG,
   /*
@@ -385,7 +386,6 @@ struct DRMPPFeatureInfo {
 
 enum DRMCscType {
   kCscYuv2Rgb601L,
-  kCscUserConfig,
   kCscTypeMax,
 };
 
@@ -529,15 +529,6 @@ class DRMManagerInterface {
    * [return]: Error code if the API fails, 0 on success.
    */
   virtual int SetScalerLUT(const DRMScalerLUTInfo &lut_info) = 0;
-  /*
-   * Update layer CSC matrix.
-   * [Input]: out_csc_coeff - Csc coeffcients array
-   * [Input]: len_of_out_csc_coeff - array size of out_csc_coeff
-   * [Input]: out_pre_bias - Csc output pre bias array
-   * [Input]: len_of_out_pre_bias - array size of out_pre_bias
-   */
-  virtual void UpdatePlaneCscMatrix(const float *out_csc_coeff, uint32_t len_of_out_csc_coeff,
-                                    const float *out_pre_bias, uint32_t len_of_out_pre_bias) = 0;
 };
 
 }  // namespace sde_drm
