@@ -1729,12 +1729,20 @@ void HWCDisplay::CloseAcquireFds() {
   }
 }
 
-HWC2::Error HWCDisplay::SetLayerCscUserConfig(const float *out_csc_coeff,
-                                              uint32_t len_of_out_csc_coeff,
-                                              const float *out_pre_bias,
-                                              uint32_t len_of_out_pre_bias) {
-  display_intf_->SetLayerCscUserConfig(out_csc_coeff, len_of_out_csc_coeff,
-                                       out_pre_bias, len_of_out_pre_bias);
+HWC2::Error HWCDisplay::SetLayerCscData(hwc2_layer_t layer_id,
+                                        const int64_t *out_csc_coeff,
+                                        uint32_t len_of_out_csc_coeff,
+                                        const uint32_t *out_post_bias,
+                                        uint32_t len_of_out_post_bias) {
+  const auto map_layer = layer_map_.find(layer_id);
+  if (map_layer == layer_map_.end()) {
+    DLOGE("[%" PRIu64"] SetlayerCscData failed to find layer", layer_id);
+    return HWC2::Error::BadLayer;
+  }
+
+  const auto layer = map_layer->second;
+  layer->SetLayerCscData(out_csc_coeff, len_of_out_csc_coeff,
+                         out_post_bias, len_of_out_post_bias);
 
   return HWC2::Error::None;
 }

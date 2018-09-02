@@ -100,10 +100,6 @@ class HWDevice : public HWInterface {
   virtual DisplayError GetMixerAttributes(HWMixerAttributes *mixer_attributes);
   virtual DisplayError EnablePllUpdate(int32_t enable) { return kErrorNotSupported; };
   virtual DisplayError UpdateDisplayPll(int32_t ppm) { return kErrorNotSupported; };
-  virtual void SetLayerCscUserConfig(const float *out_csc_coeff,
-                                     uint32_t len_of_out_csc_coeff,
-                                     const float *out_pre_bias,
-                                     uint32_t len_of_out_pre_bias);
 
   enum {
     kHWEventVSync,

@@ -1363,12 +1363,5 @@ DisplayError HWDevice::GetMixerAttributes(HWMixerAttributes *mixer_attributes) {
   return kErrorNone;
 }
 
-void HWDevice::SetLayerCscUserConfig(const float *out_csc_coeff,
-                                     uint32_t len_of_out_csc_coeff,
-                                     const float *out_pre_bias,
-                                     uint32_t len_of_out_pre_bias) {
-// Not supported.
-}
-
 }  // namespace sdm
 
