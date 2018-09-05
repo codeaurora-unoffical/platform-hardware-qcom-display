@@ -21,6 +21,8 @@ endif
 
 LOCAL_CLANG                   := true
 
+ifeq ($(TARGET_HAS_NO_DISPLAY),false)
+# target has display
 # TODO: Remove libui after addressing gpu_tonemapper issues
 LOCAL_SHARED_LIBRARIES        := libsdmcore libqservice libbinder libhardware libhardware_legacy \
                                  libutils libcutils libsync libqdutils libqdMetaData libdl libdrmutils \
@@ -59,6 +61,11 @@ else
     LOCAL_SRC_FILES += hwc_buffer_allocator.cpp
 endif
 
+else
+# target has no display. eg., 212 SOM
+LOCAL_SHARED_LIBRARIES :=  libc++ liblog libutils
+LOCAL_SRC_FILES := hwcomposer.cpp
+endif
 ifeq ($(TARGET_HAS_WIDE_COLOR_DISPLAY), true)
     LOCAL_CFLAGS += -DFEATURE_WIDE_COLOR
 endif
