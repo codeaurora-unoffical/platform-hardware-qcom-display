@@ -44,6 +44,14 @@
 #define IOCTL_LOGE(ioctl, type) \
   DLOGE("ioctl %s, device = %d errno = %d, desc = %s", #ioctl, type, errno, strerror(errno))
 
+#ifndef DRM_MODE_FLAG_PIC_AR_SHIFT
+#define DRM_MODE_FLAG_PIC_AR_SHIFT 24
+#endif
+
+#ifndef DRM_MODE_FLAG_PIC_AR_MASK
+#define DRM_MODE_FLAG_PIC_AR_MASK (0x0F<<DRM_MODE_FLAG_PIC_AR_SHIFT)
+#endif
+
 namespace sdm {
 class HWInfoInterface;
 

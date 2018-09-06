@@ -46,12 +46,6 @@
 
 #define __CLASS__ "HWHDMIDRM"
 
-#define DRM_MODE_FLAG_PIC_AR_SHIFT 24
-
-#ifndef DRM_MODE_FLAG_PIC_AR_MASK
-#define DRM_MODE_FLAG_PIC_AR_MASK (0x0F<<DRM_MODE_FLAG_PIC_AR_SHIFT)
-#endif
-
 #ifndef DRM_MODE_FLAG_SUPPORTS_RGB
 #define DRM_MODE_FLAG_SUPPORTS_RGB (1<<20)
 #endif
@@ -209,6 +203,8 @@ DisplayError HWHDMIDRM::GetDisplayAttributes(uint32_t index,
 
   display_attributes->x_dpi = (FLOAT(mode.hdisplay) * 25.4f) / FLOAT(mm_width);
   display_attributes->y_dpi = (FLOAT(mode.vdisplay) * 25.4f) / FLOAT(mm_height);
+  display_attributes->aspect_ratio = (mode.flags & DRM_MODE_FLAG_PIC_AR_MASK) >>
+                                     DRM_MODE_FLAG_PIC_AR_SHIFT;
 
   return kErrorNone;
 }
