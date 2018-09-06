@@ -124,19 +124,32 @@ HWC2::Error HWCColorMode::SetColorModeWithRenderIntent(ColorMode mode, RenderInt
     return HWC2::Error::None;
   }
 
-  auto mode_string = color_mode_map_[mode][intent];
-  DisplayError error = display_intf_->SetColorMode(mode_string);
-  if (error != kErrorNone) {
-    DLOGE("failed for mode = %d intent = %d name = %s", mode, intent, mode_string.c_str());
-    return HWC2::Error::Unsupported;
-  }
-  // The mode does not have the PCC configured, restore the transform
-  RestoreColorTransform();
-
   current_color_mode_ = mode;
   current_render_intent_ = intent;
-  DLOGV_IF(kTagClient, "Successfully applied mode = %d intent = %d name = %s", mode, intent,
-           mode_string.c_str());
+  apply_mode_ = true;
+
+  return HWC2::Error::None;
+}
+
+HWC2::Error HWCColorMode::ApplyCurrentColorModeWithRenderIntent() {
+  if (!apply_mode_) {
+    return HWC2::Error::None;
+  }
+
+  apply_mode_ = false;
+  auto mode_string = color_mode_map_[current_color_mode_][current_render_intent_];
+  DisplayError error = display_intf_->SetColorMode(mode_string);
+  if (error != kErrorNone) {
+    DLOGE("Failed for mode = %d intent = %d name = %s", current_color_mode_,
+          current_render_intent_, mode_string.c_str());
+    return HWC2::Error::Unsupported;
+  }
+
+  // The mode does not have the PCC configured, restore the transform
+  RestoreColorTransform();
+  DLOGV_IF(kTagClient, "Successfully applied mode = %d intent = %d name = %s",
+           current_color_mode_, current_render_intent_, mode_string.c_str());
+
   return HWC2::Error::None;
 }
 
@@ -598,10 +611,15 @@ void HWCDisplay::BuildLayerStack() {
   Layer *sdm_client_target = client_target_->GetSDMLayer();
   sdm_client_target->flags.updating = IsLayerUpdating(client_target_);
   layer_stack_.layers.push_back(sdm_client_target);
+
+  // Apply current Color Mode and Render Intent.
+  HWC2::Error error = color_mode_->ApplyCurrentColorModeWithRenderIntent();
+
   // fall back frame composition to GPU when client target is 10bit
   // TODO(user): clarify the behaviour from Client(SF) and SDM Extn -
   // when handling 10bit FBT, as it would affect blending
-  if (Is10BitFormat(sdm_client_target->input_buffer.format)) {
+  // Fallback to GPU Composition, if Color Mode can't be applied.
+  if ((error != HWC2::Error::None) || Is10BitFormat(sdm_client_target->input_buffer.format)) {
     // Must fall back to client composition
     MarkLayersForClientComposition();
   }
@@ -1978,6 +1996,16 @@ std::string HWCDisplay::Dump() {
        << std::endl;
   }
 
+  if (has_client_composition_) {
+    os << "\n---------client target---------\n";
+    auto sdm_layer = client_target_->GetSDMLayer();
+    os << "format: " << std::setw(14) << GetFormatString(sdm_layer->input_buffer.format);
+    os << " dataspace:" << std::hex << "0x" << std::setw(8) << std::setfill('0')
+       << client_target_->GetLayerDataspace() << std::dec << std::setfill(' ');
+    os << "  buffer_id: " << std::hex << "0x" << sdm_layer->input_buffer.buffer_id << std::dec
+       << std::endl;
+  }
+
   if (layer_stack_invalid_) {
     os << "\n Layers added or removed but not reflected to SDM's layer stack yet\n";
     return os.str();
@@ -2016,6 +2044,7 @@ bool HWCDisplay::CanSkipValidate() {
   }
 
   for (auto hwc_layer : layer_set_) {
+    Layer *layer = hwc_layer->GetSDMLayer();
     if (hwc_layer->NeedsValidation()) {
       DLOGV_IF(kTagClient, "hwc_layer[%d] needs validation. Returning false.",
                hwc_layer->GetId());
@@ -2023,9 +2052,9 @@ bool HWCDisplay::CanSkipValidate() {
     }
 
     // Do not allow Skip Validate, if any layer needs GPU Composition.
-    if (hwc_layer->GetDeviceSelectedCompositionType() == HWC2::Composition::Client) {
-      DLOGV_IF(kTagClient, "hwc_layer[%d] is GPU composed. Returning false.",
-               hwc_layer->GetId());
+    if (layer->composition == kCompositionGPU || layer->composition == kCompositionNone) {
+      DLOGV_IF(kTagClient, "hwc_layer[%d] is %s. Returning false.", hwc_layer->GetId(),
+               (layer->composition == kCompositionGPU) ? "GPU composed": "Dropped");
       return false;
     }
   }

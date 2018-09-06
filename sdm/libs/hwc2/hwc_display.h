@@ -81,6 +81,7 @@ class HWCColorMode {
   HWC2::Error SetColorTransform(const float *matrix, android_color_transform_t hint);
   HWC2::Error RestoreColorTransform();
   ColorMode GetCurrentColorMode() { return current_color_mode_; }
+  HWC2::Error ApplyCurrentColorModeWithRenderIntent();
 
  private:
   static const uint32_t kColorTransformMatrixCount = 16;
@@ -95,7 +96,7 @@ class HWCColorMode {
   HWC2::Error ApplyDefaultColorMode();
 
   DisplayInterface *display_intf_ = NULL;
-
+  bool apply_mode_ = false;
   ColorMode current_color_mode_ = ColorMode::NATIVE;
   RenderIntent current_render_intent_ = RenderIntent::COLORIMETRIC;
   typedef std::map<RenderIntent, std::string> RenderIntentMap;
@@ -204,6 +205,9 @@ class HWCDisplay : public DisplayEventHandler {
   bool IsSkipValidateState() { return (validate_state_ == kSkipValidate); }
   bool IsInternalValidateState() { return (validated_ && (validate_state_ == kInternalValidate)); }
   void SetValidationState(DisplayValidateState state) { validate_state_ = state; }
+  ColorMode GetCurrentColorMode() {
+    return (color_mode_ ? color_mode_->GetCurrentColorMode() : ColorMode::SRGB);
+  }
 
   // HWC2 APIs
   virtual HWC2::Error AcceptDisplayChanges(void);
@@ -267,6 +271,9 @@ class HWCDisplay : public DisplayEventHandler {
   virtual HWC2::Error GetValidateDisplayOutput(uint32_t *out_num_types, uint32_t *out_num_requests);
   virtual bool IsDisplayCommandMode();
   virtual HWC2::Error SetQSyncMode(QSyncMode qsync_mode) {
+    return HWC2::Error::Unsupported;
+  }
+  virtual HWC2::Error ControlIdlePowerCollapse(bool enable, bool synchronous) {
     return HWC2::Error::Unsupported;
   }
 
