@@ -720,16 +720,25 @@ int32_t HWCSession::SetPowerMode(hwc2_device_t *device, hwc2_display_t display, 
 
   if(display == kFirst && hwc_session->notify_displays_ == true) {
      hwc_session->notify_displays_ = false;
-     if (hwc_session->hwc_display_[HWC_DISPLAY_EXTERNAL] != NULL) {
-       DLOGE("Notify SurfaceFlinger for display %d\n", kSecondary);
+
+     int disable_multi_display = 0;
+     Debug::Get()->GetProperty("persist.hwc.disable_multi_display", &disable_multi_display);
+     if (disable_multi_display) {
+       DLOGI("disable multi display mask = 0x%x", disable_multi_display);
+     }
+
+     if (hwc_session->hwc_display_[HWC_DISPLAY_EXTERNAL] != NULL &&
+          (disable_multi_display & (1 << HWC_DISPLAY_EXTERNAL)) == 0) {
+       DLOGI("Notify SurfaceFlinger for display %d\n", kSecondary);
        hwc_session->callbacks_.Hotplug(HWC_DISPLAY_EXTERNAL, HWC2::Connection::Connected);
      }
 
 #ifdef ENABLE_THREE_DISPLAYS
      for (uint32_t i = qdutils::DISPLAY_VIRTUAL + MAX_VIRTUAL_DISPLAY_NUM;
           i < MAX_TOTAL_DISPLAY_NUM; i++) {
-         if (hwc_session->hwc_display_[i] != NULL) {
-           DLOGE("Notify SurfaceFlinger for display %d\n", i);
+         if (hwc_session->hwc_display_[i] != NULL &&
+              (disable_multi_display & (1 << i)) == 0) {
+           DLOGI("Notify SurfaceFlinger for display %d\n", i);
            hwc_session->callbacks_.Hotplug(i, HWC2::Connection::Connected);
          }
      }
