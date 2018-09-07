@@ -120,13 +120,6 @@ DisplayError ResourceDefault::Init() {
     hw_res_info_.max_scale_up = 1;
   }
 
-  // TODO(user): clean it up, query from driver for initial pipe status.
-#ifndef SDM_VIRTUAL_DRIVER
-  rgb_index = hw_res_info_.num_vig_pipe;
-  src_pipes_[rgb_index].owner = kPipeOwnerKernelMode;
-  src_pipes_[rgb_index + 1].owner = kPipeOwnerKernelMode;
-#endif
-
   return error;
 }
 

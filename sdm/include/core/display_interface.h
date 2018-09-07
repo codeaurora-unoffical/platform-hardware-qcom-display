@@ -164,6 +164,7 @@ struct DisplayConfigVariableInfo {
   uint32_t fps = 0;               //!< Frame rate per second.
   uint32_t vsync_period_ns = 0;   //!< VSync period in nanoseconds.
   bool is_yuv = false;            //!< If the display output is in YUV format.
+  uint32_t bits_per_pixel = 0;    //!< Total number of pixels in X-direction on the display panel.
 };
 
 /*! @brief Event data associated with VSync event.

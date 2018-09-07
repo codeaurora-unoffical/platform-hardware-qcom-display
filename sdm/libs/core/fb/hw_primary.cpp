@@ -235,7 +235,7 @@ DisplayError HWPrimary::PopulateDisplayAttributes() {
     var_screeninfo.height = UINT32(((FLOAT(var_screeninfo.yres) * 25.4f)/320.0f) + 0.5f);
     DLOGW("Driver doesn't report panel physical width and height - defaulting to 320dpi");
   }
-
+  display_attributes_.bits_per_pixel = var_screeninfo.bits_per_pixel;
   display_attributes_.x_pixels = var_screeninfo.xres;
   display_attributes_.y_pixels = var_screeninfo.yres;
   display_attributes_.v_front_porch = var_screeninfo.lower_margin;
