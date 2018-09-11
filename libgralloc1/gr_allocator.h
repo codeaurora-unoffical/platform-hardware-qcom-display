@@ -37,6 +37,7 @@
 #endif
 
 #include <vector>
+#include <memory>
 
 #include "gralloc_priv.h"
 #include "gr_buf_descriptor.h"

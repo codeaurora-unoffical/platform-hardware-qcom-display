@@ -31,6 +31,9 @@ inline int roundUpToPageSize(int x) {
 /* Gralloc usage bits indicating the type of allocation that should be used */
 /* Refer gralloc1_producer_usage_t & gralloc1_consumer_usage-t in gralloc1.h */
 
+#define GRALLOC1_CONSUMER_USAGE_PRIVATE_10BIT_TP       0x08000000
+#define HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS          0x7FA30C0A
+
 /* Producer flags */
 /* Non linear, Universal Bandwidth Compression */
 #define GRALLOC1_PRODUCER_USAGE_PRIVATE_ALLOC_UBWC  GRALLOC1_PRODUCER_USAGE_PRIVATE_0
