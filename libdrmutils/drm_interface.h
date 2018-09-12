@@ -246,7 +246,12 @@ enum DRMDisplayOrder {
   kDRMPrimary = 0,
   kDRMSecondary = 1,
   kDRMTertiary = 2,
-  kDRMMaxOrder = 3,
+  kDRMQuaternary = 3,
+  kDRMQuinary = 4,
+  kDRMSenary = 5,
+  kDRMSeptenary = 6,
+  kDRMOctonary = 7,
+  kDRMMaxOrder = 8,
 };
 
 struct DRMRect {

@@ -161,6 +161,36 @@ DisplayError ResourceDefault::RegisterDisplay(DisplayOrder order, DisplayType ty
     }
     break;
 
+  case kQuaternary:
+    if (!hw_block_ctx_[kHWQuaternary].is_in_use) {
+      hw_block_id = kHWQuaternary;
+    }
+    break;
+
+  case kQuinary:
+    if (!hw_block_ctx_[kHWQuinary].is_in_use) {
+      hw_block_id = kHWQuinary;
+    }
+    break;
+
+  case kSenary:
+    if (!hw_block_ctx_[kHWSenary].is_in_use) {
+      hw_block_id = kHWSenary;
+    }
+    break;
+
+  case kSeptenary:
+    if (!hw_block_ctx_[kHWSeptenary].is_in_use) {
+      hw_block_id = kHWSeptenary;
+    }
+    break;
+
+  case kOctonary:
+    if (!hw_block_ctx_[kHWOctonary].is_in_use) {
+      hw_block_id = kHWOctonary;
+    }
+    break;
+
   default:
     DLOGW("RegisterDisplay, invalid type %d", type);
     return kErrorParameters;
