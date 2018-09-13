@@ -140,7 +140,7 @@ bool Debug::IsScalarDisabled() {
   int value = 0;
   debug_.debug_handler_->GetProperty("sdm.debug.disable_scalar", &value);
 
-  return true;//(value == 1);
+  return (value == 1);
 }
 
 bool Debug::IsUbwcTiledFrameBuffer() {
