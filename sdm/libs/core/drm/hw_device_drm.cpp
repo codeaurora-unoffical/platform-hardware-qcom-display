@@ -723,13 +723,19 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
           }
         }
 
-        if (input_buffer->flags.sideband) {
+        sde_drm::DRMCscType csc_type = sde_drm::DRMCscType::kCscTypeMax;
+        /* Full range case and sideband case are mutual */
+        if (input_buffer->color_metadata.range == Range_Full) {
+          SelectCscType(layer.input_buffer, &csc_type);
+          drm_atomic_intf_->Perform(DRMOps::PLANE_SET_CSC_CONFIG, pipe_id, &csc_type, NULL);
+        } else if (input_buffer->flags.sideband) {
+          /* update customized csc data for sideband layer */
           sde_drm_csc_v1 csc_mat = {};
           //copy new CSC data from layer_buffer
           SetUsrCscConfig(layer.input_buffer, &csc_mat);
 
-          //select CSC type and update new CSC data
-          sde_drm::DRMCscType csc_type = sde_drm::DRMCscType::kCscYuv2Rgb601L;
+          //select CSC type for side band case
+          csc_type = sde_drm::DRMCscType::kCscYuv2Rgb601L;
           drm_atomic_intf_->Perform(DRMOps::PLANE_SET_CSC_CONFIG, pipe_id, &csc_type, &csc_mat);
         }
       }
@@ -888,6 +894,34 @@ void HWDeviceDRM::SetSrcConfig(const LayerBuffer &input_buffer, uint32_t *config
 void HWDeviceDRM::SetUsrCscConfig(LayerBuffer &input_buffer, sde_drm_csc_v1 *csc) {
   memcpy(csc->ctm_coeff, input_buffer.color_metadata.cscData.ctm_coeff, sizeof(csc->ctm_coeff));
   memcpy(csc->post_bias, input_buffer.color_metadata.cscData.post_bias, sizeof(csc->post_bias));
+}
+
+void HWDeviceDRM::SelectCscType(const LayerBuffer &input_buffer, sde_drm::DRMCscType *type) {
+  if (type == NULL) {
+    return;
+  }
+
+  *type = sde_drm::DRMCscType::kCscTypeMax;
+  if (input_buffer.format < kFormatYCbCr420Planar) {
+    return;
+  }
+
+  switch (input_buffer.color_metadata.colorPrimaries) {
+    case ColorPrimaries_BT601_6_525:
+    case ColorPrimaries_BT601_6_625:
+      *type = ((input_buffer.color_metadata.range == Range_Full) ?
+              sde_drm::DRMCscType::kCscYuv2Rgb601FR : sde_drm::DRMCscType::kCscYuv2Rgb601L);
+      break;
+    case ColorPrimaries_BT709_5:
+      *type = sde_drm::DRMCscType::kCscYuv2Rgb709L;
+      break;
+    case ColorPrimaries_BT2020:
+      *type = ((input_buffer.color_metadata.range == Range_Full) ?
+              sde_drm::DRMCscType::kCscYuv2Rgb2020FR : sde_drm::DRMCscType::kCscYuv2Rgb2020L);
+      break;
+    default:
+      break;
+  }
 }
 
 void HWDeviceDRM::SetRect(const LayerRect &source, DRMRect *target) {
