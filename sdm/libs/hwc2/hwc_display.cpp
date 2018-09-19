@@ -451,8 +451,11 @@ void HWCDisplay::BuildLayerStack() {
       layer->src_rect.top = 0;
       layer->src_rect.right = layer_buffer->width;
       layer->src_rect.bottom = layer_buffer->height;
-      layer->flags.skip = true;
-      layer_stack_.flags.skip_present = true;
+      // if bottom layer has the same color as border color, skip it
+      if (hwc_layer != *layer_set_.begin() || (layer->solid_fill_color & 0xFFFFFF) != 0) {
+        layer->flags.skip = true;
+        layer_stack_.flags.skip_present = true;
+      }
     }
 
     if (layer->frame_rate > metadata_refresh_rate_) {
