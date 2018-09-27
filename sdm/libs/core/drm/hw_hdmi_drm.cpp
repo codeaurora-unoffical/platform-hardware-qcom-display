@@ -36,7 +36,7 @@
 #include <utils/debug.h>
 #include <utils/sys.h>
 #include <utils/formats.h>
-#include <linux/msm_mdp_ext.h>
+#include <drm/msm_drm.h>
 #include <vector>
 #include <map>
 #include <utility>
@@ -57,8 +57,12 @@
 #define DRM_MODE_FLAG_FMT_MASK (3<<20)
 #define DRM_MODE_FLAG_SUPPORTS_SHIFT 20
 #define  MIN_HDR_RESET_WAITTIME 2
-#define  HDR_ENABLE 1
-#define  HDR_DISABLE 0
+#define HDR_ENABLE   DRM_MSM_HDR_ENABLE
+#define HDR_DISABLE  DRM_MSM_HDR_DISABLE
+#define HDR_RESET    DRM_MSM_HDR_RESET
+
+#define MDP_HDR_EOTF_SMTPE_ST2084	HDR_EOTF_SMTPE_ST2084
+#define MDP_HDR_EOTF_HLG		HDR_EOTF_HLG
 
 using drm_utils::DRMMaster;
 using drm_utils::DRMResMgr;
@@ -350,7 +354,7 @@ DisplayError HWHDMIDRM::UpdateHDRMetaData(HWLayers *hw_layers) {
   else if (hdr_layer_info.operation == HWHDRLayerInfo::kReset) {
         memset(&connector_info_.hdr_ctrl.hdr_meta,0,sizeof(connector_info_.hdr_ctrl.hdr_meta));
         connector_info_.hdr_ctrl.hdr_meta.hdr_supported = 1;
-        connector_info_.hdr_ctrl.hdr_state = HDR_ENABLE;
+        connector_info_.hdr_ctrl.hdr_state = HDR_RESET;
         reset_hdr_flag = true;
         gettimeofday(&hdr_reset_start, NULL);
         drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_HDR_PROP, token_.conn_id,
@@ -392,6 +396,7 @@ DisplayError HWHDMIDRM::UpdateHDRMetaData(HWLayers *hw_layers) {
 
        drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_HDR_PROP, token_.conn_id,
                               &connector_info_.hdr_ctrl);
+       DLOGI("kNoOp: HDR metadata: HDR_DISABLE");
       }
      }
     }
