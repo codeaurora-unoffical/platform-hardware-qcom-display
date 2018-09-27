@@ -586,6 +586,8 @@ DisplayError HWDeviceDRM::PowerOn() {
     DLOGE("%s failed with error %d", __FUNCTION__, ret);
     return kErrorHardware;
   }
+  // Reload connector info for updated info after power on
+  drm_mgr_intf_->GetConnectorInfo(token_.conn_id, &connector_info_);
   return kErrorNone;
 }
 
