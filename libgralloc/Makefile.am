@@ -1,4 +1,4 @@
-HEADER_PATH := ${WORKSPACE}/display/display-hal/include
+HEADER_PATH := $(top_srcdir)/include
 h_sources = alloc_controller.h \
             memalloc.h
 

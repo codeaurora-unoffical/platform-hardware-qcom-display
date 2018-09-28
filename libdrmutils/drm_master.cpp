@@ -36,7 +36,6 @@
 // Intentionally included after xf86 headers so that they in-turn include libdrm version of drm.h
 // that doesn't use keyword "virtual" for a variable name. Not doing so leads to the kernel version
 // of drm.h being included causing compilation to fail
-#include <drm/msm_drm.h>
 #include <algorithm>
 #include <iterator>
 

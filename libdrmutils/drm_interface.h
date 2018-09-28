@@ -326,8 +326,10 @@ struct DRMConnectorInfo {
   uint32_t hdcp_version;
   std::vector<drmModeModeInfo> modes;
   DRMTopology topology;
+#ifdef DRM_MSM_EXT_PANEL_HDR_CTRL
   drm_msm_ext_panel_hdr_properties hdr_prop;
   drm_msm_ext_panel_hdr_ctrl hdr_ctrl;
+#endif
   std::string panel_name;
   DRMPanelMode panel_mode;
   bool is_primary;
@@ -347,8 +349,10 @@ struct DRMConnectorInfo {
     hdcp_version=0;
     modes.clear();
     topology = DRMTopology::UNKNOWN;
+#ifdef DRM_MSM_EXT_PANEL_HDR_CTRL
     hdr_prop = {};
     hdr_ctrl = {};
+#endif
     panel_name.clear();
     is_primary = false;
     dynamic_fps = false;

@@ -1,5 +1,5 @@
 AM_CFLAGS = -Wno-missing-field-initializersi -Wall -Wno-unused-parameter -std=c++11
-HEADER_PATH := ${WORKSPACE}/display/display-hal/gpu_tonemapper
+HEADER_PATH := $(top_srcdir)/gpu_tonemapper
 
 cpp_sources = glengine.cpp \
               EGLImageBufferBase.cpp \

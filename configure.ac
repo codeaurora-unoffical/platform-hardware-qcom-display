@@ -31,7 +31,7 @@ fi
 AC_ARG_WITH(sanitized-headers,
    AS_HELP_STRING([--with-sanitized-headers=DIR],
        [Specify the location of the sanitized Linux headers]),
-   [CPPFLAGS="$CPPFLAGS -idirafter $withval"])
+   [CPPFLAGS="$CPPFLAGS -I$withval"])
 
 AC_ARG_ENABLE([sdmhaldrm],
      AC_HELP_STRING([--enable-sdmhaldrm],
@@ -40,6 +40,15 @@ AC_ARG_ENABLE([sdmhaldrm],
         enable_sdmhaldrm=no)
 
 AM_CONDITIONAL([ENABLE_SDMHALDRM], [test "x${enable_sdmhaldrm}" = "xyes"])
+
+
+AC_ARG_ENABLE([sdmhalfb],
+     AC_HELP_STRING([--enable-sdmhalfb],
+        [enable sdmhalfb, build display-hal-linux with sdmhalfb]),
+        [enable_sdmhalfb="${enableval}"],
+        enable_sdmhalfb=no)
+
+AM_CONDITIONAL([ENABLE_SDMHALFB], [test "x${enable_sdmhalfb}" = "xyes"])
 
 # Checks for programs.
 AC_PROG_CC

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015 - 2017, The Linux Foundation. All rights reserved.
+* Copyright (c) 2015 - 2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -45,6 +45,12 @@
 #include "hw_hdmi_drm.h"
 
 #define __CLASS__ "HWHDMIDRM"
+
+#define DRM_MODE_FLAG_PIC_AR_SHIFT 24
+
+#ifndef DRM_MODE_FLAG_PIC_AR_MASK
+#define DRM_MODE_FLAG_PIC_AR_MASK (0x0F<<DRM_MODE_FLAG_PIC_AR_SHIFT)
+#endif
 
 #ifndef DRM_MODE_FLAG_SUPPORTS_RGB
 #define DRM_MODE_FLAG_SUPPORTS_RGB (1<<20)
@@ -122,12 +128,14 @@ void HWHDMIDRM::PopulateHWPanelInfo() {
   hw_panel_info_ = {};
 
   HWDeviceDRM::PopulateHWPanelInfo();
+#ifdef DRM_MSM_EXT_PANEL_HDR_CTRL
   hw_panel_info_.hdr_metadata_type_one = connector_info_.hdr_prop.hdr_metadata_type_one;
   hw_panel_info_.hdr_enabled = connector_info_.hdr_prop.hdr_supported;
   hw_panel_info_.hdr_eotf = connector_info_.hdr_prop.hdr_eotf;
   hw_panel_info_.peak_luminance = connector_info_.hdr_prop.hdr_max_luminance;
   hw_panel_info_.average_luminance = connector_info_.hdr_prop.hdr_avg_luminance;
   hw_panel_info_.blackness_level = connector_info_.hdr_prop.hdr_min_luminance;
+#endif
 }
 
 DisplayError HWHDMIDRM::GetNumDisplayAttributes(uint32_t *count) {
@@ -242,9 +250,10 @@ DisplayError HWHDMIDRM::SetDisplayAttributes(uint32_t index) {
 DisplayError HWHDMIDRM::GetConfigIndex(char *mode, uint32_t *index) {
 
   uint32_t width = 0, height = 0, fps = 0, format = 0;
+  int32_t aspect_ratio = -1;
 
-  //mode should be in width:height:fps:format
-  if (sscanf(mode, "%u:%u:%u:%u", &width, &height, &fps, &format) != 4)
+  //mode should be in width:height:fps:format:aspect_ratio
+  if (sscanf(mode, "%u:%u:%u:%u:%d", &width, &height, &fps, &format, &aspect_ratio) != 5)
      return kErrorParameters;
 
   for (size_t idex = 0; idex < connector_info_.modes.size(); idex ++) {
@@ -254,13 +263,16 @@ DisplayError HWHDMIDRM::GetConfigIndex(char *mode, uint32_t *index) {
         (format & ((connector_info_.modes[idex].flags & DRM_MODE_FLAG_FMT_MASK)
                     >> DRM_MODE_FLAG_SUPPORTS_SHIFT)))
     {
+      if ((aspect_ratio >= 0) && ((aspect_ratio << DRM_MODE_FLAG_PIC_AR_SHIFT) !=
+          (connector_info_.modes[idex].flags & DRM_MODE_FLAG_PIC_AR_MASK)))
+        continue;
       *index = UINT32(idex);
       return kErrorNone;
     }
    }
   return kErrorNotSupported;
 }
-
+#ifdef DRM_MSM_EXT_PANEL_HDR_CTRL
 static int32_t GetEOTF(const GammaTransfer &transfer) {
   int32_t hdr_transfer = -1;
 
@@ -389,6 +401,7 @@ DisplayError HWHDMIDRM::UpdateHDRMetaData(HWLayers *hw_layers) {
     }
   return error;
 }
+#endif
 
 DisplayError HWHDMIDRM::Validate(HWLayers *hw_layers) {
   HWDeviceDRM::ResetDisplayParams();
@@ -397,10 +410,12 @@ DisplayError HWHDMIDRM::Validate(HWLayers *hw_layers) {
 }
 
 DisplayError HWHDMIDRM::Commit(HWLayers *hw_layers) {
+#ifdef DRM_MSM_EXT_PANEL_HDR_CTRL
   DisplayError error = UpdateHDRMetaData(hw_layers);
   if (error != kErrorNone) {
     return error;
   }
+#endif
   return HWDeviceDRM::Commit(hw_layers);
 }
 
