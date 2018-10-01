@@ -282,6 +282,13 @@ enum struct QSEEDVersion {
   V3,
 };
 
+/* QSEED3 Step version */
+enum struct QSEEDStepVersion {
+  V2,
+  V3,
+  V4,
+};
+
 enum struct SmartDMARevision {
   V1,
   V2,
@@ -318,6 +325,7 @@ struct DRMPlaneTypeInfo {
   uint32_t max_downscale;
   uint32_t max_horizontal_deci;
   uint32_t max_vertical_deci;
+  QSEEDStepVersion qseed3_version;
 };
 
 // All DRM Planes as map<Plane_id , plane_type_info> listed from highest to lowest priority
