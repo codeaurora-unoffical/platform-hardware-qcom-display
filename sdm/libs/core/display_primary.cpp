@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2017, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -325,7 +325,9 @@ void DisplayPrimary::ThermalEvent(int64_t thermal_level) {
 
 void DisplayPrimary::IdlePowerCollapse() {
   if (hw_panel_info_.mode == kModeCommand) {
-    event_handler_->HandleEvent(kIdlePowerCollapse);
+    if (event_handler_->HandleEvent(kIdlePowerCollapse) != kErrorNone) {
+      return;
+    }
     lock_guard<recursive_mutex> obj(recursive_mutex_);
     comp_manager_->ProcessIdlePowerCollapse(display_comp_ctx_);
   }
