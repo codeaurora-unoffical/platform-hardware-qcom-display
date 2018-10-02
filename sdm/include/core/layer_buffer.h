@@ -275,6 +275,8 @@ struct LayerBuffer {
                                 //!< could be modified by both client and SDM.
   uint64_t buffer_id __attribute__((aligned(8))) = 0;
                                 //!< Specifies the buffer id.
+
+  uint64_t handle_id = 0;
 };
 
 // This enum represents buffer layout types.
@@ -282,6 +284,11 @@ enum BufferLayout {
   kLinear,    //!< Linear data
   kUBWC,      //!< UBWC aligned data
   kTPTiled    //!< Tightly Packed data
+};
+
+class LayerBufferObject {
+ public:
+  virtual ~LayerBufferObject() {}
 };
 
 }  // namespace sdm
