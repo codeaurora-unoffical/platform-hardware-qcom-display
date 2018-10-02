@@ -416,6 +416,8 @@ DisplayError HWDeviceDRM::PopulateDisplayAttributes() {
 
   display_attributes_.x_dpi = (FLOAT(mode.hdisplay) * 25.4f) / FLOAT(mm_width);
   display_attributes_.y_dpi = (FLOAT(mode.vdisplay) * 25.4f) / FLOAT(mm_height);
+  display_attributes_.aspect_ratio = (mode.flags & DRM_MODE_FLAG_PIC_AR_MASK) >>
+                                     DRM_MODE_FLAG_PIC_AR_SHIFT;
 
   return kErrorNone;
 }
