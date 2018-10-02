@@ -386,6 +386,10 @@ struct DRMPPFeatureInfo {
 
 enum DRMCscType {
   kCscYuv2Rgb601L,
+  kCscYuv2Rgb601FR,
+  kCscYuv2Rgb709L,
+  kCscYuv2Rgb2020L,
+  kCscYuv2Rgb2020FR,
   kCscTypeMax,
 };
 

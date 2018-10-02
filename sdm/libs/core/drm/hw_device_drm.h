@@ -121,6 +121,7 @@ class HWDeviceDRM : public HWInterface {
   void InitializeConfigs();
   void SetBlending(const LayerBlending &source, sde_drm::DRMBlendType *target);
   void SetSrcConfig(const LayerBuffer &input_buffer, uint32_t *config);
+  void SelectCscType(const LayerBuffer &input_buffer, sde_drm::DRMCscType *type);
   void SetRect(const LayerRect &source, sde_drm::DRMRect *target);
   DisplayError DefaultCommit(HWLayers *hw_layers);
   DisplayError AtomicCommit(HWLayers *hw_layers);
