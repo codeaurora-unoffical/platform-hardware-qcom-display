@@ -606,23 +606,6 @@ static int32_t GetDisplayType(hwc2_device_t *device, hwc2_display_t display, int
   return HWCSession::CallDisplayFunction(device, display, &HWCDisplay::GetDisplayType, out_type);
 }
 
-static int32_t GetDozeSupport(hwc2_device_t *device, hwc2_display_t display, int32_t *out_support) {
-  if (!device || !out_support) {
-    return HWC2_ERROR_BAD_PARAMETER;
-  }
-
-  if (display >= HWCSession::kNumDisplays) {
-    return HWC2_ERROR_BAD_DISPLAY;
-  }
-
-  if (display == HWC_DISPLAY_PRIMARY) {
-    *out_support = 1;
-  } else {
-    *out_support = 0;
-  }
-
-  return HWC2_ERROR_NONE;
-}
 
 static int32_t GetHdrCapabilities(hwc2_device_t* device, hwc2_display_t display,
                                   uint32_t* out_num_types, int32_t* out_types,
@@ -891,12 +874,13 @@ int32_t HWCSession::SetPowerMode(hwc2_device_t *device, hwc2_display_t display, 
 
   //  all displays support on/off. Check for doze modes
   int support = 0;
-  GetDozeSupport(device, display, &support);
+  hwc_session->GetDozeSupport(device, display, &support);
   if (!support && (mode == HWC2::PowerMode::Doze || mode == HWC2::PowerMode::DozeSuspend)) {
     return HWC2_ERROR_UNSUPPORTED;
   }
 
-  auto error = CallDisplayFunction(device, display, &HWCDisplay::SetPowerMode, mode);
+  auto error = CallDisplayFunction(device, display, &HWCDisplay::SetPowerMode, mode,
+                                   false /* teardown */);
   if (error != HWC2_ERROR_NONE) {
     return error;
   }
@@ -923,6 +907,25 @@ int32_t HWCSession::SetVsyncEnabled(hwc2_device_t *device, hwc2_display_t displa
   display = hwc_session->callbacks_.GetVsyncSource();
 
   return HWCSession::CallDisplayFunction(device, display, &HWCDisplay::SetVsyncEnabled, enabled);
+}
+
+int32_t HWCSession::GetDozeSupport(hwc2_device_t *device, hwc2_display_t display,
+                                   int32_t *out_support) {
+  if (!device || !out_support) {
+    return HWC2_ERROR_BAD_PARAMETER;
+  }
+
+  if (display >= HWCSession::kNumDisplays) {
+    return HWC2_ERROR_BAD_DISPLAY;
+  }
+
+  HWCSession *hwc_session = static_cast<HWCSession *>(device);
+  *out_support = 0;
+  if (display == HWC_DISPLAY_PRIMARY || display == hwc_session->GetNextBuiltinIndex()) {
+    *out_support = 1;
+  }
+
+  return HWC2_ERROR_NONE;
 }
 
 int32_t HWCSession::ValidateDisplay(hwc2_device_t *device, hwc2_display_t display,
@@ -1143,6 +1146,16 @@ HWC2::Error HWCSession::CreateVirtualDisplayObj(uint32_t width, uint32_t height,
   hwc_display_[HWC_DISPLAY_PRIMARY]->ResetValidation();
 
   return HWC2::Error::None;
+}
+
+hwc2_display_t HWCSession::GetNextBuiltinIndex() {
+  for (auto &map_info : map_info_builtin_) {
+    if (hwc_display_[map_info.client_id]) {
+        return map_info.client_id;
+    }
+  }
+
+  return 0;
 }
 
 // Qclient methods
@@ -1920,14 +1933,15 @@ void HWCSession::ResetPanel() {
   HWC2::Error status = HWC2::Error::None;
 
   DLOGI("Powering off primary");
-  status = hwc_display_[HWC_DISPLAY_PRIMARY]->SetPowerMode(HWC2::PowerMode::Off);
+  status = hwc_display_[HWC_DISPLAY_PRIMARY]->SetPowerMode(HWC2::PowerMode::Off,
+                                                           false /* teardown */);
   if (status != HWC2::Error::None) {
     DLOGE("power-off on primary failed with error = %d", status);
   }
 
   DLOGI("Restoring power mode on primary");
   HWC2::PowerMode mode = hwc_display_[HWC_DISPLAY_PRIMARY]->GetLastPowerMode();
-  status = hwc_display_[HWC_DISPLAY_PRIMARY]->SetPowerMode(mode);
+  status = hwc_display_[HWC_DISPLAY_PRIMARY]->SetPowerMode(mode, false /* teardown */);
   if (status != HWC2::Error::None) {
     DLOGE("Setting power mode = %d on primary failed with error = %d", mode, status);
   }
@@ -2367,7 +2381,8 @@ void HWCSession::DisplayPowerReset() {
   for (hwc2_display_t display = HWC_DISPLAY_PRIMARY; display < HWC_NUM_DISPLAY_TYPES; display++) {
     if (hwc_display_[display] != NULL) {
       DLOGI("Powering off display = %d", display);
-      status = hwc_display_[display]->SetPowerMode(HWC2::PowerMode::Off);
+      status = hwc_display_[display]->SetPowerMode(HWC2::PowerMode::Off,
+                                                   true /* teardown */);
       if (status != HWC2::Error::None) {
         DLOGE("Power off for display = %d failed with error = %d", display, status);
       }
@@ -2376,7 +2391,7 @@ void HWCSession::DisplayPowerReset() {
   for (hwc2_display_t display = HWC_DISPLAY_PRIMARY; display < HWC_NUM_DISPLAY_TYPES; display++) {
     if (hwc_display_[display] != NULL) {
       DLOGI("Powering on display = %d", display);
-      status = hwc_display_[display]->SetPowerMode(HWC2::PowerMode::On);
+      status = hwc_display_[display]->SetPowerMode(HWC2::PowerMode::On, false /* teardown */);
       if (status != HWC2::Error::None) {
         DLOGE("Power on for display = %d failed with error = %d", display, status);
       }
@@ -2443,7 +2458,8 @@ void HWCSession::HandlePowerOnPending(hwc2_display_t disp_id, int retire_fence) 
 
   if (power_on_pending_[HWC_DISPLAY_EXTERNAL]) {
     if (hwc_display_[HWC_DISPLAY_EXTERNAL]) {
-      HWC2::Error status = hwc_display_[HWC_DISPLAY_EXTERNAL]->SetPowerMode(HWC2::PowerMode::On);
+      HWC2::Error status = hwc_display_[HWC_DISPLAY_EXTERNAL]->SetPowerMode(HWC2::PowerMode::On,
+                                                                            false /* teardown */);
       if (status == HWC2::Error::None) {
         power_on_pending_[HWC_DISPLAY_EXTERNAL] = false;
       }
@@ -2452,7 +2468,8 @@ void HWCSession::HandlePowerOnPending(hwc2_display_t disp_id, int retire_fence) 
 
   if (power_on_pending_[HWC_DISPLAY_VIRTUAL]) {
     if (hwc_display_[HWC_DISPLAY_VIRTUAL]) {
-      HWC2::Error status = hwc_display_[HWC_DISPLAY_VIRTUAL]->SetPowerMode(HWC2::PowerMode::On);
+      HWC2::Error status = hwc_display_[HWC_DISPLAY_VIRTUAL]->SetPowerMode(HWC2::PowerMode::On,
+                                                                           false /* teardown */);
       if (status == HWC2::Error::None) {
         power_on_pending_[HWC_DISPLAY_VIRTUAL] = false;
       }
@@ -2582,13 +2599,9 @@ void HWCSession::UpdateVsyncSource(hwc2_display_t display) {
 
   // If primary display is powered off, change vsync source to next builtin display.
   // If primary display is powerd on, change vsync source back to primary display.
-  // First check for active builtins. If not found switch to pluggable displays.
-  std::vector<DisplayMapInfo> map_info = map_info_builtin_;
-  std::copy(map_info_pluggable_.begin(), map_info_pluggable_.end(), std::back_inserter(map_info));
-
   if (power_mode == HWC2::PowerMode::Off) {
     hwc2_display_t next_vsync_source = HWC_DISPLAY_PRIMARY;
-    for (auto &info : map_info) {
+    for (auto &info : map_info_builtin_) {
       auto &hwc_display = hwc_display_[info.client_id];
       if (!hwc_display) {
         continue;
