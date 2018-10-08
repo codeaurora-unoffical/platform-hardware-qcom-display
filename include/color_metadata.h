@@ -141,6 +141,7 @@ typedef struct ColorRemappingInfo {
 typedef struct ColorConversionInfo {
   int64_t ctm_coeff[CSC_MATRIX_COEFF_SIZE];
   uint32_t post_bias[CSC_BIAS_SIZE];
+  bool usr_csc;
 } ColorConversionInfo;
 
 typedef struct ColorMetaData {
