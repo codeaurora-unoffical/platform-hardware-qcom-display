@@ -958,6 +958,16 @@ DisplayError DisplayBase::ReconfigureMixer(uint32_t width, uint32_t height) {
   return ReconfigureDisplay();
 }
 
+void DisplayBase::SetLayerCscUserConfig(const float *out_csc_coeff,
+                                        uint32_t len_of_out_csc_coeff,
+                                        const float *out_pre_bias,
+                                        uint32_t len_of_out_pre_bias) {
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
+
+  hw_intf_->SetLayerCscUserConfig(out_csc_coeff, len_of_out_csc_coeff,
+                                  out_pre_bias, len_of_out_pre_bias);
+}
+
 bool DisplayBase::NeedsDownScale(const LayerRect &src_rect, const LayerRect &dst_rect,
                                  bool needs_rotation) {
   float src_width = FLOAT(src_rect.right - src_rect.left);

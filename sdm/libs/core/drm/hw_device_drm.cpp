@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -780,6 +780,11 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
                                       reinterpret_cast<uint64_t>(&scaler_output.scaler_v2));
           }
         }
+
+        if (input_buffer->flags.sideband) {
+          sde_drm::DRMCscType csc_type = sde_drm::DRMCscType::kCscUserConfig;
+          drm_atomic_intf_->Perform(DRMOps::PLANE_SET_CSC_CONFIG, pipe_id, &csc_type);
+        }
       }
     }
   }
@@ -1184,6 +1189,14 @@ void HWDeviceDRM::UpdateMixerAttributes() {
   mixer_attributes_.split_left = display_attributes_.is_device_split
                                      ? hw_panel_info_.split_info.left_split
                                      : mixer_attributes_.width;
+}
+
+void HWDeviceDRM::SetLayerCscUserConfig(const float *out_csc_coeff,
+                                        uint32_t len_of_out_csc_coeff,
+                                        const float *out_pre_bias,
+                                        uint32_t len_of_out_pre_bias) {
+  drm_mgr_intf_->UpdatePlaneCscMatrix(out_csc_coeff, len_of_out_csc_coeff,
+                                      out_pre_bias, len_of_out_pre_bias);
 }
 
 }  // namespace sdm
