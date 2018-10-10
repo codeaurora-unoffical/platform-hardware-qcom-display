@@ -144,7 +144,7 @@ enum DispParamType {
     SET_VT_TIMESTAMP         = 0x0001,
     COLOR_METADATA           = 0x0002,
     PP_PARAM_INTERLACED      = 0x0004,
-    PP_PARAM_VIDEO_FULLRANGE = 0x0008,
+    UNUSED2                  = 0x0008,
     UNUSED3                  = 0x0010,
     UNUSED4                  = 0x0020,
     SET_UBWC_CR_STATS_INFO   = 0x0040,
