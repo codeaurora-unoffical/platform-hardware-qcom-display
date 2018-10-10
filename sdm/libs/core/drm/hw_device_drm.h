@@ -100,10 +100,6 @@ class HWDeviceDRM : public HWInterface {
   virtual DisplayError GetMixerAttributes(HWMixerAttributes *mixer_attributes);
   virtual DisplayError EnablePllUpdate(int32_t enable) { return kErrorNotSupported; };
   virtual DisplayError UpdateDisplayPll(int32_t ppm) { return kErrorNotSupported; };
-  virtual void SetLayerCscUserConfig(const float *out_csc_coeff,
-                                     uint32_t len_of_out_csc_coeff,
-                                     const float *out_pre_bias,
-                                     uint32_t len_of_out_pre_bias);
 
   enum {
     kHWEventVSync,
@@ -133,6 +129,7 @@ class HWDeviceDRM : public HWInterface {
   DisplayError DefaultCommit(HWLayers *hw_layers);
   DisplayError AtomicCommit(HWLayers *hw_layers);
   void SetupAtomic(HWLayers *hw_layers, bool validate);
+  void SetUsrCscConfig(LayerBuffer &input_buffer, sde_drm_csc_v1 *csc_data);
 
   class Registry {
    public:

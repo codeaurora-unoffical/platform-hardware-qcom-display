@@ -727,16 +727,6 @@ class DisplayInterface {
   */
   virtual DisplayError UpdateResourceInfo() = 0;
 
-  /*! @brief Method to update layer CSC info.
-
-    @param[in] out_csc_coeff \link updated csc coefficient matrix \endlink
-    @param[in] len_of_out_csc_coeff \link length of array out_csc_coeff \endlink
-    @param[in] out_pre_bias \link output pre bias matrix \endlink
-    @param[in] len_of_out_pre_bias \link length of arrary out_pre_bias \endlink
-  */
-  virtual void SetLayerCscUserConfig(const float *out_csc_coeff, uint32_t len_of_out_csc_coeff,
-                                     const float *out_pre_bias, uint32_t len_of_out_pre_bias) = 0;
-
  protected:
   virtual ~DisplayInterface() { }
 };
