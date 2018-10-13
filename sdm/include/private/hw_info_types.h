@@ -277,6 +277,7 @@ struct HWPanelInfo {
   HWColorPrimaries primaries = {};    // WRGB color primaries
   HWPanelOrientation panel_orientation = {};  // Panel Orientation
   uint32_t max_blendstages = 0;       // Max blend stages per panel
+  uint32_t padding_height = 0;        // Panel Stacking height
 
   bool operator !=(const HWPanelInfo &panel_info) {
     return ((port != panel_info.port) || (mode != panel_info.mode) ||
@@ -345,7 +346,11 @@ struct HWRotatorSession {
   float input_compression = 1.0f;
   float output_compression = 1.0f;
   bool is_buffer_cached = false;
+};
 
+struct HWPanelStackSession {
+  LayerBuffer output_buffer;
+  int session_id = -1;
 };
 
 struct HWScaleLutInfo {
@@ -461,6 +466,7 @@ struct HWLayerConfig {
   HWPipeInfo left_pipe;           // pipe for left side of output
   HWPipeInfo right_pipe;          // pipe for right side of output
   HWRotatorSession hw_rotator_session;
+  HWPanelStackSession hw_panelstack_session;
   float compression = 1.0f;
 
   void Reset() { *this = HWLayerConfig(); }

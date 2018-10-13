@@ -299,7 +299,13 @@ void HWDeviceDRM::Registry::Register(HWLayers *hw_layers) {
   for (uint32_t i = 0; i < hw_layer_count; i++) {
    Layer &layer = hw_layer_info.hw_layers.at(i);
    LayerBuffer *input_buffer = &layer.input_buffer;
+   HWPanelStackSession *hw_panel_stack_session = &hw_layers->config[i].hw_panelstack_session;
    fbid_cache_limit_ = input_buffer->flags.video ? VIDEO_FBID_LIMIT : UI_FBID_LIMIT;
+
+    if (hw_panel_stack_session->session_id >= 0) {
+      input_buffer = &hw_panel_stack_session->output_buffer;
+    }
+
     // layer input buffer map to fb id also applies for inline rot
     MapBufferToFbId(&layer, input_buffer);
    }
@@ -532,6 +538,7 @@ void HWDeviceDRM::PopulateHWPanelInfo() {
   hw_panel_info_.is_primary_panel = (connector_info_.display_order == DRMDisplayOrder::kDRMPrimary);
   hw_panel_info_.is_pluggable = 0;
   hw_panel_info_.max_blendstages = connector_info_.max_blendstages;
+  hw_panel_info_.padding_height = connector_info_.padding_height;
 
   if (!default_mode_) {
     hw_panel_info_.needs_roi_merge = (connector_info_.topology == DRMTopology::DUAL_LM_MERGE);
@@ -704,7 +711,9 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
     HWPipeInfo *left_pipe = &hw_layers->config[i].left_pipe;
     HWPipeInfo *right_pipe = &hw_layers->config[i].right_pipe;
     HWRotatorSession *hw_rotator_session = &hw_layers->config[i].hw_rotator_session;
+    HWPanelStackSession *hw_panel_stack_session = &hw_layers->config[i].hw_panelstack_session;
     bool needs_rotation = false;
+    bool needs_linepadding = false;
 
     for (uint32_t count = 0; count < 2; count++) {
       HWPipeInfo *pipe_info = (count == 0) ? left_pipe : right_pipe;
@@ -713,6 +722,11 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
       if (hw_rotate_info->valid) {
         input_buffer = &hw_rotator_session->output_buffer;
         needs_rotation = true;
+      }
+
+      if (hw_panel_stack_session->session_id >= 0) {
+        input_buffer = &hw_panel_stack_session->output_buffer;
+        needs_linepadding = true;
       }
 
       uint32_t fb_id = registry_.GetFbId(&layer, input_buffer->handle_id);
@@ -765,6 +779,9 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
                                   pipe_info->vertical_decimation);
         uint32_t config = 0;
         SetSrcConfig(layer.input_buffer, &config);
+        if (needs_linepadding) {
+                config |= (0x01 << UINT32(DRMSrcConfig::LINEPADDING));
+        }
         drm_atomic_intf_->Perform(DRMOps::PLANE_SET_SRC_CONFIG, pipe_id, config);;
         drm_atomic_intf_->Perform(DRMOps::PLANE_SET_FB_ID, pipe_id, fb_id);
         drm_atomic_intf_->Perform(DRMOps::PLANE_SET_CRTC, pipe_id, token_.crtc_id);
