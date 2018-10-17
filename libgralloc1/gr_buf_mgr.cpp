@@ -191,7 +191,7 @@ void BufferManager::CreateSharedHandle(buffer_handle_t inbuffer, const BufferDes
                                                    input->size,
                                                    descriptor.GetProducerUsage(),
                                                    descriptor.GetConsumerUsage());
-  out_hnd->id = ++next_id_;
+  out_hnd->id = ++next_id_ | ((uint64_t)getpid() << 48);
   // TODO(user): Base address of shared handle and ion handles
   RegisterHandleLocked(out_hnd, -1, -1);
   *outbuffer = out_hnd;
@@ -538,7 +538,7 @@ int BufferManager::AllocateBuffer(const BufferDescriptor &descriptor, buffer_han
                                                prod_usage,
                                                cons_usage);
 
-  hnd->id = ++next_id_;
+  hnd->id = ++next_id_ | ((uint64_t)getpid() << 48);
   hnd->base = 0;
   hnd->base_metadata = 0;
   hnd->layer_count = layer_count;
