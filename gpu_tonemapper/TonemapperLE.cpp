@@ -158,6 +158,12 @@ int Tonemapper::blit(void *dst, void *src, int srcFenceFd, void *userdata, void 
 
   engine_set2DInputBuffer(2, lutXformTexture);
 
+  // set dimensions
+  float dimensions[2] = { 0.0f, 0.0f };
+  dimensions[0] = dst_buffer->getWidth();
+  dimensions[1] = dst_buffer->getHeight();
+  engine_setData2f(5, dimensions);
+
   // perform
   int fenceFD = engine_blit(srcFenceFd);
 
