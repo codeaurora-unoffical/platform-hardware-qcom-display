@@ -33,6 +33,8 @@ typedef gralloc1_error_t (*GRALLOC1_PFN_PERFORM)(gralloc1_device_t *device, int 
 
 #define PRIV_HANDLE_CONST(exp) static_cast<const private_handle_t *>(exp)
 
+#pragma pack(push, 4)
+
 struct private_handle_t : public native_handle_t {
   enum {
     PRIV_FLAGS_FRAMEBUFFER = 0x00000001,
@@ -76,12 +78,12 @@ struct private_handle_t : public native_handle_t {
   unsigned int size;
   unsigned int offset;
   unsigned int offset_metadata;
-  uint64_t base                            __attribute__((aligned(8)));
-  uint64_t base_metadata                   __attribute__((aligned(8)));
-  uint64_t gpuaddr                         __attribute__((aligned(8)));
-  uint64_t id                              __attribute__((aligned(8)));
-  gralloc1_producer_usage_t producer_usage __attribute__((aligned(8)));
-  gralloc1_consumer_usage_t consumer_usage __attribute__((aligned(8)));
+  uint64_t base;
+  uint64_t base_metadata;
+  uint64_t gpuaddr;
+  uint64_t id;
+  gralloc1_producer_usage_t producer_usage;
+  gralloc1_consumer_usage_t consumer_usage;
   unsigned int layer_count;
 
   static const int kNumFds = 2;
@@ -188,5 +190,6 @@ struct private_handle_t : public native_handle_t {
 
   uint64_t GetBackingstore() const { return id; }
 };
+#pragma pack(pop)
 
 #endif  // __GR_PRIV_HANDLE_H__

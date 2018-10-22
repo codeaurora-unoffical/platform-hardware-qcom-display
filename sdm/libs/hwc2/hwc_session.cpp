@@ -182,7 +182,13 @@ int HWCSession::Init() {
 
   error = CoreInterface::CreateCore(&buffer_allocator_, &buffer_sync_handler_,
                                     &socket_handler_, &core_intf_);
-  if (error != kErrorNone) {
+  if (error == kErrorNoDevice) {
+    CreateNullDisplay();
+    primary_ready_ = true;
+    is_composer_up_ = true;
+    DLOGI("NULL display created!");
+    return 0;
+  } else if (error != kErrorNone) {
     DLOGE("Display core initialization failed. Error = %d", error);
     Deinit();
     return -EINVAL;
@@ -269,6 +275,9 @@ int HWCSession::GetDisplayIndex(int dpy) {
       break;
     case qdutils::DISPLAY_VIRTUAL:
       map_info = map_info_virtual_.size() ? &map_info_virtual_[0] : nullptr;
+      break;
+    case qdutils::DISPLAY_BUILTIN_2:
+      map_info = map_info_builtin_.size() ? &map_info_builtin_[0] : nullptr;
       break;
   }
 
@@ -574,9 +583,9 @@ int32_t HWCSession::PresentDisplay(hwc2_device_t *device, hwc2_display_t display
 
   // Handle pending builtin/pluggable display connections
   if (!hwc_session->primary_ready_ && (display == HWC_DISPLAY_PRIMARY)) {
+    hwc_session->primary_ready_ = true;
     hwc_session->CreateBuiltInDisplays();
     hwc_session->CreatePluggableDisplays(false);
-    hwc_session->primary_ready_ = true;
   }
 
   return INT32(status);
@@ -1097,7 +1106,11 @@ android::status_t HWCSession::notifyCallback(uint32_t command, const android::Pa
       break;
 
     case qService::IQService::SCREEN_REFRESH:
-      status = refreshScreen();
+      if (!input_parcel) {
+        DLOGE("QService command = %d: input_parcel needed.", command);
+        break;
+      }
+      status = RefreshScreen(input_parcel);
       break;
 
     case qService::IQService::SET_IDLE_TIMEOUT:
@@ -1513,7 +1526,7 @@ android::status_t HWCSession::SetColorModeOverride(const android::Parcel *input_
 }
 
 android::status_t HWCSession::SetColorModeById(const android::Parcel *input_parcel) {
-  int display = static_cast<int >(input_parcel->readInt32());
+  int display = input_parcel->readInt32();
   auto mode = input_parcel->readInt32();
   auto device = static_cast<hwc2_device_t *>(this);
 
@@ -1527,6 +1540,20 @@ android::status_t HWCSession::SetColorModeById(const android::Parcel *input_parc
                                  &HWCDisplay::SetColorModeById, mode);
   if (err != HWC2_ERROR_NONE)
     return -EINVAL;
+
+  return 0;
+}
+
+android::status_t HWCSession::RefreshScreen(const android::Parcel *input_parcel) {
+  int display = input_parcel->readInt32();
+
+  int disp_idx = GetDisplayIndex(display);
+  if (disp_idx == -1) {
+    DLOGE("Invalid display = %d", display);
+    return -EINVAL;
+  }
+
+  Refresh(static_cast<hwc2_display_t>(disp_idx));
 
   return 0;
 }
@@ -1868,6 +1895,15 @@ void HWCSession::HotPlug(hwc2_display_t display, HWC2::Connection state) {
     callbacks_lock_.Wait();
     err = callbacks_.Hotplug(display, state);
   }
+}
+
+void HWCSession::CreateNullDisplay() {
+  auto hwc_display = &hwc_display_[HWC_DISPLAY_PRIMARY];
+
+  hwc2_display_t client_id = map_info_primary_.client_id;
+
+  HWCDisplayDummy::Create(core_intf_, &buffer_allocator_, &callbacks_, qservice_,
+                          client_id, 0, hwc_display);
 }
 
 int HWCSession::CreatePrimaryDisplay() {
