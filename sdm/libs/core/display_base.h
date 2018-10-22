@@ -117,6 +117,12 @@ class DisplayBase : public DisplayInterface, DumpImpl {
   virtual DisplayError GetClientTargetSupport(uint32_t width, uint32_t height,
                                               LayerBufferFormat format,
                                               const ColorMetaData &color_metadata);
+  virtual DisplayError SetDynamicDSIClock(uint64_t bitclk) {
+    return kErrorNotSupported;
+  }
+  virtual DisplayError GetDynamicDSIClock(uint64_t *bitclk) {
+    return kErrorNotSupported;
+  }
 
  protected:
   DisplayError BuildLayerStackStats(LayerStack *layer_stack);
