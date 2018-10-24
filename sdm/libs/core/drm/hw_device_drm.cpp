@@ -704,7 +704,7 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
           SDEScaler scaler_output = {};
           hw_scale_->SetPlaneScaler(pipe_info->scale_data, &scaler_output);
           // TODO(user): Remove qseed3 and add version check, then send appropriate scaler object
-          if (hw_resource_.has_qseed3 && pipe_info->scale_data.enable.scale) {
+          if (hw_resource_.has_qseed3) {
             drm_atomic_intf_->Perform(DRMOps::PLANE_SET_SCALER_CONFIG, pipe_id,
                                       reinterpret_cast<uint64_t>(&scaler_output.scaler_v2));
           }
