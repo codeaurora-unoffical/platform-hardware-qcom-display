@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -43,6 +43,10 @@
 
 #define IOCTL_LOGE(ioctl, type) \
   DLOGE("ioctl %s, device = %d errno = %d, desc = %s", #ioctl, type, errno, strerror(errno))
+
+#define UI_FBID_LIMIT 3
+#define VIDEO_FBID_LIMIT 16
+#define OFFLINE_ROTATOR_FBID_LIMIT 2
 
 namespace sdm {
 class HWInfoInterface;
@@ -121,22 +125,30 @@ class HWDeviceDRM : public HWInterface {
   void InitializeConfigs();
   void SetBlending(const LayerBlending &source, sde_drm::DRMBlendType *target);
   void SetSrcConfig(const LayerBuffer &input_buffer, uint32_t *config);
+  void SelectCscType(const LayerBuffer &input_buffer, sde_drm::DRMCscType *type);
   void SetRect(const LayerRect &source, sde_drm::DRMRect *target);
   DisplayError DefaultCommit(HWLayers *hw_layers);
   DisplayError AtomicCommit(HWLayers *hw_layers);
   void SetupAtomic(HWLayers *hw_layers, bool validate);
+  void SetUsrCscConfig(LayerBuffer &input_buffer, sde_drm_csc_v1 *csc_data);
 
   class Registry {
    public:
-    explicit Registry(BufferAllocator *buffer_allocator) : buffer_allocator_(buffer_allocator) {}
-    // Call on each validate and commit to register layer buffers
-    void RegisterCurrent(HWLayers *hw_layers);
+    explicit Registry(BufferAllocator *buffer_allocator);
     // Call at the end of draw cycle to clear the next slot for business
     void UnregisterNext();
     // Call on display disconnect to release all gem handles and fb_ids
     void Clear();
     // Finds an fb_id corresponding to an fd in current map
-    uint32_t GetFbId(int fd);
+
+    void Register(HWLayers *hw_layers);
+    // Create the fd_id for the given buffer.
+    int CreateFbId(LayerBuffer *buffer, uint32_t *fb_id);
+    // Find handle_id in the layer map. Else create fb_id and add <handle_id,fb_id> in map.
+    void MapBufferToFbId(Layer* layer, LayerBuffer* buffer);
+    // Find fb_id for given handle_id in the layer map.
+    uint32_t GetFbId(Layer *layer, uint64_t handle_id);
+
 
    private:
     static const int kCycleDelay = 2;  // N cycle delay before destroy
@@ -144,7 +156,10 @@ class HWDeviceDRM : public HWInterface {
     // prepare and commit. It should not be used for caching in future due to fd recycling
     std::unordered_map<int, uint32_t> hashmap_[kCycleDelay] {};
     int current_index_ = 0;
+    bool disable_fbid_cache_ = false;
+    std::unordered_map<uint64_t, std::shared_ptr<LayerBufferObject>> output_buffer_map_ {};
     BufferAllocator *buffer_allocator_ = {};
+    uint8_t fbid_cache_limit_ = UI_FBID_LIMIT;
   };
 
   HWResourceInfo hw_resource_ = {};

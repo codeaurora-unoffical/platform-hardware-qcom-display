@@ -153,6 +153,103 @@ int32_t HWCSidebandStream::PostDisplay(hwc2_display_t displayId) {
   return 0;
 }
 
+void HWCSidebandStream::MatrixMultiplication(float *pArray1, int pArrary1_row_num,
+                                             int pArray1_col_num, float *pArray2,
+                                             int pArray2_col_num, float *pDestArray) {
+  int i, j, k;
+
+  for (i = 0; i < pArrary1_row_num; i++) {
+    for (j = 0; j < pArray2_col_num; j++) {
+        for (k = 0; k < pArray1_col_num; k++)
+          pDestArray[pArray2_col_num * i + j] +=
+            pArray1[pArray1_col_num * i + k] * pArray2[pArray2_col_num * k + j];
+    }
+  }
+}
+
+/*
+ * Color space conversion formulas
+ *
+ * The default YUV2RGB transformation CSC matrix is:
+ * YUV2RGB = [1.1644, 0.0000, 1.596,
+ *            1.1644, -0.3918, -0.813,
+ *            1.1644, 2.0172, 0.0000,]
+ *
+ * 1) For the general input case, Hue(H), Contrast(C), Brightness(B), Saturation(S),
+ *    the calculated CSC coeffcients is:
+ *    YUV2RGB *[C, 0,        0,
+ *              0, S*cos(H), S*sin(H),
+ *              0, -S*sin(H), S*cos(H),].
+ *
+ * 2) For the input case like color tone(Cb, Cr), Contrast(C), Brightness(B), Saturation(S),
+ *    the calculated CSC coeffcients is:
+ *    YUV2RGB *[C, 0,    0,
+ *              0, S*Cb, 0,
+ *              0, 0,    S*Cr,].
+ *
+ * 3) The offset of output pre basis matrix(3*1 matrix) is from:
+ *    [B - 128 *(C - 1), 0, 0,].
+ */
+int32_t HWCSidebandStream::CalcCscInputData(color_data_pack *color_data_pack_, csc_mat *csc_mat) {
+  float default_yuv2rgb_matrix[CSC_MATRIX_COEFF_SIZE] = {(float)1.1644, (float)0.0000, (float)1.596,
+                                                       (float)1.1644, (float)-0.3918, (float)-0.813,
+                                                       (float)1.1644, (float)2.0172, (float)0.0000,};
+  float coeff_adj_matrix[CSC_MATRIX_COEFF_SIZE] = {(float)1.0, (float)0.0, (float)0.0,
+                                                   (float)0.0, (float)1.0, (float)0.0,
+                                                   (float)0.0, (float)0.0, (float)1.0};
+  float new_coeff_matrix[CSC_MATRIX_COEFF_SIZE] = {(float(0.0))};
+  float new_post_bias_matrix[CSC_BIAS_SIZE] = {(float)0.0};
+  float bias_adj_matrix[CSC_BIAS_SIZE] = {(float)0.0};
+  int32_t i = 0, temp;
+
+  SCOPE_LOCK(mSidebandLock_);
+
+  DLOGI("CalcCscInputData color_data_pack %f, %f, %f, %f, %f",
+             color_data_pack_->saturation, color_data_pack_->tone_cb, color_data_pack_->tone_cr,
+             color_data_pack_->contrast, color_data_pack_->brightness);
+
+  if ((color_data_pack_->flags & CSC_HUE_TAG) && (color_data_pack_->flags & CSC_COLOR_TONE_TAG)) {
+    DLOGE("Hue and Color tone setting can't co-exist.");
+    return HWC2_ERROR_NOT_VALIDATED;
+  }
+
+  /* Update coeff adj matrix */
+  coeff_adj_matrix[0] = color_data_pack_->contrast;
+
+  /* Hanle Hue case and Color Tone case respectively. */
+  if (color_data_pack_->flags & CSC_HUE_TAG) {
+    coeff_adj_matrix[4] = color_data_pack_->saturation * cos(color_data_pack_->hue);
+    coeff_adj_matrix[5] = color_data_pack_->saturation * sin(color_data_pack_->hue);
+    coeff_adj_matrix[7] = -color_data_pack_->saturation * sin(color_data_pack_->hue);
+    coeff_adj_matrix[8] = color_data_pack_->saturation * cos(color_data_pack_->hue);
+  } else if (color_data_pack_->flags & CSC_COLOR_TONE_TAG) {
+    coeff_adj_matrix[4] = color_data_pack_->saturation * color_data_pack_->tone_cb;
+    coeff_adj_matrix[8] = color_data_pack_->saturation * color_data_pack_->tone_cr;
+  }
+
+  /* Update output bias offset matrix */
+  bias_adj_matrix[0] = color_data_pack_->brightness -
+                                          128 * (color_data_pack_->contrast - 1);
+
+  MatrixMultiplication(default_yuv2rgb_matrix, 3, 3, bias_adj_matrix, 1,
+                       new_post_bias_matrix);
+  for (i = 0; i < CSC_BIAS_SIZE; i++) {
+    temp = (int32_t)(new_post_bias_matrix[i] + 0.5); //round
+    csc_mat->post_bias[i] = (uint32_t)temp;
+  }
+
+  /* final coeff matrix = default_coeff_matrix * coeff_adj_matrix */
+  MatrixMultiplication(default_yuv2rgb_matrix, 3, 3, coeff_adj_matrix, 3,
+                       new_coeff_matrix);
+
+  /* round by multiply 65536 */
+  for (i = 0; i < CSC_MATRIX_COEFF_SIZE; i++) {
+    csc_mat->ctm_coeff[i] = static_cast<int64_t>((new_coeff_matrix[i] * 65536.0));
+  }
+
+  return HWC2_ERROR_NONE;
+}
+
 void *HWCSidebandStream::SidebandStreamThread(void *context) {
   if (context) {
     return reinterpret_cast<HWCSidebandStream *>(context)->SidebandThreadHandler();
@@ -175,6 +272,32 @@ void *HWCSidebandStream::SidebandThreadHandler(void) {
     if (CheckBuffer() == HWC2_ERROR_NOT_VALIDATED) {
       mSession->UpdateSidebandStream(this);
       continue;
+    }
+
+    /* Process input chroma data */
+    color_data_pack_.color_dirty = false;
+    android::color_data_t color_data;
+    if(sb_nativeHandle_->getColorData(&color_data) != SETTING_NO_DATA_CHANGE){
+      DLOGI("getColorData %d, %f, %f, %f, %f, %f, %f", color_data.flags, color_data.hue,
+                                                       color_data.saturation,
+                                                       color_data.tone_cb,
+                                                       color_data.tone_cr,
+                                                       color_data.contrast,
+                                                       color_data.brightness);
+
+      color_data_pack_.color_dirty = true;
+      color_data_pack_.flags = color_data.flags;
+      color_data_pack_.saturation = (float)color_data.saturation;
+      if (color_data.flags & CSC_HUE_TAG)
+        color_data_pack_.hue = (float)color_data.hue;
+
+      if (color_data.flags & CSC_COLOR_TONE_TAG) {
+        color_data_pack_.tone_cb = (float)color_data.tone_cb;
+        color_data_pack_.tone_cr = (float)color_data.tone_cr;
+      }
+
+      color_data_pack_.contrast = (float)color_data.contrast;
+      color_data_pack_.brightness = (float)color_data.brightness;
     }
 
     result = sb_nativeHandle_->acquireBuffer(&buf_idx, 50);
@@ -314,8 +437,27 @@ int32_t HWCSidebandStreamSession::UpdateSidebandStream(HWCSidebandStream * stm) 
   int vsync_span = hwc_session->GetVsyncPeriod(0);
   struct timespec tv;
   int64_t span;
+  color_data_pack color_data_pack_;
+  csc_mat csc_mat;
 
   SCOPE_LOCK(hwc_session->locker_);
+
+  memcpy(&color_data_pack_, &stm->color_data_pack_, sizeof(color_data_pack_));
+
+  /* only calculate when color data is changed */
+  if (color_data_pack_.color_dirty) {
+    stm->CalcCscInputData(&color_data_pack_, &csc_mat);
+
+    for (auto & pair : stm->mLayers) {
+      hwc2_layer_t layer = pair.first;
+      hwc2_display_t display = pair.second;
+      hwc_session->hwc_display_[display]->SetLayerCscData(layer,
+                                                          csc_mat.ctm_coeff,
+                                                          CSC_MATRIX_COEFF_SIZE,
+                                                          csc_mat.post_bias,
+                                                          CSC_BIAS_SIZE);
+    }
+  }
 
   // if there are more than one streams, go back to surfaceflinger
   if (mSidebandStreamList.size() > 1) {

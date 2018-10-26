@@ -136,6 +136,14 @@ typedef struct ColorRemappingInfo {
   uint32_t           crPostLutTargetValue[3*33];
 } ColorRemappingInfo;
 
+#define CSC_MATRIX_COEFF_SIZE 9
+#define CSC_BIAS_SIZE         3
+typedef struct ColorConversionInfo {
+  int64_t ctm_coeff[CSC_MATRIX_COEFF_SIZE];
+  uint32_t post_bias[CSC_BIAS_SIZE];
+  bool usr_csc;
+} ColorConversionInfo;
+
 typedef struct ColorMetaData {
   // Default values based on sRGB, needs to be overridden in gralloc
   // based on the format and size.
@@ -147,6 +155,7 @@ typedef struct ColorMetaData {
   MasteringDisplay   masteringDisplayInfo;
   ContentLightLevel  contentLightLevel;
   ColorRemappingInfo cRI;
+  ColorConversionInfo cscData; //save for layer csc matrix data changed by user.
 } ColorMetaData;
 
 typedef struct Color10Bit {

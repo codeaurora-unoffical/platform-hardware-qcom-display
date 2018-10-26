@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2017, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -64,6 +64,11 @@ enum DisplayOrder {
   kFirst,         //!< The first display.
   kSecondary,     //!< The second display.
   kTertiary,      //!< The third display.
+  kQuaternary,    //!< The fourth display.
+  kQuinary,       //!< The fifth display.
+  kSenary,        //!< The sizth display.
+  kSeptenary,     //!< The seventh display.
+  kOctonary,      //!< The eighth display.
   kOrderMax,
 };
 

@@ -21,8 +21,14 @@ LOCAL_CLANG                   := true
 LOCAL_SHARED_LIBRARIES        := libsdmcore libqservice libbinder libhardware libhardware_legacy \
                                  libutils libcutils libsync libqdutils libqdMetaData libdl libdrmutils \
                                  libpowermanager libsdmutils libc++ liblog libgrallocutils libdl \
-                                 vendor.display.config@1.0_vendor libhidlbase libhidltransport \
-                                 libsidebandstreamhandle
+                                 libhidlbase libhidltransport libsidebandstreamhandle
+
+
+ifeq ($(call is-platform-sdk-version-at-least,28),true)
+LOCAL_SHARED_LIBRARIES += vendor.display.config@1.0
+else
+LOCAL_SHARED_LIBRARIES += vendor.display.config@1.0_vendor
+endif
 
 ifneq ($(TARGET_USES_GRALLOC1), true)
     LOCAL_SHARED_LIBRARIES += libmemalloc

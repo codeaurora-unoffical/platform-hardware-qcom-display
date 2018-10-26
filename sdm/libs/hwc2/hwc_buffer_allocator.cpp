@@ -93,6 +93,7 @@ DisplayError HWCBufferAllocator::AllocateBuffer(BufferInfo *buffer_info) {
     alloc_buffer_info->fd = hnd->fd;
     alloc_buffer_info->stride = UINT32(hnd->width);
     alloc_buffer_info->size = hnd->size;
+    alloc_buffer_info->id = hnd->id;
   } else {
     DLOGE("Failed to allocate memory");
     return kErrorMemory;

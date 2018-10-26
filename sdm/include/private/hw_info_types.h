@@ -54,6 +54,11 @@ enum HWBlockType {
   kHWFirst,
   kHWSecondary,
   kHWTertiary,
+  kHWQuaternary,
+  kHWQuinary,
+  kHWSenary,
+  kHWSeptenary,
+  kHWOctonary,
   kHWWriteback0,
   kHWWriteback1,
   kHWWriteback2,
@@ -339,6 +344,7 @@ struct HWRotatorSession {
   float input_compression = 1.0f;
   float output_compression = 1.0f;
   bool is_buffer_cached = false;
+
 };
 
 struct HWScaleLutInfo {

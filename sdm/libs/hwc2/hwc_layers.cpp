@@ -85,6 +85,31 @@ HWCLayer::~HWCLayer() {
   }
 }
 
+HWC2::Error HWCLayer::SetLayerCscData(const int64_t *out_csc_coeff,
+                                      uint32_t len_of_out_csc_coef,
+                                      const uint32_t *out_post_bias,
+                                      uint32_t len_of_out_post_bias) {
+  layer_->input_buffer.color_metadata.cscData.usr_csc = false;
+  // Ensure all are valid before copying.
+  if ((len_of_out_csc_coef == CSC_MATRIX_COEFF_SIZE) &&
+      (len_of_out_post_bias == CSC_BIAS_SIZE)) {
+      if (out_csc_coeff) {
+        memcpy(layer_->input_buffer.color_metadata.cscData.ctm_coeff, out_csc_coeff,
+             sizeof(layer_->input_buffer.color_metadata.cscData.ctm_coeff));
+      }
+
+      if (out_post_bias) {
+        memcpy(layer_->input_buffer.color_metadata.cscData.post_bias, out_post_bias,
+             sizeof(layer_->input_buffer.color_metadata.cscData.post_bias));
+      }
+
+      layer_->input_buffer.color_metadata.cscData.usr_csc = true;
+      return HWC2::Error::None;
+   } else {
+      return HWC2::Error::BadParameter;
+   }
+}
+
 HWC2::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, int32_t acquire_fence) {
   if (!buffer) {
     DLOGE("Invalid buffer handle: %p on layer: %d", buffer, id_);
@@ -150,6 +175,7 @@ HWC2::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, int32_t acquire_fen
   layer_buffer->acquire_fence_fd = acquire_fence;
   layer_buffer->size = handle->size;
   layer_buffer->buffer_id = reinterpret_cast<uint64_t>(handle);
+  layer_buffer->handle_id = handle->id;
 
   return HWC2::Error::None;
 }

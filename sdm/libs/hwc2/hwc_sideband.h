@@ -40,6 +40,33 @@
 
 namespace sdm {
 
+#define CSC_HUE_TAG             1 << 1
+#define CSC_BRIGHTNESS_TAG      1 << 2
+#define CSC_CONTRAST_TAG        1 << 3
+#define CSC_SATURATION_TAG      1 << 4
+#define CSC_COLOR_TONE_TAG      1 << 5
+
+struct color_data_pack {
+  uint32_t flags;
+  float hue;
+  float saturation;
+  float tone_cb;
+  float tone_cr;
+  float contrast;
+  float brightness;
+  bool color_dirty;
+};
+
+/**
+ * struct csc_mat:    csc matrix structure
+ * @ctm_coeff:        New main matrix coefficients
+ * @post_biast:        New post-bias offset values
+ */
+  struct csc_mat {
+    int64_t ctm_coeff[CSC_MATRIX_COEFF_SIZE];
+    uint32_t post_bias[CSC_BIAS_SIZE];
+  };
+
   struct SidebandStreamBuf : public android::LightRefBase<SidebandStreamBuf> {
     private_handle_t *mSBHandle = nullptr;
     android::SidebandHandleBase *mHandle = nullptr;
@@ -58,6 +85,10 @@ namespace sdm {
     android::sp<SidebandStreamBuf> GetBuffer(void);
     int32_t CheckBuffer(void);
     int32_t PostDisplay(hwc2_display_t display);
+    int32_t CalcCscInputData(color_data_pack *color_data_pack_, csc_mat *new_mat);
+    void MatrixMultiplication(float *pArray1, int pArrary1_row_num,
+                              int pArray1_col_num, float *pArray2,
+                              int pArray2_col_num, float *pDestArray);
     HWCSidebandStream(HWCSidebandStreamSession *session, buffer_handle_t handle);
     ~HWCSidebandStream();
 
@@ -80,6 +111,7 @@ namespace sdm {
     pthread_t sideband_thread_ = {};
     bool sideband_thread_exit_ = false;
     bool new_bufffer_ = false;
+    color_data_pack color_data_pack_ = {};
   };
 
   class SidebandStreamLoader {

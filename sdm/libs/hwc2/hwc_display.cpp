@@ -451,6 +451,11 @@ void HWCDisplay::BuildLayerStack() {
       layer->src_rect.top = 0;
       layer->src_rect.right = layer_buffer->width;
       layer->src_rect.bottom = layer_buffer->height;
+      // if bottom layer has the same color as border color, skip it
+      if (hwc_layer != *layer_set_.begin() || (layer->solid_fill_color & 0xFFFFFF) != 0) {
+        layer->flags.skip = true;
+        layer_stack_.flags.skip_present = true;
+      }
     }
 
     if (layer->frame_rate > metadata_refresh_rate_) {
@@ -845,7 +850,7 @@ HWC2::Error HWCDisplay::PrepareLayerStack(uint32_t *out_num_types, uint32_t *out
     LayerComposition &composition = layer->composition;
 
     if ((composition == kCompositionSDE) || (composition == kCompositionHybrid) ||
-        (composition == kCompositionBlit)) {
+        (composition == kCompositionBlit) || (composition == kCompositionSideband)) {
       layer_requests_[hwc_layer->GetId()] = HWC2::LayerRequest::ClearClientTarget;
     }
 
@@ -1727,6 +1732,24 @@ void HWCDisplay::CloseAcquireFds() {
     close(client_target_acquire_fence);
     client_target_acquire_fence = -1;
   }
+}
+
+HWC2::Error HWCDisplay::SetLayerCscData(hwc2_layer_t layer_id,
+                                        const int64_t *out_csc_coeff,
+                                        uint32_t len_of_out_csc_coeff,
+                                        const uint32_t *out_post_bias,
+                                        uint32_t len_of_out_post_bias) {
+  const auto map_layer = layer_map_.find(layer_id);
+  if (map_layer == layer_map_.end()) {
+    DLOGE("[%" PRIu64"] SetlayerCscData failed to find layer", layer_id);
+    return HWC2::Error::BadLayer;
+  }
+
+  const auto layer = map_layer->second;
+  layer->SetLayerCscData(out_csc_coeff, len_of_out_csc_coeff,
+                         out_post_bias, len_of_out_post_bias);
+
+  return HWC2::Error::None;
 }
 
 std::string HWCDisplay::Dump() {

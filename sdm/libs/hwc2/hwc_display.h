@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -209,6 +209,11 @@ class HWCDisplay : public DisplayEventHandler {
                                          float* out_max_luminance,
                                          float* out_max_average_luminance,
                                          float* out_min_luminance);
+  virtual HWC2::Error SetLayerCscData(hwc2_layer_t layer_id,
+                                      const int64_t *out_csc_coeff,
+                                      uint32_t len_of_out_csc_coef,
+                                      const uint32_t *out_post_bias,
+                                      uint32_t len_of_out_post_bias);
 
  protected:
   // Maximum number of layers supported by display manager.
