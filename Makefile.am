@@ -8,5 +8,4 @@ SUBDIRS += libdrmutils
 SUBDIRS += gpu_tonemapper
 endif
 SUBDIRS += sdm/libs/core
-
-
+SUBDIRS += libdisplayconfig
