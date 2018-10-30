@@ -128,17 +128,15 @@ DisplayError DisplayBase::Init() {
     }
   }
 
-  if (!color_mgr_exists_) {
+  // ColorManager supported for built-in display.
+  if (kBuiltIn == display_type_) {
     color_mgr_ = ColorManagerProxy::CreateColorManagerProxy(display_type_, hw_intf_,
                                                             display_attributes_, hw_panel_info_);
 
     if (!color_mgr_) {
-      DLOGW("Unable to create ColorManagerProxy for display = %d", display_type_);
-    } else {
-      color_mgr_exists_ = true;
-      if (InitializeColorModes() != kErrorNone) {
-        DLOGW("InitColorModes failed for display = %d", display_type_);
-      }
+      DLOGW("Unable to create ColorManagerProxy for display %d-%d", display_id_, display_type_);
+    } else if (InitializeColorModes() != kErrorNone) {
+      DLOGW("InitColorModes failed for display %d-%d", display_id_, display_type_);
     }
   }
 
@@ -169,7 +167,7 @@ DisplayError DisplayBase::Init() {
   Debug::GetProperty(DISABLE_HW_RECOVERY_DUMP_PROP, &disable_hw_recovery_dump_);
   DLOGI("disable_hw_recovery_dump_ set to %d", disable_hw_recovery_dump_);
 
-  Debug::Get()->GetProperty("DROP_SKEWED_VSYNC", &drop_vsync);
+  Debug::Get()->GetProperty(DROP_SKEWED_VSYNC, &drop_vsync);
   drop_skewed_vsync_ = (drop_vsync == 1);
 
   return kErrorNone;
@@ -401,7 +399,7 @@ DisplayError DisplayBase::Commit(LayerStack *layer_stack) {
   return kErrorNone;
 }
 
-DisplayError DisplayBase::Flush() {
+DisplayError DisplayBase::Flush(LayerStack *layer_stack) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   DisplayError error = kErrorNone;
 
@@ -409,7 +407,8 @@ DisplayError DisplayBase::Flush() {
     return kErrorPermission;
   }
   hw_layers_.info.hw_layers.clear();
-  error = hw_intf_->Flush();
+  hw_layers_.info.stack = layer_stack;
+  error = hw_intf_->Flush(&hw_layers_);
   if (error == kErrorNone) {
     comp_manager_->Purge(display_comp_ctx_);
     needs_validate_ = true;
@@ -508,7 +507,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
   switch (state) {
   case kStateOff:
     hw_layers_.info.hw_layers.clear();
-    error = hw_intf_->Flush();
+    error = hw_intf_->Flush(&hw_layers_);
     if (error == kErrorNone) {
       error = hw_intf_->PowerOff(teardown);
     }
@@ -1633,8 +1632,6 @@ void DisplayBase::SetPUonDestScaler() {
                                 mixer_height != display_height);
 }
 
-bool DisplayBase::color_mgr_exists_ = false;
-
 void DisplayBase::ClearColorInfo() {
   color_modes_.clear();
   color_mode_map_.clear();
@@ -1644,7 +1641,6 @@ void DisplayBase::ClearColorInfo() {
   if (color_mgr_) {
     delete color_mgr_;
     color_mgr_ = NULL;
-    color_mgr_exists_ = false;
   }
 }
 

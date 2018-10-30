@@ -153,7 +153,7 @@ void HWCDisplayBuiltIn::ProcessBootAnimCompleted() {
 
   if ((!isEncrypted || (isEncrypted && main_class_services_started)) &&
       bootanim_exit) {
-    DLOGI("Applying default mode");
+    DLOGI("Applying default mode for display %d", sdm_id_);
     boot_animation_completed_ = true;
     // Applying default mode after bootanimation is finished And
     // If Data is Encrypted, it is ready for access.
@@ -208,6 +208,7 @@ HWC2::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_n
     // here in a subsequent draw round. Readback is not allowed for any secure use case.
     readback_configured_ = !layer_stack_.flags.secure_present;
     if (readback_configured_) {
+      DisablePartialUpdateOneFrame();
       layer_stack_.output_buffer = &output_buffer_;
       layer_stack_.flags.post_processed_output = post_processed_output_;
     }
@@ -242,7 +243,7 @@ HWC2::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_n
 HWC2::Error HWCDisplayBuiltIn::Present(int32_t *out_retire_fence) {
   auto status = HWC2::Error::None;
   if (display_paused_) {
-    DisplayError error = display_intf_->Flush();
+    DisplayError error = display_intf_->Flush(&layer_stack_);
     validated_ = false;
     if (error != kErrorNone) {
       DLOGE("Flush failed. Error = %d", error);
@@ -366,7 +367,6 @@ HWC2::Error HWCDisplayBuiltIn::SetReadbackBuffer(const native_handle_t *buffer,
   readback_configured_ = false;
   validated_ = false;
 
-  DisablePartialUpdateOneFrame();
   return HWC2::Error::None;
 }
 
@@ -386,6 +386,46 @@ HWC2::Error HWCDisplayBuiltIn::GetReadbackBufferFence(int32_t *release_fence) {
   output_buffer_ = {};
 
   return status;
+}
+
+HWC2::Error HWCDisplayBuiltIn::SetDisplayDppsAdROI(uint32_t h_start, uint32_t h_end,
+                                                   uint32_t v_start, uint32_t v_end,
+                                                   uint32_t factor_in, uint32_t factor_out) {
+  DisplayError error = kErrorNone;
+  DisplayDppsAd4RoiCfg dpps_ad4_roi_cfg = {};
+  uint32_t panel_width = 0, panel_height = 0;
+  constexpr uint16_t kMaxFactorVal = 0xffff;
+
+  if (h_start >= h_end || v_start >= v_end || factor_in > kMaxFactorVal ||
+      factor_out > kMaxFactorVal) {
+    DLOGE("Invalid roi region = [%u, %u, %u, %u, %u, %u]",
+           h_start, h_end, v_start, v_end, factor_in, factor_out);
+    return HWC2::Error::BadParameter;
+  }
+
+  GetPanelResolution(&panel_width, &panel_height);
+
+  if (h_start >= panel_width || h_end > panel_width ||
+      v_start >= panel_height || v_end > panel_height) {
+    DLOGE("Invalid roi region = [%u, %u, %u, %u], panel resolution = [%u, %u]",
+           h_start, h_end, v_start, v_end, panel_width, panel_height);
+    return HWC2::Error::BadParameter;
+  }
+
+  dpps_ad4_roi_cfg.h_start = h_start;
+  dpps_ad4_roi_cfg.h_end = h_end;
+  dpps_ad4_roi_cfg.v_start = v_start;
+  dpps_ad4_roi_cfg.v_end = v_end;
+  dpps_ad4_roi_cfg.factor_in = factor_in;
+  dpps_ad4_roi_cfg.factor_out = factor_out;
+
+  error = display_intf_->SetDisplayDppsAdROI(&dpps_ad4_roi_cfg);
+  if (error)
+    return HWC2::Error::BadConfig;
+
+  callbacks_->Refresh(HWC_DISPLAY_PRIMARY);
+
+  return HWC2::Error::None;
 }
 
 int HWCDisplayBuiltIn::Perform(uint32_t operation, ...) {
@@ -436,6 +476,16 @@ DisplayError HWCDisplayBuiltIn::SetDisplayMode(uint32_t mode) {
 
   if (display_intf_) {
     error = display_intf_->SetDisplayMode(mode);
+    if (error == kErrorNone) {
+      DisplayConfigFixedInfo fixed_info = {};
+      display_intf_->GetConfig(&fixed_info);
+      is_cmd_mode_ = fixed_info.is_cmdmode;
+      partial_update_enabled_ = fixed_info.partial_update;
+      for (auto hwc_layer : layer_set_) {
+        hwc_layer->SetPartialUpdate(partial_update_enabled_);
+      }
+      client_target_->SetPartialUpdate(partial_update_enabled_);
+    }
   }
 
   return error;
@@ -477,7 +527,7 @@ int HWCDisplayBuiltIn::HandleSecureSession(const std::bitset<kSecureMax> &secure
   if (active_secure_sessions_[kSecureDisplay] != secure_sessions[kSecureDisplay]) {
     SecureEvent secure_event =
         secure_sessions.test(kSecureDisplay) ? kSecureDisplayStart : kSecureDisplayEnd;
-    DisplayError err = display_intf_->HandleSecureEvent(secure_event);
+    DisplayError err = display_intf_->HandleSecureEvent(secure_event, &layer_stack_);
     if (err != kErrorNone) {
       DLOGE("Set secure event failed");
       return err;

@@ -432,9 +432,7 @@ void DisplayBuiltIn::ResetPanel() {
   if (status != kErrorNone) {
     DLOGE("power-off on built-in/primary %d failed with error = %d", display_id_, status);
   }
-  if (release_fence >= 0) {
-    ::close(release_fence);
-  }
+  CloseFd(&release_fence);
 
   DLOGI("Restoring power mode on built-in/primary %d", display_id_);
   DisplayState mode = GetLastPowerMode();
@@ -443,9 +441,7 @@ void DisplayBuiltIn::ResetPanel() {
     DLOGE("Setting power mode = %d on built-in/primary %d failed with error = %d", mode,
           display_id_, status);
   }
-  if (release_fence >= 0) {
-    ::close(release_fence);
-  }
+  CloseFd(&release_fence);
 
   DLOGI("Enabling HWVsync");
   status = SetVSyncState(true);
@@ -510,6 +506,17 @@ DisplayError DisplayBuiltIn::DppsProcessOps(enum DppsOps op, void *payload, size
   return error;
 }
 
+DisplayError DisplayBuiltIn::SetDisplayDppsAdROI(void *payload) {
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
+  DisplayError err = kErrorNone;
+
+  err = hw_intf_->SetDisplayDppsAdROI(payload);
+  if (err != kErrorNone)
+    DLOGE("Failed to set ad roi config, err %d", err);
+
+  return err;
+}
+
 void DppsInfo::Init(DppsPropIntf *intf, const std::string &panel_name) {
   int error = 0;
 
@@ -563,8 +570,9 @@ void DppsInfo::DppsNotifyOps(enum DppsNotifyOps op, void *payload, size_t size) 
     DLOGE("DppsNotifyOps op %d error %d", op, ret);
 }
 
-DisplayError DisplayBuiltIn::HandleSecureEvent(SecureEvent secure_event) {
-  DisplayError err = hw_intf_->HandleSecureEvent(secure_event);
+DisplayError DisplayBuiltIn::HandleSecureEvent(SecureEvent secure_event, LayerStack *layer_stack) {
+  hw_layers_.info.stack = layer_stack;
+  DisplayError err = hw_intf_->HandleSecureEvent(secure_event, &hw_layers_);
   if (err != kErrorNone) {
     return err;
   }

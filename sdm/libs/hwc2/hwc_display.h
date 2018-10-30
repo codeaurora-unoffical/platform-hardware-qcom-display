@@ -175,6 +175,12 @@ class HWCDisplay : public DisplayEventHandler {
     return HWC2::Error::Unsupported;
   }
 
+  virtual HWC2::Error SetDisplayDppsAdROI(uint32_t h_start, uint32_t h_end,
+                                          uint32_t v_start, uint32_t v_end,
+                                          uint32_t factor_in, uint32_t factor_out) {
+    return HWC2::Error::Unsupported;
+  }
+
   // Display Configurations
   virtual int SetActiveDisplayConfig(uint32_t config);
   virtual int GetActiveDisplayConfig(uint32_t *config);
@@ -362,6 +368,8 @@ class HWCDisplay : public DisplayEventHandler {
   uint32_t display_config_ = 0;
   bool config_pending_ = false;
   bool pending_commit_ = false;
+  bool is_cmd_mode_ = false;
+  bool partial_update_enabled_ = false;
 
  private:
   void DumpInputBuffers(void);
@@ -374,7 +382,6 @@ class HWCDisplay : public DisplayEventHandler {
   int null_display_mode_ = 0;
   bool has_client_composition_ = false;
   DisplayValidateState validate_state_ = kNormalValidate;
-  bool partial_update_enabled_ = false;
 };
 
 inline int HWCDisplay::Perform(uint32_t operation, ...) {
