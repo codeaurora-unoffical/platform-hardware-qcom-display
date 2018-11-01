@@ -89,7 +89,6 @@ HWC2::Error HWCLayer::SetLayerCscData(const int64_t *out_csc_coeff,
                                       uint32_t len_of_out_csc_coef,
                                       const uint32_t *out_post_bias,
                                       uint32_t len_of_out_post_bias) {
-  layer_->input_buffer.color_metadata.cscData.usr_csc = false;
   // Ensure all are valid before copying.
   if ((len_of_out_csc_coef == CSC_MATRIX_COEFF_SIZE) &&
       (len_of_out_post_bias == CSC_BIAS_SIZE)) {
@@ -103,7 +102,6 @@ HWC2::Error HWCLayer::SetLayerCscData(const int64_t *out_csc_coeff,
              sizeof(layer_->input_buffer.color_metadata.cscData.post_bias));
       }
 
-      layer_->input_buffer.color_metadata.cscData.usr_csc = true;
       return HWC2::Error::None;
    } else {
       return HWC2::Error::BadParameter;

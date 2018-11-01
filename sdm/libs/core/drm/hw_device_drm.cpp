@@ -774,16 +774,12 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
         } else if (input_buffer->flags.sideband) {
           /* update customized csc data for sideband layer */
           sde_drm_csc_v1 csc_mat = {};
-          //select CSC type
-          sde_drm::DRMCscType csc_type = sde_drm::DRMCscType::kCscYuv2Rgb601L;
-
           //copy new CSC data from layer_buffer
-          if (layer.input_buffer.color_metadata.cscData.usr_csc) {
-            SetUsrCscConfig(layer.input_buffer, &csc_mat);
-            drm_atomic_intf_->Perform(DRMOps::PLANE_SET_CSC_CONFIG, pipe_id, &csc_type, &csc_mat);
-          } else {
-            drm_atomic_intf_->Perform(DRMOps::PLANE_SET_CSC_CONFIG, pipe_id, &csc_type, NULL);
-          }
+          SetUsrCscConfig(layer.input_buffer, &csc_mat);
+
+          //select CSC type for side band case
+          csc_type = sde_drm::DRMCscType::kCscYuv2Rgb601L;
+          drm_atomic_intf_->Perform(DRMOps::PLANE_SET_CSC_CONFIG, pipe_id, &csc_type, &csc_mat);
         }
       }
     }
