@@ -840,6 +840,16 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
 
   hw_layer_info.sync_handle = release_fence;
 
+  /* for null commit case, no src pipe update its sync handle to current release fence because
+   * PostCommit is not called.
+   * close the release fence to avoid fd leak
+   */
+  if (!hw_layer_info.app_layer_count) {
+    DLOGE("none applayer, close release fence %d\n",  release_fence);
+    Sys::close_(hw_layer_info.sync_handle);
+    hw_layer_info.sync_handle = -1;
+  }
+
   return kErrorNone;
 }
 
