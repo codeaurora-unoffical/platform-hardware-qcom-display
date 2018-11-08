@@ -679,6 +679,21 @@ class DisplayInterface {
   virtual DisplayError GetClientTargetSupport(uint32_t width, uint32_t height,
                                               LayerBufferFormat format,
                                               const ColorMetaData &color_metadata) = 0;
+  /*! @brief Method to dynamically set DSI clock rate.
+
+      @param[in] bitclk DSI bit clock in HZ.
+
+      @return \link DisplayError \endlink
+   */
+   virtual DisplayError SetDynamicDSIClock(uint64_t bitclk) = 0;
+
+   /*! @brief Method to get the current DSI clock rate
+
+       @param[out] bitclk DSI bit clock in HZ
+
+       @return \link DisplayError \endlink
+    */
+    virtual DisplayError GetDynamicDSIClock(uint64_t *bitclk) = 0;
 
  protected:
   virtual ~DisplayInterface() { }

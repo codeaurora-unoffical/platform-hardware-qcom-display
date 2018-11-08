@@ -97,6 +97,8 @@ class HWDevice : public HWInterface {
   virtual DisplayError SetScaleLutConfig(HWScaleLutInfo *lut_info);
   virtual DisplayError SetMixerAttributes(const HWMixerAttributes &mixer_attributes);
   virtual DisplayError GetMixerAttributes(HWMixerAttributes *mixer_attributes);
+  virtual DisplayError SetDynamicDSIClock(uint64_t bitclk);
+  virtual DisplayError GetDynamicDSIClock(uint64_t *bitclk);
 
   enum {
     kHWEventVSync,
@@ -121,6 +123,7 @@ class HWDevice : public HWInterface {
   int GetFBNodeIndex(HWDeviceType device_type);
   // Populates HWPanelInfo based on node index
   void PopulateHWPanelInfo();
+  void PopulateBitClkRates();
   void GetHWPanelInfoByNode(int device_node, HWPanelInfo *panel_info);
   void GetHWPanelNameByNode(int device_node, HWPanelInfo *panel_info);
   void GetHWDisplayPortAndMode(int device_node, HWPanelInfo *panel_info);
