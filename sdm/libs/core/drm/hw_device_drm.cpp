@@ -844,7 +844,7 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
    * PostCommit is not called.
    * close the release fence to avoid fd leak
    */
-  if (!hw_layer_info.app_layer_count) {
+  if (!hw_layer_info.app_layer_count && hw_layer_info.sync_handle > 0) {
     DLOGE("none applayer, close release fence %d\n",  release_fence);
     Sys::close_(hw_layer_info.sync_handle);
     hw_layer_info.sync_handle = -1;
