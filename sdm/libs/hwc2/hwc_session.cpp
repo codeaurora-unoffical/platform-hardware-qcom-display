@@ -797,6 +797,11 @@ int32_t HWCSession::SetPowerMode(hwc2_device_t *device, hwc2_display_t display, 
   hwc_session->UpdateVsyncSource();
   hwc_session->HandleConcurrency(display);
 
+  // Trigger refresh for doze mode to take effect.
+  if (mode == HWC2::PowerMode::Doze) {
+    hwc_session->Refresh(display);
+  }
+
   return HWC2_ERROR_NONE;
 }
 
@@ -1709,6 +1714,7 @@ android::status_t HWCSession::QdcmCMDHandler(const android::Parcel *input_parcel
 
   int32_t action = pending_action.action;
   int count = -1;
+  bool invalidate_needed = true;
   while (action > 0) {
     count++;
     int32_t bit = (action & 1);
@@ -1720,7 +1726,10 @@ android::status_t HWCSession::QdcmCMDHandler(const android::Parcel *input_parcel
     DLOGV_IF(kTagQDCM, "pending action = %d, display_id = %d", BITMAP(count), display_id);
     switch (BITMAP(count)) {
     case kInvalidating:
-      Refresh(display_id);
+      {
+        invalidate_needed = false;
+        Refresh(display_id);
+      }
       break;
     case kEnterQDCMMode:
       ret = color_mgr_->EnableQDCMMode(true, hwc_display_[display_id]);
@@ -1821,7 +1830,9 @@ android::status_t HWCSession::QdcmCMDHandler(const android::Parcel *input_parcel
   HWCColorManager::MarshallStructIntoParcel(resp_payload, output_parcel);
   req_payload.DestroyPayload();
   resp_payload.DestroyPayload();
-  hwc_display_[display_id]->ResetValidation();
+  if (invalidate_needed) {
+    hwc_display_[display_id]->ResetValidation();
+  }
 
   return ret;
 }
