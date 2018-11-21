@@ -73,6 +73,11 @@ DisplayError CoreImpl::Init() {
     goto CleanupOnError;
   }
 
+  if (!hw_info_intf_) {
+    DLOGE("invalid hw_info_intf_");
+    goto CleanupOnError;
+  }
+
   error = hw_info_intf_->GetHWResourceInfo(&hw_resource_);
   if (error != kErrorNone) {
     goto CleanupOnError;
