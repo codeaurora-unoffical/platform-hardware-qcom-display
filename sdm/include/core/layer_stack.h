@@ -260,6 +260,9 @@ struct LayerStackFlags {
       uint32_t hdr_present : 1;  //!< Set if stack has HDR content
 
       uint32_t sideband_present : 1; //!< Set if stack has sideband content
+
+      uint32_t client_composited_layer_present : 1;    //!< Set if client composition is requested
+                                                       //!< for any layer in the layer stack
     };
 
     uint32_t flags = 0;               //!< For initialization purpose only.

@@ -371,6 +371,7 @@ void HWCDisplay::BuildLayerStack() {
     layer->flags = {};   // Reset earlier flags
     if (hwc_layer->GetClientRequestedCompositionType() == HWC2::Composition::Client) {
       layer->flags.skip = true;
+      layer_stack_.flags.client_composited_layer_present = true;
     } else if (hwc_layer->GetClientRequestedCompositionType() == HWC2::Composition::SolidColor) {
       layer->flags.solid_fill = true;
     } else if (hwc_layer->GetClientRequestedCompositionType() == HWC2::Composition::Sideband) {
