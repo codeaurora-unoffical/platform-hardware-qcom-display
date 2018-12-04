@@ -417,7 +417,7 @@ DisplayError ResourceDefault::SetMaxMixerStages(Handle display_ctx, uint32_t max
   return kErrorNone;
 }
 
-DisplayError ResourceDefault::UpdateResourceInfo(Handle display_ctx) {
+DisplayError ResourceDefault::UpdateResourceInfo(Handle display_ctx, HWResourceInfo *res_info) {
   SCOPE_LOCK(locker_);
 
   return kErrorNone;

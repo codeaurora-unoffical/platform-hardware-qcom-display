@@ -472,6 +472,12 @@ class DRMManagerInterface {
   virtual void GetCrtcInfo(uint32_t crtc_id, DRMCrtcInfo *info) = 0;
 
   /*
+   * Update capability information of a selected crtc.
+   * [input]: Use crtc id 0 to update system wide info
+   */
+  virtual void UpdateCrtcInfo(uint32_t crtc_id) = 0;
+
+  /*
    * Will provide all the information of a selected connector.
    * [input]: Use conn id 0 to obtain primary connector inforrmation
    * [output]: DRMConnectorInfo: Resource Info for the given connector id

@@ -65,7 +65,7 @@ class ResourceDefault : public ResourceInterface {
   virtual DisplayError SetDetailEnhancerData(Handle display_ctx,
                                              const DisplayDetailEnhancerData &de_data);
   virtual DisplayError Perform(int cmd, ...) { return kErrorNone; }
-  virtual DisplayError UpdateResourceInfo(Handle display_ctx);
+  virtual DisplayError UpdateResourceInfo(Handle display_ctx, HWResourceInfo *res_info);
   DisplayError SetPlaneAvailable(uint32_t plane_id, bool is_available);
 
  private:

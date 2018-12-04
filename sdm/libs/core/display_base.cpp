@@ -532,7 +532,22 @@ DisplayError DisplayBase::UpdateResourceInfo()
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   DisplayError error = kErrorNone;
 
-  error = comp_manager_->UpdateResourceInfo(display_comp_ctx_);
+  if (hw_info_intf_) {
+    HWResourceInfo hw_resource_info = HWResourceInfo();
+    // Update HW resource info first, and next retrieve it.
+    hw_info_intf_->UpdateHWResourceInfo();
+    hw_info_intf_->GetHWResourceInfo(&hw_resource_info);
+    auto max_mixer_stages = hw_resource_info.num_blending_stages;
+    int property_value = Debug::GetMaxPipesPerMixer(display_type_);
+    if (property_value >= 0) {
+      max_mixer_stages = std::min(UINT32(property_value), hw_resource_info.num_blending_stages);
+    }
+
+    hw_resource_info.num_blending_stages = max_mixer_stages;
+    error = comp_manager_->UpdateResourceInfo(display_comp_ctx_, &hw_resource_info);
+
+    DisplayBase::SetMaxMixerStages(max_mixer_stages);
+  }
 
   return error;
 }

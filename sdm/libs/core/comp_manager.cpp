@@ -480,7 +480,7 @@ DisplayError CompManager::SetMaxMixerStages(Handle display_ctx, uint32_t max_mix
   return error;
 }
 
-DisplayError CompManager::UpdateResourceInfo(Handle display_ctx) {
+DisplayError CompManager::UpdateResourceInfo(Handle display_ctx, HWResourceInfo *res_info) {
   SCOPE_LOCK(locker_);
 
   DisplayError error = kErrorNone;
@@ -488,7 +488,8 @@ DisplayError CompManager::UpdateResourceInfo(Handle display_ctx) {
                             reinterpret_cast<DisplayCompositionContext *>(display_ctx);
 
   if (display_comp_ctx) {
-    error = resource_intf_->UpdateResourceInfo(display_comp_ctx->display_resource_ctx);
+    error = resource_intf_->UpdateResourceInfo(display_comp_ctx->display_resource_ctx,
+                                               res_info);
   }
 
   return error;

@@ -43,6 +43,7 @@ class HWInfo: public HWInfoInterface {
  public:
   virtual ~HWInfo() { delete hw_resource_; }
   virtual DisplayError GetHWResourceInfo(HWResourceInfo *hw_resource);
+  virtual DisplayError UpdateHWResourceInfo();
   virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info);
   virtual DisplayError GetDisplayCount(uint32_t *count);
   virtual DisplayError GetDisplayInterfaceTypeByOrder(HWDisplayInterfaceInfo *hw_disp_info_array);

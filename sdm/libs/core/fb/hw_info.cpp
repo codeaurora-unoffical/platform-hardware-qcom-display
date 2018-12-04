@@ -345,6 +345,10 @@ DisplayError HWInfo::GetHWResourceInfo(HWResourceInfo *hw_resource) {
   return kErrorNone;
 }
 
+DisplayError HWInfo::UpdateHWResourceInfo() {
+  return kErrorNone;
+}
+
 DisplayError HWInfo::GetHWRotatorInfo(HWResourceInfo *hw_resource) {
   if (GetMDSSRotatorInfo(hw_resource) != kErrorNone)
     return GetV4L2RotatorInfo(hw_resource);
