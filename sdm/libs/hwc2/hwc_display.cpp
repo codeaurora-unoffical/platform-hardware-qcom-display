@@ -592,12 +592,8 @@ void HWCDisplay::BuildLayerStack() {
     bool hdr_layer = layer->input_buffer.color_metadata.colorPrimaries == ColorPrimaries_BT2020 &&
                      (layer->input_buffer.color_metadata.transfer == Transfer_SMPTE_ST2084 ||
                      layer->input_buffer.color_metadata.transfer == Transfer_HLG);
-    if (hdr_layer && !disable_hdr_handling_  &&
-        GetCurrentColorMode() != ColorMode::NATIVE) {
+    if (hdr_layer && !disable_hdr_handling_) {
       // Dont honor HDR when its handling is disabled
-      // Also, when the color mode is native, it implies that
-      // SF has not correctly set the mode to BT2100_PQ in the presence of an HDR layer
-      // In such cases, we should not handle HDR as the HDR mode isn't applied
       layer->input_buffer.flags.hdr = true;
       layer_stack_.flags.hdr_present = true;
     }
@@ -749,11 +745,6 @@ HWC2::Error HWCDisplay::SetPowerMode(HWC2::PowerMode mode, bool teardown) {
     return HWC2::Error::None;
   }
 
-  if (active_secure_sessions_[kSecureDisplay]) {
-    DLOGW("Changing display power mode not allowed during secure display session");
-    return HWC2::Error::Unsupported;
-  }
-
   switch (mode) {
     case HWC2::PowerMode::Off:
       // During power off, all of the buffers are released.
@@ -763,19 +754,15 @@ HWC2::Error HWCDisplay::SetPowerMode(HWC2::PowerMode mode, bool teardown) {
       if (tone_mapper_) {
         tone_mapper_->Terminate();
       }
-      last_power_mode_ = HWC2::PowerMode::Off;
       break;
     case HWC2::PowerMode::On:
       state = kStateOn;
-      last_power_mode_ = HWC2::PowerMode::On;
       break;
     case HWC2::PowerMode::Doze:
       state = kStateDoze;
-      last_power_mode_ = HWC2::PowerMode::Doze;
       break;
     case HWC2::PowerMode::DozeSuspend:
       state = kStateDozeSuspend;
-      last_power_mode_ = HWC2::PowerMode::DozeSuspend;
       break;
     default:
       return HWC2::Error::BadParameter;
@@ -811,6 +798,7 @@ HWC2::Error HWCDisplay::SetPowerMode(HWC2::PowerMode mode, bool teardown) {
     }
     ::close(release_fence);
   }
+  current_power_mode_ = mode;
   return HWC2::Error::None;
 }
 
@@ -1045,8 +1033,8 @@ HWC2::Error HWCDisplay::SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_lay
   return HWC2::Error::None;
 }
 
-HWC2::PowerMode HWCDisplay::GetLastPowerMode() {
-  return last_power_mode_;
+HWC2::PowerMode HWCDisplay::GetCurrentPowerMode() {
+  return current_power_mode_;
 }
 
 HWC2::Vsync HWCDisplay::GetLastVsyncMode() {
@@ -1075,7 +1063,7 @@ DisplayError HWCDisplay::CECMessage(char *message) {
 DisplayError HWCDisplay::HandleEvent(DisplayEvent event) {
   switch (event) {
     case kIdleTimeout: {
-      SCOPE_LOCK(HWCSession::locker_[type_]);
+      SCOPE_LOCK(HWCSession::locker_[id_]);
       if (pending_commit_) {
         // If idle timeout event comes in between prepare
         // and commit, drop it since device is not really
@@ -1086,18 +1074,18 @@ DisplayError HWCDisplay::HandleEvent(DisplayEvent event) {
       break;
     }
     case kThermalEvent:
-    case kIdlePowerCollapse:
-    case kPanelDeadEvent: {
-      SEQUENCE_WAIT_SCOPE_LOCK(HWCSession::locker_[type_]);
+    case kIdlePowerCollapse: {
+      SEQUENCE_WAIT_SCOPE_LOCK(HWCSession::locker_[id_]);
       validated_ = false;
     } break;
+    case kPanelDeadEvent:
     case kDisplayPowerResetEvent: {
       validated_ = false;
       if (event_handler_) {
         event_handler_->DisplayPowerReset();
       } else {
-        DLOGI("Cannot process kDisplayPowerEventReset (display = %d), event_handler_ is nullptr",
-              type_);
+        DLOGW("Cannot execute DisplayPowerReset (client_id = %d), event_handler_ is nullptr",
+              id_);
       }
     } break;
     default:
@@ -1681,11 +1669,15 @@ int HWCDisplay::SetDisplayStatus(DisplayStatus display_status) {
   switch (display_status) {
     case kDisplayStatusResume:
       display_paused_ = false;
+      status = INT32(SetPowerMode(HWC2::PowerMode::On, false /* teardown */));
+      break;
     case kDisplayStatusOnline:
       status = INT32(SetPowerMode(HWC2::PowerMode::On, false /* teardown */));
       break;
     case kDisplayStatusPause:
       display_paused_ = true;
+      status = INT32(SetPowerMode(HWC2::PowerMode::Off, false /* teardown */));
+      break;
     case kDisplayStatusOffline:
       status = INT32(SetPowerMode(HWC2::PowerMode::Off, false /* teardown */));
       break;
