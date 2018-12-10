@@ -587,11 +587,13 @@ class PPFeaturesConfig {
   // Consumer to call this to retrieve all the TFeatureInfo<T> on the list to be programmed.
   DisplayError RetrieveNextFeature(PPFeatureInfo **feature);
 
-  inline bool IsDirty() { return dirty_; }
+  inline bool IsDirty() { return dirty_ && !locked_; }
   inline void MarkAsDirty() { dirty_ = true; }
+  inline void SetLockState(bool lock_state) { locked_ = lock_state; }
 
  private:
   bool dirty_ = 0;
+  bool locked_ = 0;
   Locker locker_;
   PPFeatureInfo *feature_[kMaxNumPPFeatures];  // reference to TFeatureInfo<T>.
   uint32_t next_idx_ = 0;
