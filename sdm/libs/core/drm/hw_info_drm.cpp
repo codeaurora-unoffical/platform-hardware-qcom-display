@@ -252,6 +252,16 @@ DisplayError HWInfoDRM::GetHWResourceInfo(HWResourceInfo *hw_resource) {
   return kErrorNone;
 }
 
+DisplayError HWInfoDRM::UpdateHWResourceInfo() {
+  DRMCrtcInfo info;
+  drm_mgr_intf_->UpdateCrtcInfo(0); /* Update system info */
+
+  drm_mgr_intf_->GetCrtcInfo(0 /* system_info */, &info);
+  hw_resource_->num_blending_stages = info.max_blend_stages;
+
+  return kErrorNone;
+}
+
 void HWInfoDRM::GetSystemInfo(HWResourceInfo *hw_resource) {
   DRMCrtcInfo info;
   drm_mgr_intf_->GetCrtcInfo(0 /* system_info */, &info);

@@ -75,7 +75,7 @@ class CompManager : public DumpImpl {
   DisplayError SetCompositionState(Handle display_ctx, LayerComposition composition_type,
                                    bool enable);
   DisplayError ControlDpps(bool enable);
-  DisplayError UpdateResourceInfo(Handle display_ctx);
+  DisplayError UpdateResourceInfo(Handle display_ctx, HWResourceInfo *res_info);
   DisplayError SetPlaneAvailable(uint32_t pipe_id, bool is_available);
 
   // DumpImpl method
