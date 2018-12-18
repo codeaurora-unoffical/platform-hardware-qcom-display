@@ -354,6 +354,7 @@ struct DRMConnectorInfo {
   std::vector<std::pair<uint32_t, uint64_t>> formats_supported;
   // Valid only if type is DRM_MODE_CONNECTOR_VIRTUAL
   uint32_t max_linewidth;
+  uint32_t max_blendstages;
 };
 
 /* Identifier token for a display */

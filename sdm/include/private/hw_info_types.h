@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2017, The Linux Foundation. All rights reserved.
+* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -276,6 +276,7 @@ struct HWPanelInfo {
   uint32_t blackness_level = 0;       // Panel's blackness level
   HWColorPrimaries primaries = {};    // WRGB color primaries
   HWPanelOrientation panel_orientation = {};  // Panel Orientation
+  uint32_t max_blendstages = 0;       // Max blend stages per panel
 
   bool operator !=(const HWPanelInfo &panel_info) {
     return ((port != panel_info.port) || (mode != panel_info.mode) ||

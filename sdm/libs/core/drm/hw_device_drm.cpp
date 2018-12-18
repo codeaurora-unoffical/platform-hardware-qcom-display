@@ -531,6 +531,7 @@ void HWDeviceDRM::PopulateHWPanelInfo() {
   hw_panel_info_.max_fps = 60;
   hw_panel_info_.is_primary_panel = (connector_info_.display_order == DRMDisplayOrder::kDRMPrimary);
   hw_panel_info_.is_pluggable = 0;
+  hw_panel_info_.max_blendstages = connector_info_.max_blendstages;
 
   if (!default_mode_) {
     hw_panel_info_.needs_roi_merge = (connector_info_.topology == DRMTopology::DUAL_LM_MERGE);
