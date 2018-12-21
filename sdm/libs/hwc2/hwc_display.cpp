@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -363,6 +363,7 @@ void HWCDisplay::BuildLayerStack() {
   display_rect_ = LayerRect();
   metadata_refresh_rate_ = 0;
   auto working_primaries = ColorPrimaries_BT709_5;
+  bool default_bottom_solid_color = true;
 
   // Add one layer for fb target
   // TODO(user): Add blit target layers
@@ -452,11 +453,17 @@ void HWCDisplay::BuildLayerStack() {
       layer->src_rect.top = 0;
       layer->src_rect.right = layer_buffer->width;
       layer->src_rect.bottom = layer_buffer->height;
+
       // if bottom layer has the same color as border color, skip it
-      if (hwc_layer != *layer_set_.begin() || (layer->solid_fill_color & 0xFFFFFF) != 0) {
-        layer->flags.skip = true;
-        layer_stack_.flags.skip_present = true;
+      if (default_bottom_solid_color) {
+        if ((layer->solid_fill_color & 0xFFFFFF) != 0) {
+          layer->flags.skip = true;
+          layer_stack_.flags.skip_present = true;
+          default_bottom_solid_color = false;
+        }
       }
+    } else {
+      default_bottom_solid_color = false;
     }
 
     if (layer->frame_rate > metadata_refresh_rate_) {
