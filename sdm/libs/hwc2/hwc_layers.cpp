@@ -854,8 +854,9 @@ DisplayError HWCLayer::SetMetaData(const private_handle_t *pvt_handle, Layer *la
     GetUBWCStatsFromMetaData(&cr_stats[0], &(layer_buffer->ubwc_crstats[0]));
   }  // if (getMetaData)
 
-  single_buffer_ = false;
-  getMetaData(const_cast<private_handle_t *>(handle), GET_SINGLE_BUFFER_MODE, &single_buffer_);
+  uint32_t single_buffer = 0;
+  getMetaData(const_cast<private_handle_t *>(handle), GET_SINGLE_BUFFER_MODE, &single_buffer);
+  single_buffer_ = (single_buffer == 1);
 
   // Handle colorMetaData / Dataspace handling now
   ValidateAndSetCSC(handle);
@@ -913,7 +914,8 @@ void HWCLayer::ValidateAndSetCSC(const private_handle_t *handle) {
     }
   }
 
-  if (IsBT2020(layer_buffer->color_metadata.colorPrimaries)) {
+  // Only Video module populates the Color Metadata in handle.
+  if (layer_buffer->flags.video && IsBT2020(layer_buffer->color_metadata.colorPrimaries)) {
      // android_dataspace_t doesnt support mastering display and light levels
      // so retrieve it from metadata for BT2020(HDR)
      use_color_metadata = true;
