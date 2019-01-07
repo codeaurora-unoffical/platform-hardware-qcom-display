@@ -38,7 +38,6 @@
 #include <vector>
 
 #include "hwc_buffer_allocator.h"
-#include "hwc_buffer_sync_handler.h"
 #include "hwc_session.h"
 #include "hwc_debugger.h"
 
@@ -556,7 +555,24 @@ int32_t HWCSession::PresentDisplay(hwc2_device_t *device, hwc2_display_t display
     hwc_session->CreatePluggableDisplays(false);
   }
 
+  hwc_session->HandlePendingRefresh();
+
   return INT32(status);
+}
+
+void HWCSession::HandlePendingRefresh() {
+  if (pending_refresh_.none()) {
+    return;
+  }
+
+  for (size_t i = 0; i < pending_refresh_.size(); i++) {
+    if (pending_refresh_.test(i)) {
+      Refresh(i);
+      // SF refreshes all displays on refresh request.
+      break;
+    }
+  }
+  pending_refresh_.reset();
 }
 
 void HWCSession::MapBuiltInDisplays() {
@@ -797,9 +813,11 @@ int32_t HWCSession::SetPowerMode(hwc2_device_t *device, hwc2_display_t display, 
   hwc_session->UpdateVsyncSource();
   hwc_session->HandleConcurrency(display);
 
-  // Trigger refresh for doze mode to take effect.
   if (mode == HWC2::PowerMode::Doze) {
+    // Trigger refresh for doze mode to take effect.
     hwc_session->Refresh(display);
+    // Trigger one more refresh for PP features to take effect.
+    hwc_session->pending_refresh_.set(UINT32(display));
   }
 
   return HWC2_ERROR_NONE;
@@ -1375,6 +1393,30 @@ android::status_t HWCSession::notifyCallback(uint32_t command, const android::Pa
       output_parcel->writeInt32(getComposerStatus());
       break;
 
+    case qService::IQService::SET_DSI_CLK:
+      if (!input_parcel) {
+        DLOGE("QService command = %d: input_parcel needed.", command);
+        break;
+      }
+      status = SetDsiClk(input_parcel);
+      break;
+
+    case qService::IQService::GET_DSI_CLK:
+      if (!input_parcel || !output_parcel) {
+        DLOGE("QService command = %d: input_parcel and output_parcel needed.", command);
+        break;
+      }
+      status = GetDsiClk(input_parcel, output_parcel);
+      break;
+
+    case qService::IQService::GET_SUPPORTED_DSI_CLK:
+      if (!input_parcel || !output_parcel) {
+        DLOGE("QService command = %d: input_parcel and output_parcel needed.", command);
+        break;
+      }
+      status = GetSupportedDsiClk(input_parcel, output_parcel);
+      break;
+
     default:
       DLOGW("QService command = %d is not supported.", command);
       break;
@@ -1865,6 +1907,45 @@ const char *GetTokenValue(const char *uevent_data, int length, const char *token
     pstr = pstr+strlen(token);
 
   return pstr;
+}
+
+android::status_t HWCSession::SetDsiClk(const android::Parcel *input_parcel) {
+  int disp_id = input_parcel->readInt32();
+  uint64_t clk = UINT32(input_parcel->readInt64());
+  if (disp_id < 0 || !hwc_display_[disp_id]) {
+    return -EINVAL;
+  }
+
+  return hwc_display_[disp_id]->SetDynamicDSIClock(clk);
+}
+
+android::status_t HWCSession::GetDsiClk(const android::Parcel *input_parcel,
+                                        android::Parcel *output_parcel) {
+  int disp_id = input_parcel->readInt32();
+  if (disp_id < 0 || !hwc_display_[disp_id]) {
+    return -EINVAL;
+  }
+
+  uint64_t bitrate = 0;
+  hwc_display_[disp_id]->GetDynamicDSIClock(&bitrate);
+  output_parcel->writeUint64(bitrate);
+  return 0;
+}
+
+android::status_t HWCSession::GetSupportedDsiClk(const android::Parcel *input_parcel,
+                                                 android::Parcel *output_parcel) {
+  int disp_id = input_parcel->readInt32();
+  if (disp_id < 0 || !hwc_display_[disp_id]) {
+    return -EINVAL;
+  }
+
+  std::vector<uint64_t> bit_rates;
+  hwc_display_[disp_id]->GetSupportedDSIClock(&bit_rates);
+  output_parcel->writeInt32(INT32(bit_rates.size()));
+  for (auto &bit_rate : bit_rates) {
+    output_parcel->writeUint64(bit_rate);
+  }
+  return 0;
 }
 
 void HWCSession::UEventHandler(const char *uevent_data, int length) {
