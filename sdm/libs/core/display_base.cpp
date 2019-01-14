@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2017, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -96,6 +96,9 @@ DisplayError DisplayBase::Init() {
     int property_value = Debug::GetMaxPipesPerMixer(display_type_);
     if (property_value >= 0) {
       max_mixer_stages = std::min(UINT32(property_value), hw_resource_info.num_blending_stages);
+    }
+    if (hw_panel_info_.max_blendstages > 0) {
+      max_mixer_stages = std::min(hw_panel_info_.max_blendstages, max_mixer_stages);
     }
     DisplayBase::SetMaxMixerStages(max_mixer_stages);
   }
@@ -533,7 +536,9 @@ DisplayError DisplayBase::UpdateResourceInfo()
     if (property_value >= 0) {
       max_mixer_stages = std::min(UINT32(property_value), hw_resource_info.num_blending_stages);
     }
-
+    if (hw_panel_info_.max_blendstages > 0) {
+      max_mixer_stages = std::min(hw_panel_info_.max_blendstages, max_mixer_stages);
+    }
     hw_resource_info.num_blending_stages = max_mixer_stages;
     error = comp_manager_->UpdateResourceInfo(display_comp_ctx_, &hw_resource_info);
 
