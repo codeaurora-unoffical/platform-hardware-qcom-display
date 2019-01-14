@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -784,6 +784,11 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
       }
     }
   }
+
+  if (!validate) {
+    drm_atomic_intf_->Perform(DRMOps::CRTC_GET_RELEASE_FENCE, token_.crtc_id, &release_fence_);
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_GET_RETIRE_FENCE, token_.conn_id, &retire_fence_);
+  }
 }
 
 DisplayError HWDeviceDRM::Validate(HWLayers *hw_layers) {
@@ -878,11 +883,8 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
     return kErrorHardware;
   }
 
-  int release_fence = -1;
-  int retire_fence = -1;
-
-  drm_atomic_intf_->Perform(DRMOps::CRTC_GET_RELEASE_FENCE, token_.crtc_id, &release_fence);
-  drm_atomic_intf_->Perform(DRMOps::CONNECTOR_GET_RETIRE_FENCE, token_.conn_id, &retire_fence);
+  int release_fence = static_cast<int>(release_fence_);
+  int retire_fence = static_cast<int>(retire_fence_);
 
   HWLayersInfo &hw_layer_info = hw_layers->info;
   LayerStack *stack = hw_layer_info.stack;
