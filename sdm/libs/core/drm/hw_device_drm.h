@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -173,6 +173,8 @@ class HWDeviceDRM : public HWInterface {
   bool enable_pflip_event_ = false;
   void *pflip_user_data_ = {};
   HWDisplayAttributes display_attributes_ = {};
+  int64_t release_fence_ = -1;
+  int64_t retire_fence_ = -1;
   HWMixerAttributes mixer_attributes_ = {};
   sde_drm::DRMManagerInterface *drm_mgr_intf_ = {};
   sde_drm::DRMAtomicReqInterface *drm_atomic_intf_ = {};
