@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2017, 2019 The Linux Foundation. All rights reserved.
  * Not a Contribution
  *
  * Copyright (C) 2010 The Android Open Source Project
@@ -224,6 +224,10 @@ gralloc1_error_t BufferManager::MapBuffer(private_handle_t const *handle) {
 gralloc1_error_t BufferManager::RetainBuffer(private_handle_t const *hnd) {
   std::lock_guard<std::mutex> lock(locker_);
 
+  if (private_handle_t::validate(hnd) != 0) {
+    ALOGE("RetainBuffer: Invalid handle: %p", hnd);
+    return GRALLOC1_ERROR_BAD_HANDLE;
+  }
   // find if this handle is already in map
   auto it = handles_map_.find(hnd->id);
   if (it != handles_map_.end()) {
