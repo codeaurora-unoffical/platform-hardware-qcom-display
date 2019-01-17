@@ -1414,5 +1414,13 @@ DisplayError HWDevice::DumpDebugData() {
   return kErrorNone;
 }
 
+DisplayError HWDevice::SetDynamicDSIClock(uint64_t bit_clk_rate) {
+  return kErrorNotSupported;
+}
+
+DisplayError HWDevice::GetDynamicDSIClock(uint64_t *bit_clk_rate) {
+  return kErrorNotSupported;
+}
+
 }  // namespace sdm
 
