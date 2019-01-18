@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014-2017, 2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -151,7 +151,7 @@ class DisplayBase : public DisplayInterface, DumpImpl {
   Handle hw_device_ = 0;
   Handle display_comp_ctx_ = 0;
   HWLayers hw_layers_;
-  bool pending_commit_ = false;
+  bool needs_validate_ = true;
   bool vsync_enable_ = false;
   bool pflip_enable_ = false;
   uint32_t max_mixer_stages_ = 0;
