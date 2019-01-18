@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2016, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2016, 2019, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -52,8 +52,11 @@ class HWCDisplayExternal : public HWCDisplay {
   HWCDisplayExternal(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
                      HWCCallbacks *callbacks, qService::QService *qservice, DisplayOrder display_order);
   void ApplyScanAdjustment(hwc_rect_t *display_frame);
+  void GetUnderScanConfig();
   static void GetDownscaleResolution(uint32_t primary_width, uint32_t primary_height,
                                      uint32_t *virtual_width, uint32_t *virtual_height);
+  int underscan_width_ = 0;
+  int underscan_height_ = 0;
 };
 
 }  // namespace sdm

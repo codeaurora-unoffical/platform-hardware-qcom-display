@@ -894,7 +894,7 @@ DisplayError HWDeviceDRM::DefaultCommit(HWLayers *hw_layers) {
 
 DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
   DTRACE_SCOPED();
-  SetupAtomic(hw_layers, false /* validate */);
+  SetupAtomic(hw_layers, false /* commit */);
 
   int ret = drm_atomic_intf_->Commit(false /* synchronous */, pflip_user_data_);
   if (ret) {
