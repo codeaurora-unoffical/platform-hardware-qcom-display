@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -87,11 +87,18 @@ class HWCSession : hwc2_device_t, public IDisplayConfig, public qClient::BnQClie
     }
 
     HWCSession *hwc_session = static_cast<HWCSession *>(device);
-    int32_t status = INT32(HWC2::Error::BadDisplay);
+    auto status = HWC2::Error::BadDisplay;
     if (hwc_session->hwc_display_[display]) {
-      status = hwc_session->hwc_display_[display]->CallLayerFunction(layer, member, args...);
+      status = HWC2::Error::BadLayer;
+      auto hwc_layer = hwc_session->hwc_display_[display]->GetHWCLayer(layer);
+      if (hwc_layer != nullptr) {
+        status = (hwc_layer->*member)(std::forward<Args>(args)...);
+        if (hwc_session->hwc_display_[display]->GetGeometryChanges()) {
+          hwc_session->hwc_display_[display]->ResetValidation();
+        }
+      }
     }
-    return status;
+    return INT32(status);
   }
 
   // HWC2 Functions that require a concrete implementation in hwc session
