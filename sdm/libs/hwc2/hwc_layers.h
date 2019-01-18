@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -53,6 +53,7 @@ enum GeometryChanges {
   kZOrder       = 0x040,
   kAdded        = 0x080,
   kRemoved      = 0x100,
+  kBufferGeometry = 0x200,
 };
 
 class HWCLayer {
@@ -92,6 +93,8 @@ class HWCLayer {
   int32_t PopReleaseFence(void);
   bool ValidateAndSetCSC();
   bool SupportLocalConversion(ColorPrimaries working_primaries);
+  void ResetValidation() { needs_validate_ = false; }
+  bool NeedsValidation() { return (needs_validate_ || geometry_changes_); }
 
  private:
   Layer *layer_ = nullptr;
@@ -102,6 +105,7 @@ class HWCLayer {
   std::queue<int32_t> release_fences_;
   HWCBufferAllocator *buffer_allocator_ = NULL;
   int32_t dataspace_ =  HAL_DATASPACE_UNKNOWN;
+  bool needs_validate_ = true;
 
   // Composition requested by client(SF)
   HWC2::Composition client_requested_ = HWC2::Composition::Device;

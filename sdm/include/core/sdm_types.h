@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2017, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2017, 2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -55,6 +55,7 @@ enum DisplayError {
   kErrorShutDown,         //!< Driver is processing shutdown sequence
   kErrorPerfValidation,   //!< Bandwidth or Clock requirement validation failure.
   kErrorNoAppLayers,      //!< No App layer(s) in the draw cycle.
+  kErrorNotValidated,     //!< Draw cycle has not been validated.
 };
 
 /*! @brief This structure is defined for client and library compatibility check purpose only. This

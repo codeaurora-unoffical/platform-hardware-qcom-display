@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -331,11 +331,21 @@ void HWCSession::GetCapabilities(struct hwc2_device *device, uint32_t *outCount,
     return;
   }
 
-  if (outCapabilities != nullptr && *outCount >= 2) {
+  int value = 0;
+  bool disable_skip_validate = false;
+  if (Debug::Get()->GetProperty("sdm.debug.disable_skip_validate", &value) == kErrorNone) {
+    disable_skip_validate = (value == 1);
+  }
+  uint32_t count = 2 + (disable_skip_validate ? 0 : 1);
+
+  if (outCapabilities != nullptr && *outCount >= count) {
     outCapabilities[0] = HWC2_CAPABILITY_SKIP_CLIENT_COLOR_TRANSFORM;
     outCapabilities[1] = HWC2_CAPABILITY_SIDEBAND_STREAM;
+    if (!disable_skip_validate) {
+      outCapabilities[2] = HWC2_CAPABILITY_SKIP_VALIDATE;
+    }
   }
-  *outCount = 2;
+  *outCount = count;
 }
 
 template <typename PFN, typename T>
@@ -427,8 +437,8 @@ void HWCSession::Dump(hwc2_device_t *device, uint32_t *out_size, char *out_buffe
   if (out_buffer == nullptr) {
     *out_size = max_dump_size;
   } else {
-    char sdm_dump[4096];
-    DumpInterface::GetDump(sdm_dump, 4096);  // TODO(user): Fix this workaround
+    char sdm_dump[16384];
+    DumpInterface::GetDump(sdm_dump, 16384);  // TODO(user): Fix this workaround
     std::string s("");
     for (uint32_t id = HWC_DISPLAY_PRIMARY; id < MAX_TOTAL_DISPLAY_NUM; id++) {
       if (hwc_session->hwc_display_[id]) {
@@ -1371,6 +1381,7 @@ android::status_t HWCSession::QdcmCMDHandler(const android::Parcel *input_parcel
   HWCColorManager::MarshallStructIntoParcel(resp_payload, output_parcel);
   req_payload.DestroyPayload();
   resp_payload.DestroyPayload();
+  hwc_display_[display_id]->ResetValidation();
 
   return (ret ? -EINVAL : 0);
 }
