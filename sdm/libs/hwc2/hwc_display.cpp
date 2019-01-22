@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -1002,19 +1002,18 @@ DisplayError HWCDisplay::CECMessage(char *message) {
 
 DisplayError HWCDisplay::HandleEvent(DisplayEvent event) {
   switch (event) {
-    case kIdleTimeout: {
+    case kIdleTimeout:
+    case kIdlePowerCollapse: {
       SCOPE_LOCK(HWCSession::locker_[type_]);
       if (pending_commit_) {
-        // If idle timeout event comes in between prepare
-        // and commit, drop it since device is not really
-        // idle.
+        // If IdleTimeout OR IdlePowerCollapsecomes comes in between
+        // prepare and commit, drop it since device is not really idle.
         return kErrorNotSupported;
       }
       validated_ = false;
       break;
     }
     case kThermalEvent:
-    case kIdlePowerCollapse:
     case kPanelDeadEvent: {
       SEQUENCE_WAIT_SCOPE_LOCK(HWCSession::locker_[type_]);
       validated_ = false;
