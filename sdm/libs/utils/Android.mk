@@ -18,6 +18,9 @@ include $(BUILD_SHARED_LIBRARY)
 
 SDM_HEADER_PATH := ../../include
 include $(CLEAR_VARS)
+ifeq ($(call is-platform-sdk-version-at-least,28),true)
+LOCAL_VENDOR_MODULE           := true
+endif
 LOCAL_COPY_HEADERS_TO         := $(common_header_export_path)/sdm/utils
 LOCAL_COPY_HEADERS             = $(SDM_HEADER_PATH)/utils/constants.h \
                                  $(SDM_HEADER_PATH)/utils/debug.h \

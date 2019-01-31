@@ -2,13 +2,16 @@ LOCAL_PATH := $(call my-dir)
 include $(LOCAL_PATH)/../common.mk
 
 include $(CLEAR_VARS)
+LOCAL_VENDOR_MODULE       := true
 LOCAL_COPY_HEADERS_TO     := $(common_header_export_path)
 LOCAL_COPY_HEADERS        := TonemapFactory.h Tonemapper.h
 include $(BUILD_COPY_HEADERS)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE              := libgpu_tonemapper
+ifeq ($(call is-platform-sdk-version-at-least,28),true)
 LOCAL_VENDOR_MODULE       := true
+endif
 LOCAL_MODULE_TAGS         := optional
 LOCAL_C_INCLUDES          := $(TARGET_OUT_HEADERS)/qcom/display/
 LOCAL_C_INCLUDES          += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include

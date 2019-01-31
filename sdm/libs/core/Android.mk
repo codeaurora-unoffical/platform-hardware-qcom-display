@@ -59,6 +59,9 @@ include $(BUILD_SHARED_LIBRARY)
 
 SDM_HEADER_PATH := ../../include
 include $(CLEAR_VARS)
+ifeq ($(call is-platform-sdk-version-at-least,28),true)
+LOCAL_VENDOR_MODULE           := true
+endif
 LOCAL_COPY_HEADERS_TO         := $(common_header_export_path)/sdm/core
 LOCAL_COPY_HEADERS             = $(SDM_HEADER_PATH)/core/buffer_allocator.h \
                                  $(SDM_HEADER_PATH)/core/buffer_sync_handler.h \
@@ -73,6 +76,9 @@ LOCAL_COPY_HEADERS             = $(SDM_HEADER_PATH)/core/buffer_allocator.h \
 include $(BUILD_COPY_HEADERS)
 
 include $(CLEAR_VARS)
+ifeq ($(call is-platform-sdk-version-at-least,28),true)
+LOCAL_VENDOR_MODULE           := true
+endif
 LOCAL_COPY_HEADERS_TO         := $(common_header_export_path)/sdm/private
 LOCAL_COPY_HEADERS             = $(SDM_HEADER_PATH)/private/color_interface.h \
                                  $(SDM_HEADER_PATH)/private/color_params.h \
