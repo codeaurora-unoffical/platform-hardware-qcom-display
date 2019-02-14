@@ -18,11 +18,17 @@ LOCAL_CFLAGS                  := -Wno-missing-field-initializers -Wno-unused-par
                                  -I $(display_top)/sdm/libs/hwc
 LOCAL_CLANG                   := true
 
+ifeq ($(call is-platform-sdk-version-at-least,28),true)
+LOCAL_SHARED_LIBRARIES        := libsdmcore libqservice libbinder libhardware libhardware_legacy \
+                                 libutils libcutils libsync libqdutils libqdMetaData libdl libdrmutils \
+                                 libsdmutils libc++ liblog libgrallocutils libdl \
+                                 libhidlbase libhidltransport libsidebandstreamhandle
+else
 LOCAL_SHARED_LIBRARIES        := libsdmcore libqservice libbinder libhardware libhardware_legacy \
                                  libutils libcutils libsync libqdutils libqdMetaData libdl libdrmutils \
                                  libpowermanager libsdmutils libc++ liblog libgrallocutils libdl \
                                  libhidlbase libhidltransport libsidebandstreamhandle
-
+endif
 
 ifeq ($(call is-platform-sdk-version-at-least,28),true)
 LOCAL_SHARED_LIBRARIES += vendor.display.config@1.0
