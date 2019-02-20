@@ -492,8 +492,9 @@ class PPFeatureInfo {
   uint32_t feature_id_ = 0;
   uint32_t disp_id_ = 0;
   uint32_t pipe_id_ = 0;
+  PPFeatureInfo *next_ = nullptr;  //node for sibling pointer.
 
-  virtual ~PPFeatureInfo() {}
+  virtual ~PPFeatureInfo() {if (next_) delete next_;}
   virtual void *GetConfigData(void) const = 0;
 };
 
@@ -551,8 +552,27 @@ class PPFeaturesConfig {
   // from ColorManager, containing all physical features to be programmed and also compute
   // metadata/populate into T.
   inline DisplayError AddFeature(uint32_t feature_id, PPFeatureInfo *feature) {
-    if (feature_id < kMaxNumPPFeatures)
-      feature_[feature_id] = feature;
+    if (feature_id < kMaxNumPPFeatures) {
+      if (feature->enable_flags_ & kRightSplitMode) {
+        if (!feature_[feature_id]) {
+          feature_[feature_id] = feature;
+          return kErrorNone;
+        }
+        if (feature_[feature_id]->enable_flags_ & kRightSplitMode) {
+            feature_[feature_id] = feature;
+        } else {
+          if (feature_[feature_id]->next_)
+            delete feature_[feature_id]->next_;
+          feature_[feature_id]->next_ = feature;
+        }
+      } else {
+        if (feature_[feature_id] && (feature_[feature_id]->enable_flags_ & kRightSplitMode)) {
+          feature->next_ = feature_[feature_id];
+          feature_[feature_id] = feature;
+        } else
+          feature_[feature_id] = feature;
+      }
+    }
 
     return kErrorNone;
   }
@@ -567,11 +587,13 @@ class PPFeaturesConfig {
   // Consumer to call this to retrieve all the TFeatureInfo<T> on the list to be programmed.
   DisplayError RetrieveNextFeature(PPFeatureInfo **feature);
 
-  inline bool IsDirty() { return dirty_; }
+  inline bool IsDirty() { return dirty_ && !locked_; }
   inline void MarkAsDirty() { dirty_ = true; }
+  inline void SetLockState(bool lock_state) { locked_ = lock_state; }
 
  private:
   bool dirty_ = 0;
+  bool locked_ = 0;
   Locker locker_;
   PPFeatureInfo *feature_[kMaxNumPPFeatures];  // reference to TFeatureInfo<T>.
   uint32_t next_idx_ = 0;

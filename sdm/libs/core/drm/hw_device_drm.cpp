@@ -1022,7 +1022,35 @@ DisplayError HWDeviceDRM::SetPPFeatures(PPFeaturesConfig *feature_list) {
         DLOGE("GetDrmFeature is not valid for feature %d", feature->feature_id_);
         continue;
       }
-      ret = HWColorManagerDrm::GetDrmFeature[feature->feature_id_](*feature, &kernel_params);
+
+      if (feature->next_) {
+        std::vector<DRMPPFeatureInfo> params_list;
+        uint32_t size = 0;
+
+        while (feature) {
+          ret = HWColorManagerDrm::GetDrmFeature[feature->feature_id_](*feature, &kernel_params);
+          if (ret) {
+            feature = feature->next_;
+            continue;
+          }
+          params_list.push_back(kernel_params);
+          size += kernel_params.payload_size;
+          feature = feature->next_;
+        }
+
+        kernel_params.payload = malloc(size);
+        kernel_params.payload_size = 0;
+
+        for (auto & param : params_list) {
+          memcpy((uint8_t*)kernel_params.payload + kernel_params.payload_size,
+              param.payload, param.payload_size);
+          kernel_params.payload_size += param.payload_size;
+          HWColorManagerDrm::FreeDrmFeatureData(&param);
+        }
+      } else {
+        ret = HWColorManagerDrm::GetDrmFeature[feature->feature_id_](*feature, &kernel_params);
+      }
+
       if (!ret)
         drm_atomic_intf_->Perform(DRMOps::CRTC_SET_POST_PROC, token_.crtc_id, &kernel_params);
       HWColorManagerDrm::FreeDrmFeatureData(&kernel_params);
