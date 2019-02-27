@@ -1576,7 +1576,9 @@ HWC2::Error HWCDisplay::PostCommitLayerStack(int32_t *out_retire_fence) {
     dump_frame_count_--;
     dump_frame_index_++;
   }
-
+  if (geometry_changes_ != GeometryChanges::kNone) {
+    validated_ = false;
+  }
   geometry_changes_ = GeometryChanges::kNone;
   flush_ = false;
 
