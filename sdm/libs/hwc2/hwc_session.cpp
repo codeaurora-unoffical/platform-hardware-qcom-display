@@ -985,7 +985,7 @@ android::status_t HWCSession::HandleSetActiveDisplayConfig(const android::Parcel
   int dpy = input_parcel->readInt32();
   int error = android::BAD_VALUE;
 
-  if (dpy > HWC_DISPLAY_VIRTUAL) {
+  if (dpy < HWC_DISPLAY_PRIMARY || dpy > HWC_DISPLAY_VIRTUAL) {
     return android::BAD_VALUE;
   }
 
@@ -1004,7 +1004,7 @@ android::status_t HWCSession::HandleGetActiveDisplayConfig(const android::Parcel
   int dpy = input_parcel->readInt32();
   int error = android::BAD_VALUE;
 
-  if (dpy > HWC_DISPLAY_VIRTUAL) {
+  if (dpy < HWC_DISPLAY_PRIMARY || dpy > HWC_DISPLAY_VIRTUAL) {
     return android::BAD_VALUE;
   }
 
@@ -1024,7 +1024,7 @@ android::status_t HWCSession::HandleGetDisplayConfigCount(const android::Parcel 
   int dpy = input_parcel->readInt32();
   int error = android::BAD_VALUE;
 
-  if (dpy > HWC_DISPLAY_VIRTUAL) {
+  if (dpy < HWC_DISPLAY_PRIMARY || dpy > HWC_DISPLAY_VIRTUAL) {
     return android::BAD_VALUE;
   }
 
