@@ -692,8 +692,9 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
         } else {
           drm_atomic_intf_->Perform(DRMOps::PLANE_SET_FB_SECURE_MODE, pipe_id, SDE_DRM_FB_NON_SEC);
         }
-
-        drm_atomic_intf_->Perform(DRMOps::PLANE_SET_ROTATION, pipe_id, rot_bit_mask);
+        // Observed display not up while setting this rotation property to the pipe in
+        // Talos LE target. Worked fine after commenting below plane rotation property
+        //drm_atomic_intf_->Perform(DRMOps::PLANE_SET_ROTATION, pipe_id, rot_bit_mask);
         drm_atomic_intf_->Perform(DRMOps::PLANE_SET_H_DECIMATION, pipe_id,
                                   pipe_info->horizontal_decimation);
         drm_atomic_intf_->Perform(DRMOps::PLANE_SET_V_DECIMATION, pipe_id,
