@@ -276,6 +276,7 @@ void CompManager::PrepareStrategyConstraints(Handle comp_handle, HWLayers *hw_la
 }
 
 void CompManager::PrePrepare(Handle display_ctx, HWLayers *hw_layers) {
+  DTRACE_SCOPED();
   SCOPE_LOCK(locker_);
   DisplayCompositionContext *display_comp_ctx =
                              reinterpret_cast<DisplayCompositionContext *>(display_ctx);
@@ -290,6 +291,7 @@ void CompManager::PrePrepare(Handle display_ctx, HWLayers *hw_layers) {
 }
 
 DisplayError CompManager::Prepare(Handle display_ctx, HWLayers *hw_layers) {
+  DTRACE_SCOPED();
   SCOPE_LOCK(locker_);
 
   DisplayCompositionContext *display_comp_ctx =
@@ -330,6 +332,7 @@ DisplayError CompManager::Prepare(Handle display_ctx, HWLayers *hw_layers) {
 }
 
 DisplayError CompManager::PostPrepare(Handle display_ctx, HWLayers *hw_layers) {
+  DTRACE_SCOPED();
   SCOPE_LOCK(locker_);
   DisplayCompositionContext *display_comp_ctx =
                              reinterpret_cast<DisplayCompositionContext *>(display_ctx);
@@ -347,6 +350,7 @@ DisplayError CompManager::PostPrepare(Handle display_ctx, HWLayers *hw_layers) {
 }
 
 DisplayError CompManager::Commit(Handle display_ctx, HWLayers *hw_layers) {
+  DTRACE_SCOPED();
   SCOPE_LOCK(locker_);
 
   DisplayCompositionContext *display_comp_ctx =
@@ -356,6 +360,7 @@ DisplayError CompManager::Commit(Handle display_ctx, HWLayers *hw_layers) {
 }
 
 DisplayError CompManager::ReConfigure(Handle display_ctx, HWLayers *hw_layers) {
+  DTRACE_SCOPED();
   SCOPE_LOCK(locker_);
 
   DisplayCompositionContext *display_comp_ctx =
@@ -379,6 +384,7 @@ DisplayError CompManager::ReConfigure(Handle display_ctx, HWLayers *hw_layers) {
 }
 
 DisplayError CompManager::PostCommit(Handle display_ctx, HWLayers *hw_layers) {
+  DTRACE_SCOPED();
   SCOPE_LOCK(locker_);
 
   DisplayError error = kErrorNone;
@@ -404,6 +410,7 @@ DisplayError CompManager::PostCommit(Handle display_ctx, HWLayers *hw_layers) {
 }
 
 void CompManager::Purge(Handle display_ctx) {
+  DTRACE_SCOPED();
   SCOPE_LOCK(locker_);
 
   DisplayCompositionContext *display_comp_ctx =
@@ -477,6 +484,7 @@ DisplayError CompManager::SetMaxMixerStages(Handle display_ctx, uint32_t max_mix
 }
 
 void CompManager::ControlPartialUpdate(Handle display_ctx, bool enable) {
+  DTRACE_SCOPED();
   SCOPE_LOCK(locker_);
 
   DisplayCompositionContext *display_comp_ctx =

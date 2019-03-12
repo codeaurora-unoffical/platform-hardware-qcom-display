@@ -323,6 +323,7 @@ DisplayError HWEventsDRM::RegisterVBlankPFlip(){
 }
 
 DisplayError HWEventsDRM::RequestVBlankEvent(drmVBlank *vbl) {
+  DTRACE_SCOPED();
   int error = drmWaitVBlank(poll_fds_[vsync_index_].fd, vbl);
   if (error < 0) {
     DLOGE("drmWaitVBlank failed with err %d", errno);
@@ -340,6 +341,7 @@ DisplayError HWEventsDRM::RequestPageFlip(uint32_t crtc_id,
 }
 
 void HWEventsDRM::HandleVSync(char *data) {
+  DTRACE_SCOPED();
   if (poll_fds_[vsync_index_].revents & (POLLIN | POLLPRI)) {
     drmEventContext event = {};
     event.version = DRM_EVENT_CONTEXT_VERSION;

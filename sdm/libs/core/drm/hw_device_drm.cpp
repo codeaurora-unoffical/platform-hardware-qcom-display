@@ -601,6 +601,7 @@ DisplayError HWDeviceDRM::PowerOn() {
 }
 
 DisplayError HWDeviceDRM::PowerOff() {
+  DTRACE_SCOPED();
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, DRMPowerMode::OFF);
   drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 0);
   int ret = drm_atomic_intf_->Commit(false /* synchronous */);
@@ -612,6 +613,7 @@ DisplayError HWDeviceDRM::PowerOff() {
 }
 
 DisplayError HWDeviceDRM::Doze() {
+  DTRACE_SCOPED();
   drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, DRMPowerMode::DOZE);
   return kErrorNone;
 }
