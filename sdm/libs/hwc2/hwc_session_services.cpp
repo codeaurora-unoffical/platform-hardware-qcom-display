@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -289,7 +289,8 @@ int32_t HWCSession::MinHdcpEncryptionLevelChanged(int disp_id, uint32_t min_enc_
 
   DLOGI("Display %d", disp_id);
 
-  if (disp_id < 0) {
+  if ((disp_id < HWC_DISPLAY_PRIMARY ) || (disp_id >= MAX_TOTAL_DISPLAY_NUM)) {
+    DLOGE("Invalid display = %d", disp_id);
     return -EINVAL;
   }
 
@@ -320,7 +321,8 @@ Return<int32_t> HWCSession::refreshScreen() {
 int32_t HWCSession::ControlPartialUpdate(int disp_id, bool enable) {
   SCOPE_LOCK(locker_);
 
-  if (disp_id < 0) {
+  if ((disp_id < HWC_DISPLAY_PRIMARY ) || (disp_id >= MAX_TOTAL_DISPLAY_NUM)) {
+    DLOGE("Invalid display = %d", disp_id);
     return -EINVAL;
   }
 
