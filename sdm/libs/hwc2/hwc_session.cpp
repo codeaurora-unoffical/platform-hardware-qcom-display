@@ -169,6 +169,29 @@ int HWCSession::Init() {
 
   InitDisplaySlots();
 
+#if defined(DISPLAY_CONFIG_1_2) && defined(CONFIG_BASEID_FROM_PROP)
+  char indices[kPropertyMax];
+  uint32_t index_start, index_size;
+  if (Debug::Get()->GetProperty(BUILTIN_BASEID_AND_SIZE_PROP, indices) == kErrorNone) {
+    if (std::sscanf(indices, "%d,%d", &index_start, &index_size) == 2) {
+      setDisplayIndex(IDisplayConfig::DisplayTypeExt::DISPLAY_BUILTIN,
+               index_start, index_size);
+    }
+  }
+  if (Debug::Get()->GetProperty(PLUGGABLE_BASEID_AND_SIZE_PROP, indices) == kErrorNone) {
+    if (std::sscanf(indices, "%d,%d", &index_start, &index_size) == 2) {
+      setDisplayIndex(IDisplayConfig::DisplayTypeExt::DISPLAY_PLUGGABLE,
+               index_start, index_size);
+    }
+  }
+  if (Debug::Get()->GetProperty(VIRTUAL_BASEID_AND_SIZE_PROP, indices) == kErrorNone) {
+    if (std::sscanf(indices, "%d,%d", &index_start, &index_size) == 2) {
+      setDisplayIndex(IDisplayConfig::DisplayTypeExt::DISPLAY_VIRTUAL,
+               index_start, index_size);
+    }
+  }
+#endif
+
   // Start QService and connect to it.
   qService::QService::init();
   android::sp<qService::IQService> iqservice = android::interface_cast<qService::IQService>(
@@ -185,6 +208,7 @@ int HWCSession::Init() {
   StartServices();
   HWCDebugHandler::Get()->GetProperty(ENABLE_NULL_DISPLAY_PROP, &null_display_mode_);
   HWCDebugHandler::Get()->GetProperty(DISABLE_HOTPLUG_BWCHECK, &disable_hotplug_bwcheck_);
+  HWCDebugHandler::Get()->GetProperty(DISABLE_MASK_LAYER_HINT, &disable_mask_layer_hint_);
   DisplayError error = kErrorNone;
 
   HWDisplayInterfaceInfo hw_disp_info = {};
@@ -2614,7 +2638,7 @@ int HWCSession::HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool d
   hwc2_display_t active_builtin_disp_id = GetActiveBuiltinDisplay();
   if (active_builtin_disp_id < kNumDisplays) {
     {
-      SCOPE_LOCK(locker_[active_builtin_disp_id]);
+      SEQUENCE_WAIT_SCOPE_LOCK(locker_[active_builtin_disp_id]);
       hwc_display_[active_builtin_disp_id]->ResetValidation();
     }
 
@@ -2678,6 +2702,10 @@ void HWCSession::DestroyPluggableDisplay(DisplayMapInfo *map_info) {
 
   DLOGI("Notify hotplug display disconnected: client id = %d", client_id);
   callbacks_.Hotplug(client_id, HWC2::Connection::Disconnected);
+
+  // Trigger refresh to make sure disconnect event received/updated properly by SurfaceFlinger.
+  Refresh(HWC_DISPLAY_PRIMARY);
+
   // wait for sufficient time to ensure sufficient resources are available to process
   // connection.
   usleep(UINT32(GetVsyncPeriod(HWC_DISPLAY_PRIMARY)) * 2 / 1000);
