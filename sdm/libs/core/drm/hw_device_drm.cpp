@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -32,6 +32,7 @@
 #include <ctype.h>
 #include <drm/drm_fourcc.h>
 #include <drm_lib_loader.h>
+#include <drm/msm_drm_pp.h>
 #include <drm_master.h>
 #include <drm_res_mgr.h>
 #include <fcntl.h>
@@ -60,6 +61,7 @@
 #include "hw_device_drm.h"
 #include "hw_info_interface.h"
 #include "hw_color_manager_drm.h"
+#include "qdcm/inc/disp_color_apis.h"
 
 #define __CLASS__ "HWDeviceDRM"
 
@@ -1003,6 +1005,47 @@ DisplayError HWDeviceDRM::GetPPFeaturesVersion(PPFeatureVersion *vers) {
     vers->version[i] = HWColorManagerDrm::GetFeatureVersion(info);
   }
 
+  return kErrorNone;
+}
+
+DisplayError HWDeviceDRM::GetGlobalPAConfig(const PPDisplayAPIPayload &in_payload,
+                                              struct disp_pa_config *config) {
+  DRMPPFeatureInfo kernel_params = {};
+  struct drm_msm_pa_hsic *mdp_hsic;
+
+  mdp_hsic = new drm_msm_pa_hsic();
+  if (!mdp_hsic) {
+    DLOGE("Failed to allocate memory for pa hsic");
+    return kErrorMemory;
+  }
+
+  if (config->flags == PA_TARGET_SPLIT_DISP_LEFT_ONLY) {
+    mdp_hsic->flags = PA_HSIC_LEFT_DISPLAY_ONLY;
+  } else if (config->flags == PA_TARGET_SPLIT_DISP_RIGHT_ONLY) {
+    mdp_hsic->flags = PA_HSIC_RIGHT_DISPLAY_ONLY;
+  } else {
+     DLOGE("Invalid flag requested\n");
+     delete mdp_hsic;
+     return kErrorParameters;
+  }
+
+  kernel_params.id = sde_drm::kFeaturePaV2Read;
+  kernel_params.type = sde_drm::kPropBlob;
+  kernel_params.version = PPFeatureVersion::kSDEPaV17;
+  kernel_params.payload_size = sizeof(drm_msm_pa_hsic);
+  kernel_params.payload = mdp_hsic;
+
+  drm_atomic_intf_->Perform(DRMOps::CRTC_GET_POST_PROC, token_.crtc_id, &kernel_params);
+
+  if (kernel_params.payload) {
+     mdp_hsic = (struct drm_msm_pa_hsic *) kernel_params.payload;
+     config->data.hue = (int32_t) mdp_hsic->hue;
+     config->data.saturation = (float) mdp_hsic->saturation;
+     config->data.value = (float) mdp_hsic->value;
+     config->data.contrast = (float) mdp_hsic->contrast;
+  }
+
+  delete mdp_hsic;
   return kErrorNone;
 }
 

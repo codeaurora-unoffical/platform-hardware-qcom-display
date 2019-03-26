@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -78,6 +78,8 @@ class HWDeviceDRM : public HWInterface {
   virtual DisplayError Commit(HWLayers *hw_layers);
   virtual DisplayError Flush();
   virtual DisplayError GetPPFeaturesVersion(PPFeatureVersion *vers);
+  virtual DisplayError GetGlobalPAConfig(const PPDisplayAPIPayload &in_payload,
+                                     struct disp_pa_config *config);
   virtual DisplayError SetPPFeatures(PPFeaturesConfig *feature_list);
   // This API is no longer supported, expectation is to call the correct API on HWEvents
   virtual DisplayError SetVSyncState(bool enable);

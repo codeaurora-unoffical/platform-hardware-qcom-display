@@ -1,4 +1,4 @@
-/* Copyright (c) 2015-2016, The Linux Foundataion. All rights reserved.
+/* Copyright (c) 2015-2016, 2019, The Linux Foundataion. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -32,6 +32,7 @@
 
 #include "core/sdm_types.h"
 #include "color_params.h"
+#include "qdcm/inc/disp_color_apis.h"
 
 namespace sdm {
 
@@ -53,6 +54,11 @@ typedef DisplayError (*DestroyColorInterface)(DisplayType type);
 
 class ColorInterface {
  public:
+  virtual DisplayError ColorGetRequestedFlag(const PPDisplayAPIPayload &in_payload,
+                                             uint32_t *flag);
+  virtual DisplayError ColorUpdateGlobalPACponfig(const PPDisplayAPIPayload &in_payload,
+                                                 struct disp_pa_config *config);
+
   virtual DisplayError ColorSVCRequestRoute(const PPDisplayAPIPayload &in_payload,
                                             PPDisplayAPIPayload *out_payload,
                                             PPFeaturesConfig *out_features,
