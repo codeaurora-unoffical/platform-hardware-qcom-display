@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -167,6 +167,12 @@ enum struct DRMOps {
    *      DRMPPFeatureInfo * - PP feature data pointer
    */
   CRTC_SET_POST_PROC,
+  /*
+   * Op: Get PP feature
+   * Arg: uint32_t - CRTC ID
+   *      DRMPPFeatureInfo * - PP feature data pointer
+   */
+  CRTC_GET_POST_PROC,
   /*
    * Op: Sets Secure level on CRTC
    * Arg: uint32_t - CRTC ID
@@ -366,6 +372,7 @@ enum DRMPPFeatureID {
   kFeatureDither,
   kFeatureGamut,
   kFeaturePADither,
+  kFeaturePaV2Read,
   kPPFeaturesMax,
 };
 

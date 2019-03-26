@@ -1,4 +1,4 @@
-/* Copyright (c) 2015 - 2016, The Linux Foundataion. All rights reserved.
+/* Copyright (c) 2015 - 2016, 2019, The Linux Foundataion. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -32,6 +32,7 @@
 #include <utils/constants.h>
 #include <utils/debug.h>
 #include "color_manager.h"
+#include "qdcm/inc/disp_color_apis.h"
 
 #define __CLASS__ "ColorManager"
 
@@ -153,6 +154,32 @@ DisplayError ColorManagerProxy::ColorSVCRequestRoute(const PPDisplayAPIPayload &
                                                      PPDisplayAPIPayload *out_payload,
                                                      PPPendingParams *pending_action) {
   DisplayError ret = kErrorNone;
+  uint32_t req_id = 0;
+  struct disp_pa_config config;
+  uint32_t flag = 0;
+
+  if (in_payload.payload) {
+     req_id = *reinterpret_cast<const uint32_t *>(in_payload.payload);
+  }
+
+  if (req_id == DISP_APIS_GET_GLOBAL_PA_CONFIG + DISP_APIS_OFFSET) {
+
+    ret = color_intf_->ColorGetRequestedFlag(in_payload, &flag);
+    if (ret != kErrorNone) {
+     DLOGW("unable to read requested flag %d\n", ret);
+     return ret;
+    }
+
+    config.flags = flag;
+
+    ret = hw_intf_->GetGlobalPAConfig(in_payload, &config);
+    if (ret != kErrorNone) {
+     DLOGE("invalid parameters, error %d\n", ret);
+     return ret;
+    }
+
+    ret = color_intf_->ColorUpdateGlobalPACponfig(in_payload, &config);
+  }
 
   // On completion, dspp_features_ will be populated and mark dirty with all resolved dspp
   // feature list with paramaters being transformed into target requirement.

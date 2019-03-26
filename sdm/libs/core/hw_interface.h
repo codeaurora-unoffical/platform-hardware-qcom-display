@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2018, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -99,6 +99,8 @@ class HWInterface {
   virtual DisplayError Commit(HWLayers *hw_layers) = 0;
   virtual DisplayError Flush() = 0;
   virtual DisplayError GetPPFeaturesVersion(PPFeatureVersion *vers) = 0;
+  virtual DisplayError GetGlobalPAConfig(const PPDisplayAPIPayload &in_payload,
+                                     struct disp_pa_config *config) = 0;
   virtual DisplayError SetPPFeatures(PPFeaturesConfig *feature_list) = 0;
   virtual DisplayError SetVSyncState(bool enable) = 0;
   virtual void SetPageFlipState(bool enable, void *user_data) = 0;

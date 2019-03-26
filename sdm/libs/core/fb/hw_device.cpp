@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2018, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -1164,6 +1164,11 @@ DisplayError HWDevice::SetCursorPosition(HWLayers *hw_layers, int x, int y) {
 
 DisplayError HWDevice::GetPPFeaturesVersion(PPFeatureVersion *vers) {
   return kErrorNotSupported;
+}
+
+DisplayError HWDevice::GetGlobalPAConfig(const PPDisplayAPIPayload &in_payload,
+                                     struct disp_pa_config *config) {
+    return kErrorNotSupported;
 }
 
 DisplayError HWDevice::SetPPFeatures(PPFeaturesConfig *feature_list) {

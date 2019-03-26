@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2016, 2018 The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2016, 2018-2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -79,6 +79,8 @@ class HWDevice : public HWInterface {
   virtual DisplayError Commit(HWLayers *hw_layers);
   virtual DisplayError Flush();
   virtual DisplayError GetPPFeaturesVersion(PPFeatureVersion *vers);
+  virtual DisplayError GetGlobalPAConfig(const PPDisplayAPIPayload &in_payload,
+                                     struct disp_pa_config *config);
   virtual DisplayError SetPPFeatures(PPFeaturesConfig *feature_list);
   virtual DisplayError SetVSyncState(bool enable);
   virtual void SetPageFlipState(bool enable, void *user_data);
