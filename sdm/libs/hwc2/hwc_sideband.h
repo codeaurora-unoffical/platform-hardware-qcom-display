@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2018, The Linux Foundation. All rights reserved.
+* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -67,9 +67,16 @@ struct color_data_pack {
     uint32_t post_bias[CSC_BIAS_SIZE];
   };
 
+  struct SidebandHandlePtr : public android::LightRefBase<SidebandHandlePtr> {
+    android::SidebandHandleBase *mHandle = nullptr;
+    explicit SidebandHandlePtr(android::SidebandHandleBase *base) : mHandle(base) {}
+    ~SidebandHandlePtr(void) { delete mHandle; }
+    android::SidebandHandleBase *get() const { return mHandle; }
+  };
+
   struct SidebandStreamBuf : public android::LightRefBase<SidebandStreamBuf> {
     private_handle_t *mSBHandle = nullptr;
-    android::SidebandHandleBase *mHandle = nullptr;
+    android::sp<SidebandHandlePtr> mHandle;
     int32_t mIdx = 0;
     ~SidebandStreamBuf(void);
   };
@@ -102,10 +109,11 @@ struct color_data_pack {
     Locker mSidebandLock_;
     HWCSidebandStreamSession *mSession = NULL;
     native_handle_t *mNativeHandle = NULL;
-    android::SidebandHandleBase *sb_nativeHandle_ = NULL;
+    android::sp<SidebandHandlePtr> sb_nativeHandle_;
     android::sp<SidebandStreamBuf> mStreamBuf_;
     std::unordered_set<hwc2_display_t> mDisplays;
     uint32_t displayMask_ = 0;
+    uint32_t displayValidateMask_ = 0;
     uint32_t pendingMask_ = 0;
     bool enableBackpressure_ = true;
     pthread_t sideband_thread_ = {};

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2018, The Linux Foundation. All rights reserved.
+* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -41,8 +41,8 @@
 namespace sdm {
 
 SidebandStreamBuf::~SidebandStreamBuf(void) {
-  if (mHandle) {
-    mHandle->releaseBuffer(mIdx);
+  if (mHandle != nullptr) {
+    mHandle->get()->releaseBuffer(mIdx);
     delete mSBHandle;
   }
 }
@@ -58,10 +58,10 @@ HWCSidebandStream::HWCSidebandStream(HWCSidebandStreamSession *session, buffer_h
 
   android::SidebandStreamHandle * sidebandHandle = SidebandStreamLoader::GetSidebandStreamHandle();
   if (sidebandHandle && sidebandHandle->mHandleConsumer) {
-    sb_nativeHandle_ = sidebandHandle->mHandleConsumer(mNativeHandle);
-    if (sb_nativeHandle_) {
+    sb_nativeHandle_ = new SidebandHandlePtr(sidebandHandle->mHandleConsumer(mNativeHandle));
+    if (sb_nativeHandle_ != nullptr) {
       if (pthread_create(&sideband_thread_, NULL, &SidebandStreamThread, this) < 0) {
-        DLOGE("Failed to start thread %p\n", sb_nativeHandle_);
+        DLOGE("Failed to start thread %p\n", sb_nativeHandle_->get());
       }
     } else {
       DLOGE("Failed to create SidebandStream consumer");
@@ -78,8 +78,7 @@ HWCSidebandStream::~HWCSidebandStream() {
   mSidebandLock_.Unlock();
   pthread_join(sideband_thread_, NULL);
   mStreamBuf_ = nullptr;
-  if (sb_nativeHandle_)
-    delete sb_nativeHandle_;
+  sb_nativeHandle_ = nullptr;
   native_handle_close(mNativeHandle);
   native_handle_delete(mNativeHandle);
 }
@@ -89,7 +88,9 @@ int32_t HWCSidebandStream::AddLayer(hwc2_layer_t layer, hwc2_display_t display) 
   if (!mLayers.count(layer)) {
     mLayers[layer] = display;
     displayMask_ |= (1 << display);
+    displayValidateMask_ |= (1 << display);
     mDisplays.insert(display);
+    return 1;
   }
   return 0;
 }
@@ -104,12 +105,14 @@ int32_t HWCSidebandStream::RemoveLayer(hwc2_layer_t layer) {
         mSidebandLock_.Signal();
     }
     mLayers.erase(iter);
+    displayValidateMask_ = 0;
     displayMask_ = 0;
     mDisplays.clear();
     if (mLayers.size() == 0) {
       return HWC2_ERROR_NO_RESOURCES;
     }
     for (auto & layer : mLayers) {
+      displayValidateMask_ |= (1 << layer.second);
       displayMask_ |= (1 << layer.second);
       mDisplays.insert(layer.second);
     }
@@ -264,9 +267,9 @@ void *HWCSidebandStream::SidebandThreadHandler(void) {
   int width, height, buf_idx, buf_fd, format;
   unsigned int size;
 
-  width = sb_nativeHandle_->getBufferWidth();
-  height = sb_nativeHandle_->getBufferHeight();
-  size = (unsigned int)sb_nativeHandle_->getBufferSize();
+  width = sb_nativeHandle_->get()->getBufferWidth();
+  height = sb_nativeHandle_->get()->getBufferHeight();
+  size = (unsigned int)sb_nativeHandle_->get()->getBufferSize();
 
   while (!sideband_thread_exit_) {
     if (CheckBuffer() == HWC2_ERROR_NOT_VALIDATED) {
@@ -277,7 +280,7 @@ void *HWCSidebandStream::SidebandThreadHandler(void) {
     /* Process input chroma data */
     color_data_pack_.color_dirty = false;
     android::color_data_t color_data;
-    if(sb_nativeHandle_->getColorData(&color_data) != SETTING_NO_DATA_CHANGE){
+    if(sb_nativeHandle_->get()->getColorData(&color_data) != SETTING_NO_DATA_CHANGE){
       DLOGI("getColorData %d, %f, %f, %f, %f, %f, %f", color_data.flags, color_data.hue,
                                                        color_data.saturation,
                                                        color_data.tone_cb,
@@ -300,11 +303,11 @@ void *HWCSidebandStream::SidebandThreadHandler(void) {
       color_data_pack_.brightness = (float)color_data.brightness;
     }
 
-    result = sb_nativeHandle_->acquireBuffer(&buf_idx, 50);
+    result = sb_nativeHandle_->get()->acquireBuffer(&buf_idx, 50);
     if (result==android::NO_ERROR ){
       android::sp<SidebandStreamBuf> ptr = new SidebandStreamBuf;
-      buf_fd = sb_nativeHandle_->getBufferFd(buf_idx);
-      format = sb_nativeHandle_->getColorFormat();
+      buf_fd = sb_nativeHandle_->get()->getBufferFd(buf_idx);
+      format = sb_nativeHandle_->get()->getColorFormat();
 
 #if USE_GRALLOC1
       ptr->mSBHandle = new private_handle_t(buf_fd,
@@ -380,6 +383,7 @@ int32_t HWCSidebandStreamSession::SetLayerSidebandStream(hwc2_display_t display,
                                   hwc2_layer_t layer, buffer_handle_t stream) {
   int32_t stream_id;
   HWCSidebandStream *stm;
+  int new_layer;
 
   if (android::SidebandHandleBase::validate(stream))
     return HWC2_ERROR_NOT_VALIDATED;
@@ -402,12 +406,32 @@ int32_t HWCSidebandStreamSession::SetLayerSidebandStream(hwc2_display_t display,
   native_handle_delete(native_handle);
 
   //try to add new layer as a listner to this sideband stream
-  stm->AddLayer(layer, display);
+  new_layer = stm->AddLayer(layer, display);
 
   //pickup most recent sideband stream buffer
   android::sp<SidebandStreamBuf> buf = stm->GetBuffer();
   if (buf != nullptr) {
     HWCSession::CallLayerFunction(hwc_session, display, layer, &HWCLayer::SetLayerSidebandStream, buf);
+  }
+
+  //destroy previous stream attached to the same layer
+  if (new_layer) {
+    std::vector<int32_t> removeList;
+    for (auto & sbstream : mSidebandStreamList) {
+      if (sbstream.second != stm &&
+          sbstream.second->RemoveLayer(layer) == HWC2_ERROR_NO_RESOURCES) {
+        removeList.push_back(sbstream.first);
+      }
+    }
+
+    // there is no need to hold the session locker
+    hwc_session->locker_.Unlock();
+    for (auto stream_id : removeList) {
+      auto sbstream = mSidebandStreamList[stream_id];
+      mSidebandStreamList.erase(stream_id);
+      delete sbstream;
+    }
+    hwc_session->locker_.Lock();
   }
 
   return HWC2_ERROR_NONE;
@@ -439,8 +463,9 @@ int32_t HWCSidebandStreamSession::UpdateSidebandStream(HWCSidebandStream * stm) 
   int64_t span;
   color_data_pack color_data_pack_;
   csc_mat csc_mat;
-
   SCOPE_LOCK(hwc_session->locker_);
+  auto status = HWC2::Error::None;
+  uint32_t validateMask = stm->displayValidateMask_;
 
   memcpy(&color_data_pack_, &stm->color_data_pack_, sizeof(color_data_pack_));
 
@@ -457,15 +482,6 @@ int32_t HWCSidebandStreamSession::UpdateSidebandStream(HWCSidebandStream * stm) 
                                                           csc_mat.post_bias,
                                                           CSC_BIAS_SIZE);
     }
-  }
-
-  // if there are more than one streams, go back to surfaceflinger
-  if (mSidebandStreamList.size() > 1) {
-    for (auto & display : stm->mDisplays) {
-      hwc_session->Refresh(display);
-    }
-    stm->GetBuffer();
-    goto wait_present;
   }
 
   // if present start, return immediately
@@ -486,15 +502,17 @@ int32_t HWCSidebandStreamSession::UpdateSidebandStream(HWCSidebandStream * stm) 
     hwc2_layer_t layer = pair.first;
     hwc2_display_t display = pair.second;
     HWCSession::CallLayerFunction(hwc_session, display, layer, &HWCLayer::SetLayerSidebandStream, stm->GetBuffer());
+    stm->displayValidateMask_ &= ~(1 << display );
+  }
+
+  if (validateMask) {
+    for (auto & display : stm->mDisplays) {
+      hwc_session->Refresh(display);
+    }
+    goto wait_present;
   }
 
   for (auto & display : stm->mDisplays) {
-    uint32_t num_types, num_requests;
-    auto status = hwc_session->hwc_display_[display]->Validate(&num_types, &num_requests);
-    if (status != HWC2::Error::None) {
-      goto next;
-    }
-
     int32_t retire_fence;
     status = hwc_session->hwc_display_[display]->Present(&retire_fence);
     if (status != HWC2::Error::None) {
