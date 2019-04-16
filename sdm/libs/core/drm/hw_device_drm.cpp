@@ -1480,8 +1480,15 @@ DisplayError HWDeviceDRM::SetMixerAttributes(const HWMixerAttributes &mixer_attr
 
   mixer_attributes_ = mixer_attributes;
   mixer_attributes_.split_left = mixer_attributes_.width;
+  mixer_attributes_.split_type = kNoSplit;
   if (display_attributes_[index].is_device_split) {
     mixer_attributes_.split_left = UINT32(FLOAT(mixer_attributes.width) * mixer_split_ratio);
+    mixer_attributes_.split_type = kDualSplit;
+    if (display_attributes_[index].topology == kQuadLMMerge ||
+        display_attributes_[index].topology == kQuadLMDSCMerge ||
+        display_attributes_[index].topology == kQuadLMMergeDSC) {
+      mixer_attributes_.split_type = kQuadSplit;
+    }
   }
 
   return kErrorNone;
