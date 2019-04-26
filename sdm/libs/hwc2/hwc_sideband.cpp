@@ -33,6 +33,7 @@
 #include <utils/String16.h>
 #include <utils/debug.h>
 #include <gralloc_priv.h>
+#include <sync/sync.h>
 #include "hwc_buffer_sync_handler.h"
 #include "hwc_session.h"
 
@@ -81,6 +82,8 @@ HWCSidebandStream::~HWCSidebandStream() {
   sb_nativeHandle_ = nullptr;
   native_handle_close(mNativeHandle);
   native_handle_delete(mNativeHandle);
+  if (retire_fences_ >= 0)
+    ::close(retire_fences_);
 }
 
 int32_t HWCSidebandStream::AddLayer(hwc2_layer_t layer, hwc2_display_t display) {
@@ -122,9 +125,7 @@ int32_t HWCSidebandStream::RemoveLayer(hwc2_layer_t layer) {
 
 int32_t HWCSidebandStream::SetBuffer(android::sp<SidebandStreamBuf> buf) {
   SCOPE_LOCK(mSidebandLock_);
-  if (enableBackpressure_) {
-    pendingMask_ = displayMask_;
-  }
+  pendingMask_ = displayMask_;
   mStreamBuf_ = buf;
   new_bufffer_ = true;
   return 0;
@@ -140,7 +141,7 @@ int32_t HWCSidebandStream::CheckBuffer(void) {
   SCOPE_LOCK(mSidebandLock_);
   if (new_bufffer_)
     return HWC2_ERROR_NOT_VALIDATED;
-  if (pendingMask_ && !sideband_thread_exit_) {
+  if (enableBackpressure_ && pendingMask_ && !sideband_thread_exit_) {
     mSidebandLock_.Wait();
   }
   return 0;
@@ -374,8 +375,6 @@ void HWCSidebandStreamSession::StopPresentation(hwc2_display_t display) {
   for (auto & sbstream : mSidebandStreamList) {
     sbstream.second->PostDisplay(display);
   }
-
-  clock_gettime(CLOCK_MONOTONIC, &present_timestamp_);
   present_start &= ~(1 << (int)display);
 }
 
@@ -458,14 +457,23 @@ int32_t HWCSidebandStreamSession::DestroyLayer(hwc2_display_t display, hwc2_laye
 }
 
 int32_t HWCSidebandStreamSession::UpdateSidebandStream(HWCSidebandStream * stm) {
-  int vsync_span = hwc_session->GetVsyncPeriod(0);
-  struct timespec tv;
-  int64_t span;
   color_data_pack color_data_pack_;
   csc_mat csc_mat;
+
+  /* wait previous fence */
+  if (stm->retire_fences_ >= 0) {
+    int err = sync_wait(stm->retire_fences_, 1000);
+    if (err < 0) {
+      DLOGE("retire_fence_ error %d", err);
+    }
+    ::close(stm->retire_fences_);
+    stm->retire_fences_ = -1;
+  }
+
   SCOPE_LOCK(hwc_session->locker_);
   auto status = HWC2::Error::None;
   uint32_t validateMask = stm->displayValidateMask_;
+  uint32_t pendingMask = stm->pendingMask_ & ~present_start;
 
   memcpy(&color_data_pack_, &stm->color_data_pack_, sizeof(color_data_pack_));
 
@@ -484,19 +492,9 @@ int32_t HWCSidebandStreamSession::UpdateSidebandStream(HWCSidebandStream * stm) 
     }
   }
 
-  // if present start, return immediately
-  if (present_start)
-    goto wait_present;
-
-  // check most recent present timestamp, if larger than vsync period, display right away
-  clock_gettime(CLOCK_MONOTONIC, &tv);
-  span = (tv.tv_sec - present_timestamp_.tv_sec) * 1000000000LL +
-                (tv.tv_nsec - present_timestamp_.tv_nsec);
-  if (span <= vsync_span) {
-    hwc_session->locker_.WaitFinite((int)(vsync_span - span) / 1000000);
-    if (present_start)
-      goto wait_present;
-  }
+  /* return if there is no pending displays */
+  if (!pendingMask)
+    return 0;
 
   for (auto & pair : stm->mLayers) {
     hwc2_layer_t layer = pair.first;
@@ -509,18 +507,28 @@ int32_t HWCSidebandStreamSession::UpdateSidebandStream(HWCSidebandStream * stm) 
     for (auto & display : stm->mDisplays) {
       hwc_session->Refresh(display);
     }
-    goto wait_present;
+    return 0;
   }
 
   for (auto & display : stm->mDisplays) {
+    /* only update pending displays */
+    if (!(pendingMask & (1 << display)))
+      continue;
+
     int32_t retire_fence;
     status = hwc_session->hwc_display_[display]->SidebandStreamPresent(&retire_fence);
     if (status != HWC2::Error::None) {
       hwc_session->Refresh(display);
       continue;
     }
-    if (retire_fence >= 0)
-      ::close(retire_fence);
+
+    if (retire_fence >= 0) {
+      if (stm->retire_fences_ < 0) {
+        stm->retire_fences_ = retire_fence;
+      } else {
+        ::close(retire_fence);
+      }
+    }
 
     uint32_t num_layer;
     hwc_session->hwc_display_[display]->GetReleaseFences(&num_layer, NULL, NULL);
@@ -537,10 +545,6 @@ int32_t HWCSidebandStreamSession::UpdateSidebandStream(HWCSidebandStream * stm) 
     stm->PostDisplay(display);
   }
 
-  return 0;
-
-wait_present:
-  hwc_session->locker_.WaitFinite(vsync_span / 1000000);
   return 0;
 }
 

@@ -36,7 +36,7 @@
 #include <utils/LightRefBase.h>
 #include <SidebandStreamHandle.h>
 #include <unordered_map>
-#include <unordered_set>
+#include <set>
 
 namespace sdm {
 
@@ -111,7 +111,7 @@ struct color_data_pack {
     native_handle_t *mNativeHandle = NULL;
     android::sp<SidebandHandlePtr> sb_nativeHandle_;
     android::sp<SidebandStreamBuf> mStreamBuf_;
-    std::unordered_set<hwc2_display_t> mDisplays;
+    std::set<hwc2_display_t> mDisplays;
     uint32_t displayMask_ = 0;
     uint32_t displayValidateMask_ = 0;
     uint32_t pendingMask_ = 0;
@@ -120,6 +120,7 @@ struct color_data_pack {
     bool sideband_thread_exit_ = false;
     bool new_bufffer_ = false;
     color_data_pack color_data_pack_ = {};
+    int32_t retire_fences_ = -1;
   };
 
   class SidebandStreamLoader {
@@ -146,7 +147,6 @@ struct color_data_pack {
     HWCSession * hwc_session = NULL;
     std::map<int32_t, HWCSidebandStream*> mSidebandStreamList;
     uint32_t present_start = 0;
-    struct timespec present_timestamp_ = {};
   };
 
 }  // namespace sdm
