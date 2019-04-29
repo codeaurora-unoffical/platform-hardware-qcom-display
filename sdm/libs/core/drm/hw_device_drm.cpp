@@ -266,7 +266,9 @@ static DRMDisplayOrder GetDRMDisplayOrder(DisplayOrder order) {
 
 class FrameBufferObject : public LayerBufferObject {
  public:
-  explicit FrameBufferObject(uint32_t fb_id) : fb_id_(fb_id) {
+  explicit FrameBufferObject(uint32_t fb_id, LayerBufferFormat format,
+                             uint32_t width, uint32_t height)
+    :fb_id_(fb_id), format_(format), width_(width), height_(height) {
   }
 
   ~FrameBufferObject() {
@@ -278,9 +280,15 @@ class FrameBufferObject : public LayerBufferObject {
     }
   }
   uint32_t GetFbId() { return fb_id_; }
+  bool IsEqual(LayerBufferFormat format, uint32_t width, uint32_t height) {
+    return (format == format_ && width == width_ && height == height_);
+  }
 
  private:
   uint32_t fb_id_;
+  LayerBufferFormat format_;
+  uint32_t width_;
+  uint32_t height_;
 };
 
 
@@ -341,28 +349,33 @@ void HWDeviceDRM::Registry::MapBufferToFbId(Layer* layer, LayerBuffer* buffer) {
   }
 
   uint64_t handle_id = buffer->handle_id;
-
   if (!handle_id || disable_fbid_cache_) {
-
-  layer->buffer_map->buffer_map.clear();
-
-  }
-  else {
-  // Found fb_id for given handle_id key
-  if (layer->buffer_map->buffer_map.find(handle_id) != layer->buffer_map->buffer_map.end()) {
-
-    return;
-  }
-
-  if (layer->buffer_map->buffer_map.size() > fbid_cache_limit_) {
-    // Legacy: Remove & Create fb_id in each frame
+    // In legacy path, clear fb_id map in each frame.
     layer->buffer_map->buffer_map.clear();
+  } else {
+    auto it = layer->buffer_map->buffer_map.find(handle_id);
+    if (it != layer->buffer_map->buffer_map.end()) {
+      FrameBufferObject *fb_obj = static_cast<FrameBufferObject*>(it->second.get());
+      if (fb_obj->IsEqual(buffer->format, buffer->width, buffer->height)) {
+        // Found fb_id for given handle_id key
+        return;
+      } else {
+        // Remove from fb_id map if format or size have been modified
+        layer->buffer_map->buffer_map.erase(it);
+      }
+    }
+
+    if (layer->buffer_map->buffer_map.size() > fbid_cache_limit_) {
+      // Clear fb_id map, if the size reaches cache limit.
+      layer->buffer_map->buffer_map.clear();
+    }
   }
-  }
+
   uint32_t fb_id = 0;
   if (CreateFbId(buffer, &fb_id) >= 0) {
     // Create and cache the fb_id in map
-    layer->buffer_map->buffer_map[handle_id] = std::make_shared<FrameBufferObject>(fb_id);
+    layer->buffer_map->buffer_map[handle_id] = std::make_shared<FrameBufferObject>(fb_id,
+        buffer->format, buffer->width, buffer->height);
   }
 }
 
