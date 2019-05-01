@@ -741,6 +741,8 @@ class DisplayInterface {
   */
   virtual DisplayError GetSupportedDSIClock(std::vector<uint64_t> *bitclk_rates) = 0;
 
+  virtual bool CanSkipValidate() = 0;
+
  protected:
   virtual ~DisplayInterface() { }
 };
