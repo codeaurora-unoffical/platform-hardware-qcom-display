@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
+* Copyright (c) 2015-2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -120,9 +120,17 @@ enum HWTopology {
   kDualLMMerge,
   kDualLMMergeDSC,
   kDualLMDSCMerge,
+  kQuadLMMerge,
+  kQuadLMDSCMerge,
+  kQuadLMMergeDSC,
   kPPSplit,
 };
 
+enum HWMixerSplit {
+  kNoSplit,
+  kDualSplit,
+  kQuadSplit,
+};
 
 typedef std::map<HWSubBlockType, std::vector<LayerBufferFormat>> FormatsMap;
 typedef std::map<LayerBufferFormat, float> CompRatioMap;
@@ -585,12 +593,14 @@ struct HWDisplayAttributes : DisplayConfigVariableInfo {
 struct HWMixerAttributes {
   uint32_t width = 0;                                  // Layer mixer width
   uint32_t height = 0;                                 // Layer mixer height
-  uint32_t split_left = 0;
+  uint32_t split_left = 0;                             // Left portion of layer mixer
+  HWMixerSplit split_type = kNoSplit;                  // Mixer topology
   LayerBufferFormat output_format = kFormatRGB101010;  // Layer mixer output format
 
   bool operator !=(const HWMixerAttributes &mixer_attributes) {
     return ((width != mixer_attributes.width) ||
             (height != mixer_attributes.height) ||
+            (split_type != mixer_attributes.split_type) ||
             (output_format != mixer_attributes.output_format) ||
             (split_left != mixer_attributes.split_left));
   }
