@@ -521,6 +521,14 @@ class DisplayInterface {
   */
   virtual DisplayError SetRefreshRate(uint32_t refresh_rate, bool final_rate) = 0;
 
+  /*! @brief Method to get the refresh rate of a display.
+
+    @param[in] refresh_rate refresh rate of the display.
+
+    @return \link DisplayError \endlink
+  */
+  virtual DisplayError GetRefreshRate(uint32_t *refresh_rate) = 0;
+
   /*! @brief Method to query whether scanning is support for the HDMI display.
 
     @return \link DisplayError \endlink
@@ -831,6 +839,12 @@ class DisplayInterface {
       @return \link DisplayError \endlink
   */
   virtual DisplayError GetSupportedDSIClock(std::vector<uint64_t> *bitclk_rates) = 0;
+
+  /*! @brief Method to query if there is a need to validate.
+
+      @return \link boolean \endlink
+  */
+  virtual bool CanSkipValidate() = 0;
 
  protected:
   virtual ~DisplayInterface() { }
