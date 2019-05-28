@@ -2416,7 +2416,11 @@ void HWCSession::UpdateVsyncSource() {
 hwc2_display_t HWCSession::GetNextVsyncSource() {
   // If primary display is powered off, change vsync source to next builtin display.
   // If primary display is powerd on, change vsync source back to primary display.
-  // First check for active builtins. If not found switch to pluggable displays.
+  // First check for builtins in ON state. If not found switch to pluggable displays.
+  // In case display isn't found in ON state check for displays in Doze state.
+
+  bool found_display_in_doze = false;
+  hwc2_display_t display_in_doze = HWC_DISPLAY_PRIMARY;
 
   std::vector<DisplayMapInfo> map_info = {map_info_primary_};
   std::copy(map_info_builtin_.begin(), map_info_builtin_.end(), std::back_inserter(map_info));
@@ -2432,8 +2436,10 @@ hwc2_display_t HWCSession::GetNextVsyncSource() {
     if (update_vsync_on_doze_) {
       if (last_mode == HWC2::PowerMode::On) {
         return info.client_id;
+      } else if (last_mode == HWC2::PowerMode::Doze && !found_display_in_doze) {
+        display_in_doze = info.client_id;;
       }
-    } else if (update_vsync_on_power_off_) {
+    } else {
       if (last_mode != HWC2::PowerMode::Off) {
         return info.client_id;
       }
@@ -2441,7 +2447,7 @@ hwc2_display_t HWCSession::GetNextVsyncSource() {
   }
 
   // No Vsync source found. Default to main display.
-  return HWC_DISPLAY_PRIMARY;
+  return found_display_in_doze ? display_in_doze : HWC_DISPLAY_PRIMARY;
 }
 
 void HWCSession::ActivateDisplay(hwc2_display_t disp, bool enable) {
