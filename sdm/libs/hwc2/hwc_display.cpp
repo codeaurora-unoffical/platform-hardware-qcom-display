@@ -53,16 +53,6 @@
 namespace sdm {
 
 std::bitset<kDisplayMax> HWCDisplay::validated_ = 0;
-
-static void ApplyDeInterlaceAdjustment(Layer *layer) {
-  // De-interlacing adjustment
-  if (layer->input_buffer.flags.interlace) {
-    float height = (layer->src_rect.bottom - layer->src_rect.top) / 2.0f;
-    layer->src_rect.top = ROUND_UP_ALIGN_DOWN(layer->src_rect.top / 2.0f, 2);
-    layer->src_rect.bottom = layer->src_rect.top + floorf(height);
-  }
-}
-
 // This weight function is needed because the color primaries are not sorted by gamut size
 static ColorPrimaries WidestPrimaries(ColorPrimaries p1, ColorPrimaries p2) {
   int weight = 10;
@@ -445,7 +435,6 @@ void HWCDisplay::BuildLayerStack() {
                                        INT(layer->dst_rect.right), INT(layer->dst_rect.bottom)};
     ApplyScanAdjustment(&scaled_display_frame);
     hwc_layer->SetLayerDisplayFrame(scaled_display_frame);
-    ApplyDeInterlaceAdjustment(layer);
     // SDM requires these details even for solid fill
     if (layer->flags.solid_fill) {
       LayerBuffer *layer_buffer = &layer->input_buffer;
