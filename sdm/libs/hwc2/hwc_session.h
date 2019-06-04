@@ -39,10 +39,12 @@
 #include "hwc_display.h"
 #include "hwc_display_builtin.h"
 #include "hwc_display_pluggable.h"
+#include "hwc_display_dummy.h"
 #include "hwc_display_virtual.h"
 #include "hwc_display_pluggable_test.h"
 #include "hwc_color_manager.h"
 #include "hwc_socket_handler.h"
+#include "hwc_buffer_sync_handler.h"
 
 namespace sdm {
 
@@ -206,6 +208,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   void InitDisplaySlots();
   int GetDisplayIndex(int dpy);
   int CreatePrimaryDisplay();
+  void CreateNullDisplay();
   int CreateBuiltInDisplays();
   int CreatePluggableDisplays(bool delay_hotplug);
   int HandleConnectedDisplays(HWDisplaysInfo *hw_displays_info, bool delay_hotplug);
@@ -220,6 +223,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   int32_t SetSecondaryDisplayStatus(int disp_id, HWCDisplay::DisplayStatus status);
   int32_t GetPanelBrightness(int *level);
   int32_t MinHdcpEncryptionLevelChanged(int disp_id, uint32_t min_enc_level);
+  int32_t SetDynamicDSIClock(int64_t disp_id, uint32_t bitrate);
 
   // service methods
   void StartServices();
@@ -281,6 +285,10 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   android::status_t SetColorModeById(const android::Parcel *input_parcel);
   android::status_t getComposerStatus();
   android::status_t RefreshScreen(const android::Parcel *input_parcel);
+  android::status_t SetDsiClk(const android::Parcel *input_parcel);
+  android::status_t GetDsiClk(const android::Parcel *input_parcel, android::Parcel *output_parcel);
+  android::status_t GetSupportedDsiClk(const android::Parcel *input_parcel,
+                                       android::Parcel *output_parcel);
 
   void Refresh(hwc2_display_t display);
   void HotPlug(hwc2_display_t display, HWC2::Connection state);

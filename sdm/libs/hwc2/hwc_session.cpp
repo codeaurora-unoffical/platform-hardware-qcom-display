@@ -38,7 +38,6 @@
 #include <vector>
 
 #include "hwc_buffer_allocator.h"
-#include "hwc_buffer_sync_handler.h"
 #include "hwc_session.h"
 #include "hwc_debugger.h"
 
@@ -182,7 +181,13 @@ int HWCSession::Init() {
 
   error = CoreInterface::CreateCore(&buffer_allocator_, &buffer_sync_handler_,
                                     &socket_handler_, &core_intf_);
-  if (error != kErrorNone) {
+  if (error == kErrorNoDevice) {
+    CreateNullDisplay();
+    primary_ready_ = true;
+    is_composer_up_ = true;
+    DLOGI("NULL display created!");
+    return 0;
+  } else if (error != kErrorNone) {
     DLOGE("Display core initialization failed. Error = %d", error);
     Deinit();
     return -EINVAL;
@@ -1334,6 +1339,30 @@ android::status_t HWCSession::notifyCallback(uint32_t command, const android::Pa
       output_parcel->writeInt32(getComposerStatus());
       break;
 
+    case qService::IQService::SET_DSI_CLK:
+      if (!input_parcel) {
+        DLOGE("QService command = %d: input_parcel needed.", command);
+        break;
+      }
+      status = SetDsiClk(input_parcel);
+      break;
+
+    case qService::IQService::GET_DSI_CLK:
+      if (!input_parcel || !output_parcel) {
+        DLOGE("QService command = %d: input_parcel and output_parcel needed.", command);
+        break;
+      }
+      status = GetDsiClk(input_parcel, output_parcel);
+      break;
+
+    case qService::IQService::GET_SUPPORTED_DSI_CLK:
+      if (!input_parcel || !output_parcel) {
+        DLOGE("QService command = %d: input_parcel and output_parcel needed.", command);
+        break;
+      }
+      status = GetSupportedDsiClk(input_parcel, output_parcel);
+      break;
+
     default:
       DLOGW("QService command = %d is not supported.", command);
       break;
@@ -1774,6 +1803,45 @@ const char *GetTokenValue(const char *uevent_data, int length, const char *token
   return pstr;
 }
 
+android::status_t HWCSession::SetDsiClk(const android::Parcel *input_parcel) {
+  int disp_id = input_parcel->readInt32();
+  uint64_t clk = UINT32(input_parcel->readInt64());
+  if (disp_id < 0 || !hwc_display_[disp_id]) {
+    return -EINVAL;
+  }
+
+  return hwc_display_[disp_id]->SetDynamicDSIClock(clk);
+}
+
+android::status_t HWCSession::GetDsiClk(const android::Parcel *input_parcel,
+                                        android::Parcel *output_parcel) {
+  int disp_id = input_parcel->readInt32();
+  if (disp_id < 0 || !hwc_display_[disp_id]) {
+    return -EINVAL;
+  }
+
+  uint64_t bitrate = 0;
+  hwc_display_[disp_id]->GetDynamicDSIClock(&bitrate);
+  output_parcel->writeUint64(bitrate);
+  return 0;
+}
+
+android::status_t HWCSession::GetSupportedDsiClk(const android::Parcel *input_parcel,
+                                                 android::Parcel *output_parcel) {
+  int disp_id = input_parcel->readInt32();
+  if (disp_id < 0 || !hwc_display_[disp_id]) {
+    return -EINVAL;
+  }
+
+  std::vector<uint64_t> bit_rates;
+  hwc_display_[disp_id]->GetSupportedDSIClock(&bit_rates);
+  output_parcel->writeInt32(INT32(bit_rates.size()));
+  for (auto &bit_rate : bit_rates) {
+    output_parcel->writeUint64(bit_rate);
+  }
+  return 0;
+}
+
 void HWCSession::UEventHandler(const char *uevent_data, int length) {
   if (strcasestr(uevent_data, HWC_UEVENT_GRAPHICS_FB0)) {
     DLOGI("Uevent FB0 = %s", uevent_data);
@@ -1889,6 +1957,15 @@ void HWCSession::HotPlug(hwc2_display_t display, HWC2::Connection state) {
     callbacks_lock_.Wait();
     err = callbacks_.Hotplug(display, state);
   }
+}
+
+void HWCSession::CreateNullDisplay() {
+  auto hwc_display = &hwc_display_[HWC_DISPLAY_PRIMARY];
+
+  hwc2_display_t client_id = map_info_primary_.client_id;
+
+  HWCDisplayDummy::Create(core_intf_, &buffer_allocator_, &callbacks_, qservice_,
+                          client_id, 0, hwc_display);
 }
 
 int HWCSession::CreatePrimaryDisplay() {
