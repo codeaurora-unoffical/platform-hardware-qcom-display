@@ -31,6 +31,10 @@
 #ifndef _DISPLAY_CONFIG_H
 #define _DISPLAY_CONFIG_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -43,5 +47,8 @@
 int minHdcpEncryptionLevelChanged(int display_id, const uint32_t min_enc_level);
 
 
+#ifdef __cplusplus
+}
 #endif
 
+#endif //_DISPLAY_CONFIG_H
