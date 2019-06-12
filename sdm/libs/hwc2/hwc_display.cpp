@@ -461,12 +461,10 @@ void HWCDisplay::BuildLayerStack() {
       layer->src_rect.bottom = layer_buffer->height;
 
       // if bottom layer has the same color as border color, skip it
-      if (default_bottom_solid_color) {
-        if ((layer->solid_fill_color & 0xFFFFFF) != 0) {
-          layer->flags.skip = true;
-          layer_stack_.flags.skip_present = true;
-          default_bottom_solid_color = false;
-        }
+      if (!default_bottom_solid_color || (layer->solid_fill_color & 0xFFFFFF) != 0) {
+        layer->flags.skip = true;
+        layer_stack_.flags.skip_present = true;
+        default_bottom_solid_color = false;
       }
     } else {
       default_bottom_solid_color = false;
