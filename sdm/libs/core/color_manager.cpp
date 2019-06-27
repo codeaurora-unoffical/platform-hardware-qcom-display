@@ -179,6 +179,10 @@ DisplayError ColorManagerProxy::ColorSVCRequestRoute(const PPDisplayAPIPayload &
     }
 
     ret = color_intf_->ColorUpdateGlobalPACponfig(in_payload, &config);
+    if (ret != kErrorNone) {
+     DLOGE("unable to update the GlobalPA config, error %d\n", ret);
+     return ret;
+    }
   }
 
   // On completion, dspp_features_ will be populated and mark dirty with all resolved dspp
