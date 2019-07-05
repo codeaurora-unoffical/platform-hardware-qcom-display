@@ -100,8 +100,17 @@ namespace sdm {
 static void GetDRMFormat(LayerBufferFormat format, uint32_t *drm_format,
                          uint64_t *drm_format_modifier) {
   switch (format) {
+    case kFormatARGB8888:
+      *drm_format = DRM_FORMAT_BGRA8888;
+      break;
     case kFormatRGBA8888:
       *drm_format = DRM_FORMAT_ABGR8888;
+      break;
+    case kFormatBGRA8888:
+      *drm_format = DRM_FORMAT_ARGB8888;
+      break;
+    case kFormatXRGB8888:
+      *drm_format = DRM_FORMAT_BGRX8888;
       break;
     case kFormatRGBA8888Ubwc:
       *drm_format = DRM_FORMAT_ABGR8888;
@@ -112,9 +121,6 @@ static void GetDRMFormat(LayerBufferFormat format, uint32_t *drm_format,
       break;
     case kFormatRGBA4444:
       *drm_format = DRM_FORMAT_ABGR4444;
-      break;
-    case kFormatBGRA8888:
-      *drm_format = DRM_FORMAT_ARGB8888;
       break;
     case kFormatRGBX8888:
       *drm_format = DRM_FORMAT_XBGR8888;
@@ -128,6 +134,9 @@ static void GetDRMFormat(LayerBufferFormat format, uint32_t *drm_format,
       break;
     case kFormatRGB888:
       *drm_format = DRM_FORMAT_BGR888;
+      break;
+    case kFormatBGR888:
+      *drm_format = DRM_FORMAT_RGB888;
       break;
     case kFormatRGB565:
       *drm_format = DRM_FORMAT_BGR565;
