@@ -514,9 +514,10 @@ int32_t HWCSidebandStreamSession::UpdateSidebandStream(HWCSidebandStream * stm) 
 
   for (auto & display : stm->mDisplays) {
     int32_t retire_fence;
-    status = hwc_session->hwc_display_[display]->Present(&retire_fence);
+    status = hwc_session->hwc_display_[display]->SidebandStreamPresent(&retire_fence);
     if (status != HWC2::Error::None) {
-      goto next;
+      hwc_session->Refresh(display);
+      continue;
     }
     if (retire_fence >= 0)
       ::close(retire_fence);
@@ -533,7 +534,6 @@ int32_t HWCSidebandStreamSession::UpdateSidebandStream(HWCSidebandStream * stm) 
       }
     }
 
-next:
     stm->PostDisplay(display);
   }
 

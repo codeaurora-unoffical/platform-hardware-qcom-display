@@ -337,7 +337,9 @@ HWC2::Error HWCLayer::SetLayerSidebandStream(android::sp<SidebandStreamBuf> buf)
   layer_->src_rect.bottom = FLOAT(handle->height);
 
   // defer buffer release
-  mOldSidebandStreamBuffer = mSidebandStreamBuffer;
+  if (mSidebandStreamBuffer != nullptr && mSidebandStreamBuffer->mSBHandle != handle) {
+    mOldSidebandStreamBuffer = mSidebandStreamBuffer;
+  }
 
   // bookeep current buffer
   mSidebandStreamBuffer = buf;

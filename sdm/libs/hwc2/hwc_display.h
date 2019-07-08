@@ -203,6 +203,7 @@ class HWCDisplay : public DisplayEventHandler {
                                       uint32_t len_of_out_csc_coef,
                                       const uint32_t *out_post_bias,
                                       uint32_t len_of_out_post_bias);
+  virtual HWC2::Error SidebandStreamPresent(int32_t *out_retire_fence);
 
  protected:
   // Maximum number of layers supported by display manager.

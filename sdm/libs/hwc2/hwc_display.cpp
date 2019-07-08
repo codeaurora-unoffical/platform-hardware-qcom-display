@@ -1784,6 +1784,21 @@ HWC2::Error HWCDisplay::SetLayerCscData(hwc2_layer_t layer_id,
   return HWC2::Error::None;
 }
 
+HWC2::Error HWCDisplay::SidebandStreamPresent(int32_t *out_retire_fence) {
+  auto status = HWC2::Error::None;
+  DisplayError error;
+
+  error = display_intf_->Commit(&layer_stack_);
+  if (error == kErrorNone) {
+    status = PostCommitLayerStack(out_retire_fence);
+  } else {
+    DLOGW("sideband stream present error %d", error);
+  }
+
+  CloseAcquireFds();
+  return status;
+}
+
 std::string HWCDisplay::Dump() {
   std::ostringstream os;
   os << "-------------------------------" << std::endl;
