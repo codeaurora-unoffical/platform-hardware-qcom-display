@@ -319,6 +319,7 @@ class HWCDisplay : public DisplayEventHandler {
     return kErrorNone;
   }
   virtual void SetVsyncSource(bool enable) { vsync_source_ = enable; }
+  virtual void NotifyClientStatus(bool connected) { client_connected_ = connected; }
 
  protected:
   static uint32_t throttling_refresh_rate_;
@@ -409,6 +410,7 @@ class HWCDisplay : public DisplayEventHandler {
   bool skip_commit_ = false;
   std::map<uint32_t, DisplayConfigVariableInfo> variable_config_map_;
   std::vector<uint32_t> hwc_config_map_;
+  bool client_connected_ = true;
 
  private:
   void DumpInputBuffers(void);
