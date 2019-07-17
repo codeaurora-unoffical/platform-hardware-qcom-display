@@ -131,6 +131,11 @@ class HWCDisplay : public DisplayEventHandler {
     kSkipValidate,
   };
 
+  enum DisplayCommitState {
+    kNormalCommit,
+    kInternalCommit,
+  };
+
   virtual ~HWCDisplay() {}
   virtual int Init();
   virtual int Deinit();
@@ -310,7 +315,8 @@ class HWCDisplay : public DisplayEventHandler {
     validated_ = false;
     return HWC2::Error::None;
   }
-  virtual HWC2::Error GetValidateDisplayOutput(uint32_t *out_num_types, uint32_t *out_num_requests);
+  virtual HWC2::Error PresentAndOrGetValidateDisplayOutput(uint32_t *out_num_types,
+                                                           uint32_t *out_num_requests);
   virtual bool IsDisplayCommandMode();
   virtual HWC2::Error SetQSyncMode(QSyncMode qsync_mode) {
     return HWC2::Error::Unsupported;
@@ -411,6 +417,8 @@ class HWCDisplay : public DisplayEventHandler {
   std::map<uint32_t, DisplayConfigVariableInfo> variable_config_map_;
   std::vector<uint32_t> hwc_config_map_;
   bool client_connected_ = true;
+  DisplayValidateState validate_state_ = kNormalValidate;
+  DisplayCommitState commit_state_ = kNormalCommit;
 
  private:
   void DumpInputBuffers(void);
@@ -426,7 +434,6 @@ class HWCDisplay : public DisplayEventHandler {
   int null_display_mode_ = 0;
   int enable_skip_bottom_solid_layer_ = 0;
   bool has_client_composition_ = false;
-  DisplayValidateState validate_state_ = kNormalValidate;
   bool first_cycle_ = true;  // false if a display commit has succeeded on the device.
   int fbt_release_fence_ = -1;
   bool pending_config_ = false;

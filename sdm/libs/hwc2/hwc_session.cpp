@@ -2857,7 +2857,7 @@ HWC2::Error HWCSession::ValidateDisplayInternal(hwc2_display_t display, uint32_t
   HWCDisplay *hwc_display = hwc_display_[display];
   if (hwc_display->IsInternalValidateState()) {
     // Internal Validation has already been done on display, get the Output params.
-    return hwc_display->GetValidateDisplayOutput(out_num_types, out_num_requests);
+    return hwc_display->PresentAndOrGetValidateDisplayOutput(out_num_types, out_num_requests);
   }
 
   if (display == HWC_DISPLAY_PRIMARY) {
