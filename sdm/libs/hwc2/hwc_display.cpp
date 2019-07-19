@@ -492,6 +492,8 @@ int HWCDisplay::Init() {
   DisplayError error = kErrorNone;
 
   HWCDebugHandler::Get()->GetProperty(ENABLE_NULL_DISPLAY_PROP, &null_display_mode_);
+  HWCDebugHandler::Get()->GetProperty(ENABLE_SKIP_BOTTOM_SOLID_LAYER,
+                                                   &enable_skip_bottom_solid_layer_);
 
   if (null_display_mode_) {
     DisplayNull *disp_null = new DisplayNull();
@@ -672,6 +674,7 @@ void HWCDisplay::BuildLayerStack() {
   display_rect_ = LayerRect();
   metadata_refresh_rate_ = 0;
   layer_stack_.flags.animating = animating_;
+  bool zero_solid_layer_at_bottom = true;
 
   // Add one layer for fb target
   // TODO(user): Add blit target layers
@@ -779,6 +782,16 @@ void HWCDisplay::BuildLayerStack() {
       layer->src_rect.bottom = layer_buffer->height;
     }
 
+    // skip if solid layers are at the bottom and same as border color
+    if (enable_skip_bottom_solid_layer_ && zero_solid_layer_at_bottom) {
+      if (layer->flags.solid_fill && !(layer->solid_fill_color & 0xFFFFFF)) {
+        layer->composition = kCompositionSDE;
+        continue;
+      } else {
+        zero_solid_layer_at_bottom = false;
+      }
+    }
+
     if (hwc_layer->HasMetaDataRefreshRate() && layer->frame_rate > metadata_refresh_rate_) {
       metadata_refresh_rate_ = SanitizeRefreshRate(layer->frame_rate);
     }
@@ -797,7 +810,9 @@ void HWCDisplay::BuildLayerStack() {
   }
 
   // TODO(user): Set correctly when SDM supports geometry_changes as bitmask
-  layer_stack_.flags.geometry_changed = UINT32(geometry_changes_ > 0);
+  layer_stack_.flags.geometry_changed = UINT32((geometry_changes_ ||
+                                                geometry_changes_on_doze_suspend_) > 0);
+  geometry_changes_on_doze_suspend_ = GeometryChanges::kNone;
   // Append client target to the layer stack
   Layer *sdm_client_target = client_target_->GetSDMLayer();
   sdm_client_target->flags.updating = IsLayerUpdating(client_target_);
@@ -1283,6 +1298,7 @@ HWC2::Error HWCDisplay::PrepareLayerStack(uint32_t *out_num_types, uint32_t *out
     } else if (error == kErrorPermission) {
       WaitOnPreviousFence();
       MarkLayersForGPUBypass();
+      geometry_changes_on_doze_suspend_ |= geometry_changes_;
     } else {
       DLOGE("Prepare failed. Error = %d", error);
       // To prevent surfaceflinger infinite wait, flush the previous frame during Commit()
@@ -2266,6 +2282,7 @@ bool HWCDisplay::CanSkipValidate() {
   }
 
   if (!layer_set_.empty() && !display_intf_->CanSkipValidate()) {
+    DLOGV_IF(kTagClient, "Display needs validation %d", id_);
     return false;
   }
 
