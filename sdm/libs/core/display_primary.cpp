@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2017, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2017, 2019, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -323,11 +323,13 @@ DisplayError DisplayPrimary::PFlip(int fd, unsigned int sequence,
 void DisplayPrimary::IdleTimeout() {
   event_handler_->Refresh();
   comp_manager_->ProcessIdleTimeout(display_comp_ctx_);
+  event_handler_->HandleEvent(kIdleTimeout);
 }
 
 void DisplayPrimary::ThermalEvent(int64_t thermal_level) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   comp_manager_->ProcessThermalEvent(display_comp_ctx_, thermal_level);
+  event_handler_->HandleEvent(kThermalEvent);
 }
 
 void DisplayPrimary::IdlePowerCollapse() {
