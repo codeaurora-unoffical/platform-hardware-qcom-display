@@ -142,14 +142,14 @@ int32_t HWCSidebandStream::CheckBuffer(void) {
   if (new_bufffer_)
     return HWC2_ERROR_NOT_VALIDATED;
   if (enableBackpressure_ && pendingMask_ && !sideband_thread_exit_) {
-    mSidebandLock_.Wait();
+    mSidebandLock_.WaitFinite(100);
   }
   return 0;
 }
 
 int32_t HWCSidebandStream::PostDisplay(hwc2_display_t displayId) {
   SCOPE_LOCK(mSidebandLock_);
-  if (pendingMask_ | (1 << displayId)) {
+  if ((pendingMask_ | (1 << displayId)) && !new_bufffer_) {
     pendingMask_ &= ~(1 << displayId);
     if (!pendingMask_)
       mSidebandLock_.Signal();
@@ -491,10 +491,6 @@ int32_t HWCSidebandStreamSession::UpdateSidebandStream(HWCSidebandStream * stm) 
                                                           CSC_BIAS_SIZE);
     }
   }
-
-  /* return if there is no pending displays */
-  if (!pendingMask)
-    return 0;
 
   for (auto & pair : stm->mLayers) {
     hwc2_layer_t layer = pair.first;
