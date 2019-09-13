@@ -319,6 +319,7 @@ class HWCDisplay : public DisplayEventHandler {
     return kErrorNone;
   }
   virtual void SetVsyncSource(bool enable) { vsync_source_ = enable; }
+  virtual void NotifyClientStatus(bool connected) { client_connected_ = connected; }
 
  protected:
   static uint32_t throttling_refresh_rate_;
@@ -409,12 +410,14 @@ class HWCDisplay : public DisplayEventHandler {
   bool skip_commit_ = false;
   std::map<uint32_t, DisplayConfigVariableInfo> variable_config_map_;
   std::vector<uint32_t> hwc_config_map_;
+  bool client_connected_ = true;
 
  private:
   void DumpInputBuffers(void);
   bool CanSkipSdmPrepare(uint32_t *num_types, uint32_t *num_requests);
   void UpdateRefreshRate();
   void WaitOnPreviousFence();
+  void UpdateActiveConfig();
   qService::QService *qservice_ = NULL;
   DisplayClass display_class_;
   uint32_t geometry_changes_ = GeometryChanges::kNone;
@@ -426,6 +429,8 @@ class HWCDisplay : public DisplayEventHandler {
   DisplayValidateState validate_state_ = kNormalValidate;
   bool first_cycle_ = true;  // false if a display commit has succeeded on the device.
   int fbt_release_fence_ = -1;
+  bool pending_config_ = false;
+  hwc2_config_t pending_config_index_ = 0;
 };
 
 inline int HWCDisplay::Perform(uint32_t operation, ...) {
