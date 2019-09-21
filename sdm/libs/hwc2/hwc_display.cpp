@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -856,7 +856,7 @@ HWC2::Error HWCDisplay::GetDisplayName(uint32_t *out_size, char *out_name) {
         name = "Unknown";
         break;
     }
-    std::strncpy(out_name, name.c_str(), name.size());
+    strlcpy(out_name, name.c_str(), name.size());
     *out_size = UINT32(name.size());
   }
   return HWC2::Error::None;
@@ -1228,8 +1228,10 @@ HWC2::Error HWCDisplay::PostCommitLayerStack(int32_t *out_retire_fence) {
 
   // Do no call flush on errors, if a successful buffer is never submitted.
   if (flush_ && flush_on_error_) {
-    display_intf_->Flush();
-    validated_.reset();
+    display_intf_->Flush(secure_display_transition_);
+    secure_display_transition_ = false;
+    validated_.reset(type_);
+    flush_on_error_ = false;
   }
 
   if (tone_mapper_ && tone_mapper_->IsActive()) {
@@ -1893,6 +1895,7 @@ void HWCDisplay::SetSecureDisplay(bool secure_display_active) {
     DLOGI("SecureDisplay state changed from %d to %d Needs Flush!!", secure_display_active_,
           secure_display_active);
     secure_display_active_ = secure_display_active;
+    secure_display_transition_ = true;
     skip_prepare_ = true;
   }
   return;
