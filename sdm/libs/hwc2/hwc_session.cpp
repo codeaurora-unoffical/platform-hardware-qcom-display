@@ -782,7 +782,7 @@ int32_t HWCSession::RegisterCallback(hwc2_device_t *device, int32_t descriptor,
     }
 
     std::vector<hwc2_display_t> pending_hotplugs;
-    if (hwc_session->client_connected_ && pointer) {
+    if (pointer) {
       for (auto &map_info : hwc_session->map_info_builtin_) {
         SCOPE_LOCK(locker_[map_info.client_id]);
         if (hwc_session->hwc_display_[map_info.client_id]) {
@@ -811,7 +811,7 @@ int32_t HWCSession::RegisterCallback(hwc2_device_t *device, int32_t descriptor,
     }
 
     // If previously registered, call hotplug for all connected displays to refresh
-    if (hwc_session->client_connected_ && pointer) {
+    if (pointer) {
       std::vector<hwc2_display_t> updated_pending_hotplugs;
       for (auto client_id : pending_hotplugs) {
         SCOPE_LOCK(locker_[client_id]);
