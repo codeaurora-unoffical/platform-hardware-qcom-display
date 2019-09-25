@@ -780,6 +780,23 @@ int32_t HWCSession::RegisterCallback(hwc2_device_t *device, int32_t descriptor,
       DLOGI("Hotplugging primary...");
       hwc_session->callbacks_.Hotplug(HWC_DISPLAY_PRIMARY, HWC2::Connection::Connected);
     }
+
+    std::vector<hwc2_display_t> pending_hotplugs;
+    if (hwc_session->client_connected_ && pointer) {
+      for (auto &map_info : hwc_session->map_info_builtin_) {
+        SCOPE_LOCK(locker_[map_info.client_id]);
+        if (hwc_session->hwc_display_[map_info.client_id]) {
+          pending_hotplugs.push_back(static_cast<hwc2_display_t>(map_info.client_id));
+        }
+      }
+      for (auto &map_info : hwc_session->map_info_pluggable_) {
+        SCOPE_LOCK(locker_[map_info.client_id]);
+        if (hwc_session->hwc_display_[map_info.client_id]) {
+          pending_hotplugs.push_back(static_cast<hwc2_display_t>(map_info.client_id));
+        }
+      }
+    }
+
     // Create displays since they should now have their final display indices set.
     DLOGI("Handling built-in displays...");
     if (hwc_session->HandleBuiltInDisplays()) {
@@ -792,6 +809,23 @@ int32_t HWCSession::RegisterCallback(hwc2_device_t *device, int32_t descriptor,
             strerror(abs(err)), hwc_session->hotplug_pending_event_ == kHotPlugEvent ? "deferred" :
             "dropped");
     }
+
+    // If previously registered, call hotplug for all connected displays to refresh
+    if (hwc_session->client_connected_ && pointer) {
+      std::vector<hwc2_display_t> updated_pending_hotplugs;
+      for (auto client_id : pending_hotplugs) {
+        SCOPE_LOCK(locker_[client_id]);
+        // check if the display is unregistered
+        if (hwc_session->hwc_display_[client_id]) {
+          updated_pending_hotplugs.push_back(client_id);
+        }
+      }
+      for (auto client_id : updated_pending_hotplugs) {
+        DLOGI("Re-hotplug display connected: client id = %d", client_id);
+        hwc_session->callbacks_.Hotplug(client_id, HWC2::Connection::Connected);
+      }
+    }
+
     hwc_session->client_connected_ = !!pointer;
     // Notfify all displays.
     hwc_session->NotifyClientStatus(hwc_session->client_connected_);
@@ -2823,7 +2857,7 @@ HWC2::Error HWCSession::ValidateDisplayInternal(hwc2_display_t display, uint32_t
   HWCDisplay *hwc_display = hwc_display_[display];
   if (hwc_display->IsInternalValidateState()) {
     // Internal Validation has already been done on display, get the Output params.
-    return hwc_display->GetValidateDisplayOutput(out_num_types, out_num_requests);
+    return hwc_display->PresentAndOrGetValidateDisplayOutput(out_num_types, out_num_requests);
   }
 
   if (display == HWC_DISPLAY_PRIMARY) {
