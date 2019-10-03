@@ -149,7 +149,7 @@ static uint32_t GetContentType(const LayerBuffer &layer_buffer) {
 #endif
 
 static bool MapHDMIDisplayTiming(const msm_hdmi_mode_timing_info *mode,
-                                 fb_var_screeninfo *info) {
+                                 fb_var_screeninfo *info, bool hdr_enabled) {
   if (!mode || !info) {
     return false;
   }
@@ -174,9 +174,13 @@ static bool MapHDMIDisplayTiming(const msm_hdmi_mode_timing_info *mode,
   info->grayscale = V4L2_PIX_FMT_RGB24;
   // If the mode supports YUV420 set grayscale to the FOURCC value for YUV420.
   std::bitset<32> pixel_formats = mode->pixel_formats;
-  if (pixel_formats[1]) {
+  if (pixel_formats[1] && !pixel_formats[0]) {
     info->grayscale = V4L2_PIX_FMT_NV12;
   }
+  if (pixel_formats[1] && pixel_formats[0] && hdr_enabled) {
+    info->grayscale = V4L2_PIX_FMT_NV12;
+  }
+
 
   if (!mode->active_low_h) {
     info->sync |= (uint32_t)FB_SYNC_HOR_HIGH_ACT;
@@ -268,6 +272,25 @@ DisplayError HWHDMI::GetActiveConfig(uint32_t *active_config_index) {
 
 DisplayError HWHDMI::SetActiveConfig(uint32_t active_config) {
   active_config_index_ = active_config;
+  return kErrorNone;
+}
+
+DisplayError HWHDMI::ClearConfigs() {
+
+  msm_hdmi_mode_timing_info timing_mode = supported_video_modes_[0];
+  for (uint32_t i = 0; i < hdmi_modes_.size(); i++) {
+    msm_hdmi_mode_timing_info *cur = &supported_video_modes_[i];
+    if (cur->video_format == hdmi_modes_[active_config_index_]) {
+      timing_mode = *cur;
+      break;
+    }
+  }
+  uint32_t format =  hdmi_modes_[active_config_index_];
+  hdmi_modes_.clear();
+  supported_video_modes_.clear();
+  hdmi_modes_.push_back(format);
+  supported_video_modes_.push_back(timing_mode);
+  active_config_index_ = 0;
   return kErrorNone;
 }
 
@@ -389,7 +412,7 @@ DisplayError HWHDMI::SetDisplayAttributes(uint32_t index) {
     }
   }
 
-  if (MapHDMIDisplayTiming(timing_mode, &vscreeninfo) == false) {
+  if (MapHDMIDisplayTiming(timing_mode, &vscreeninfo, hw_panel_info_.hdr_enabled) == false) {
     return kErrorParameters;
   }
 
