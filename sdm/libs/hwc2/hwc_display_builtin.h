@@ -91,6 +91,8 @@ class HWCDisplayBuiltIn : public HWCDisplay {
   virtual HWC2::Error UpdateDisplayId(hwc2_display_t id);
   virtual HWC2::Error SetPendingRefresh();
   virtual DisplayError TeardownConcurrentWriteback(void);
+  virtual HWC2::Error PresentAndOrGetValidateDisplayOutput(uint32_t *out_num_types,
+                                                           uint32_t *out_num_requests);
 
  private:
   HWCDisplayBuiltIn(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
@@ -131,6 +133,7 @@ class HWCDisplayBuiltIn : public HWCDisplay {
   // Members for 1 frame capture in a client provided buffer
   bool frame_capture_buffer_queued_ = false;
   int frame_capture_status_ = -EAGAIN;
+  int retire_fence_ = -1;
 };
 
 }  // namespace sdm
