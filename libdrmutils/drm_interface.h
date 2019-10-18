@@ -511,6 +511,7 @@ struct DRMCrtcInfo {
   uint32_t num_mnocports = 0;
   uint32_t mnoc_bus_width = 0;
   float vbif_cmd_ff = 0.0f;
+  bool use_baselayer_for_stage = false;
 };
 
 enum struct DRMPlaneType {
