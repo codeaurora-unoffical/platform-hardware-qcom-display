@@ -14,4 +14,4 @@ libdrmutils_la_SOURCES = $(cpp_sources)
 libdrmutils_la_CFLAGS = $(COMMON_CFLAGS) -DLOG_TAG=\"DRMUTILS\"
 libdrmutils_la_CPPFLAGS = $(AM_CPPFLAGS)
 libsdmcore_la_LIBADD = -ldrm
-libdrmutils_la_LDFLAGS = -shared -avoid-version
+libdrmutils_la_LDFLAGS = -shared -avoid-version -llog

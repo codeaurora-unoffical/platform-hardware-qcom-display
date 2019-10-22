@@ -14,5 +14,3 @@ SUBDIRS += libgralloc
 endif
 endif
 SUBDIRS += sdm/libs/core
-
-

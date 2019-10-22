@@ -26,12 +26,29 @@ AC_ARG_WITH([core_includes],
 
 if test "x$with_core_includes" != "xno"; then
    CFLAGS="${CFLAGS} -I${core_incdir}"
+   CPPFLAGS="${CPPFLAGS} -I${core_incdir}"
 fi
 
 AC_ARG_WITH(sanitized-headers,
    AS_HELP_STRING([--with-sanitized-headers=DIR],
        [Specify the location of the sanitized Linux headers]),
-   [CPPFLAGS="$CPPFLAGS -I$withval"])
+       [sanitized_headers=$withval], [with_sanitized_headers=no])
+if test "x${sanitized_headers}" != "xno"; then
+   CFLAGS="${CFLAGS} -I${sanitized_headers}"
+   CPPFLAGS="${CPPFLAGS} -I${sanitized_headers}"
+fi
+
+AC_ARG_WITH([gbm], [--with-gbm], [gbm="${enableval}"], [gbm="no"])
+
+if test "x$gbm" = "xyes"; then
+  CPPFLAGS="${CPPFLAGS} -D__GBM__"
+fi
+
+AC_ARG_ENABLE([headless_target], [--enable-headless-target], [headless_target="${enableval}"], [headless_target="no"])
+
+if test "x$headless_target" = "xyes"; then
+  CPPFLAGS="${CPPFLAGS} -DTARGET_HEADLESS"
+fi
 
 AC_ARG_ENABLE([sdmhaldrm],
      AC_HELP_STRING([--enable-sdmhaldrm],
