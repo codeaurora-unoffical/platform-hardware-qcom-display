@@ -175,6 +175,15 @@ enum class HWRecoveryEvent : uint32_t {
   kDisplayPowerReset,  // driver requesting display power cycle
 };
 
+enum SDMVersion {
+  kVersionSDM855V1 = SDEVERSION(5, 0, 0),
+  kVersionSDM855V2 = SDEVERSION(5, 0, 1),
+  kVersionSM6150V1 = SDEVERSION(5, 3, 0),
+  kVersionSM8250V1 = SDEVERSION(6, 0, 0),
+  kVersionSM7250V1 = SDEVERSION(6, 1, 0),
+  kVersionSM6250V1 = SDEVERSION(6, 2, 0),
+};
+
 typedef std::map<HWSubBlockType, std::vector<LayerBufferFormat>> FormatsMap;
 typedef std::map<LayerBufferFormat, float> CompRatioMap;
 
@@ -314,6 +323,7 @@ struct HWResourceInfo {
   int secure_disp_blend_stage = -1;
   uint32_t num_mnocports = 2;
   uint32_t mnoc_bus_width = 32;
+  bool use_baselayer_for_stage = false;
 };
 
 struct HWSplitInfo {
