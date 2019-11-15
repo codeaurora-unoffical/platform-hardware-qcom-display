@@ -6,11 +6,5 @@ SUBDIRS = sdm/libs/utils
 if ENABLE_SDMHALDRM
 SUBDIRS += libdrmutils
 SUBDIRS += gpu_tonemapper
-else
-if !ENABLE_SDMHALFB
-SUBDIRS += libqservice
-SUBDIRS += libqdutils
-SUBDIRS += libgralloc
-endif
 endif
 SUBDIRS += sdm/libs/core
