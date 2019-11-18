@@ -56,4 +56,4 @@ libsdmcore_la_LIBADD = ../utils/libsdmutils.la
 if ENABLE_SDMHALDRM
 libsdmcore_la_LIBADD += ../../../libdrmutils/libdrmutils.la
 endif
-libsdmcore_la_LDFLAGS = -shared -avoid-version
+libsdmcore_la_LDFLAGS = -shared -avoid-version -llog
