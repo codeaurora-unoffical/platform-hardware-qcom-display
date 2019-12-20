@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2019, The Linux Foundation. All rights reserved.
 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -66,7 +66,11 @@
 #define ION_SC_FLAGS ION_SECURE
 #define ION_SC_PREVIEW_FLAGS ION_SECURE
 #else  // MASTER_SIDE_CP
+#ifdef HYPERVISOR
+#define CP_HEAP_ID ION_SECURE_DISPLAY_HEAP_ID
+#else
 #define CP_HEAP_ID ION_SECURE_HEAP_ID
+#endif
 #define SD_HEAP_ID ION_SECURE_DISPLAY_HEAP_ID
 #define ION_CP_FLAGS (ION_SECURE | ION_FLAG_CP_PIXEL)
 #define ION_SD_FLAGS (ION_SECURE | ION_FLAG_CP_SEC_DISPLAY)
