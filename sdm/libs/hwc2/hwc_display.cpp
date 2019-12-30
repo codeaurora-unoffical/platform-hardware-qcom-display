@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -52,8 +52,6 @@
 
 namespace sdm {
 
-std::bitset<kDisplayMax> HWCDisplay::validated_ = 0;
-
 static void ApplyDeInterlaceAdjustment(Layer *layer) {
   // De-interlacing adjustment
   if (layer->input_buffer.flags.interlace) {
@@ -80,6 +78,8 @@ static ColorPrimaries WidestPrimaries(ColorPrimaries p1, ColorPrimaries p2) {
     return p2;
   }
 }
+
+std::bitset<kOrderMax> HWCDisplay::validated_ = 0;
 
 HWCColorMode::HWCColorMode(DisplayInterface *display_intf) : display_intf_(display_intf) {}
 
@@ -868,7 +868,7 @@ HWC2::Error HWCDisplay::PrepareLayerStack(uint32_t *out_num_types, uint32_t *out
       }
       return HWC2::Error::BadDisplay;
     } else {
-      validated_.set(type_);
+      validated_.set(id_);
     }
   } else {
     // Skip is not set
@@ -914,7 +914,7 @@ HWC2::Error HWCDisplay::AcceptDisplayChanges() {
     return HWC2::Error::None;
   }
 
-  if (!validated_.test(type_)) {
+  if (!validated_.test(id_)) {
     return HWC2::Error::NotValidated;
   }
 
@@ -936,7 +936,7 @@ HWC2::Error HWCDisplay::GetChangedCompositionTypes(uint32_t *out_num_elements,
     return HWC2::Error::None;
   }
 
-  if (!validated_.test(type_)) {
+  if (!validated_.test(id_)) {
     DLOGW("Display is not validated");
     return HWC2::Error::NotValidated;
   }
@@ -977,7 +977,7 @@ HWC2::Error HWCDisplay::GetDisplayRequests(int32_t *out_display_requests,
     return HWC2::Error::None;
   }
 
-  if (!validated_.test(type_)) {
+  if (!validated_.test(id_)) {
     DLOGW("Display is not validated");
     return HWC2::Error::NotValidated;
   }
@@ -1031,10 +1031,10 @@ HWC2::Error HWCDisplay::CommitLayerStack(void) {
   }
 
   if (skip_validate_ && !CanSkipValidate()) {
-    validated_.reset(type_);
+    validated_.reset(id_);
   }
 
-  if (!validated_.test(type_)) {
+  if (!validated_.test(id_)) {
     DLOGV_IF(kTagCompManager, "Display %d is not validated", id_);
     return HWC2::Error::NotValidated;
   }
@@ -1053,7 +1053,7 @@ HWC2::Error HWCDisplay::CommitLayerStack(void) {
         shutdown_pending_ = true;
         return HWC2::Error::Unsupported;
       } else if (error == kErrorNotValidated) {
-        validated_.reset(type_);
+        validated_.reset(id_);
         return HWC2::Error::NotValidated;
       } else if (error != kErrorPermission) {
         DLOGE("Commit failed. Error = %d", error);
@@ -1534,7 +1534,7 @@ HWC2::Error HWCDisplay::SetCursorPosition(hwc2_layer_t layer, int x, int y) {
     }
   }
 
-  if (!skip_validate_ && validated_.test(type_)) {
+  if (!skip_validate_ && validated_.test(id_)) {
     return HWC2::Error::NotValidated;
   }
 
@@ -1568,7 +1568,7 @@ void HWCDisplay::MarkLayersForGPUBypass() {
     auto layer = hwc_layer->GetSDMLayer();
     layer->composition = kCompositionSDE;
   }
-  validated_.set(type_);
+  validated_.set(id_);
 }
 
 void HWCDisplay::MarkLayersForClientComposition() {

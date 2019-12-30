@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -251,7 +251,7 @@ class HWCDisplay : public DisplayEventHandler {
     OUTPUT_LAYER_DUMP,
   };
 
-  static std::bitset<kDisplayMax> validated_;
+  static std::bitset<kOrderMax> validated_;
   CoreInterface *core_intf_ = nullptr;
   HWCCallbacks *callbacks_  = nullptr;
   HWCBufferAllocator *buffer_allocator_ = NULL;
