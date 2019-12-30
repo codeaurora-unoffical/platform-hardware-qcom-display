@@ -30,6 +30,7 @@ PRODUCT_PACKAGES += \
     vendor.display.config@1.12.vendor \
     vendor.display.config@1.13.vendor \
     vendor.display.config@1.14.vendor \
+    vendor.display.config@1.15.vendor \
     vendor.qti.hardware.display.mapper@2.0.vendor \
     vendor.qti.hardware.display.mapper@3.0.vendor \
     modetest
@@ -77,7 +78,9 @@ PRODUCT_PROPERTY_OVERRIDES += \
 # Enable offline rotator for Bengal.
 ifneq ($(TARGET_BOARD_PLATFORM),bengal)
 PRODUCT_PROPERTY_OVERRIDES += \
-    vendor.display.disable_offline_rotator=1
+    vendor.display.disable_offline_rotator=1 \
+    vendor.display.normal_noc_efficiency_factor=0.85 \
+    vendor.display.camera_noc_efficiency_factor=0.70
 else
 PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_rotator_ubwc=1

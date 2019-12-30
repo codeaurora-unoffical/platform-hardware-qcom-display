@@ -676,6 +676,19 @@ int32_t HWCSession::GetReleaseFences(hwc2_display_t display, uint32_t *out_num_e
                              out_fences);
 }
 
+void HWCSession::PerformQsyncCallback(hwc2_display_t display) {
+  if (qsync_callback_ == nullptr) {
+    return;
+  }
+
+  bool qsync_enabled = 0;
+  int32_t refresh_rate = 0, qsync_refresh_rate = 0;
+  if (hwc_display_[display]->IsQsyncCallbackNeeded(&qsync_enabled,
+      &refresh_rate, &qsync_refresh_rate)) {
+    qsync_callback_->onQsyncReconfigured(qsync_enabled, refresh_rate, qsync_refresh_rate);
+  }
+}
+
 int32_t HWCSession::PresentDisplay(hwc2_display_t display, int32_t *out_retire_fence) {
   auto status = HWC2::Error::BadDisplay;
   DTRACE_SCOPED();
@@ -720,6 +733,9 @@ int32_t HWCSession::PresentDisplay(hwc2_display_t display, int32_t *out_retire_f
           callbacks_.ResetRefresh(display);
         }
         status = hwc_display_[target_display]->Present(out_retire_fence);
+        if (status == HWC2::Error::None) {
+          PerformQsyncCallback(target_display);
+        }
       }
     }
   }
@@ -1026,9 +1042,7 @@ int32_t HWCSession::SetPowerMode(hwc2_display_t display, int32_t int_mode) {
 
   UpdateThrottlingRate();
 
-  // Trigger refresh for doze mode to take effect.
   if (mode == HWC2::PowerMode::Doze) {
-    callbacks_.Refresh(display);
     // Trigger one more refresh for PP features to take effect.
     pending_refresh_.set(UINT32(display));
   }
@@ -2749,6 +2763,7 @@ void HWCSession::DestroyPluggableDisplay(DisplayMapInfo *map_info) {
       }
     }
     display_ready_.reset(UINT32(client_id));
+    pending_power_mode_[client_id] = false;
     hwc_display = nullptr;
     map_info->Reset();
   }
@@ -2787,6 +2802,7 @@ void HWCSession::DestroyNonPluggableDisplay(DisplayMapInfo *map_info) {
         hwc_display_dummy = nullptr;
       }
     }
+    pending_power_mode_[client_id] = false;
     hwc_display = nullptr;
     display_ready_.reset(UINT32(client_id));
     map_info->Reset();
