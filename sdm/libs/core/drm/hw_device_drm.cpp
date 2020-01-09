@@ -1206,15 +1206,16 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
     SetSolidfillStages();
     SetQOSData(qos_data);
     drm_atomic_intf_->Perform(DRMOps::CRTC_SET_SECURITY_LEVEL, token_.crtc_id, crtc_security_level);
-    if (hw_layers->hw_avr_info.update) {
-      sde_drm::DRMQsyncMode mode = sde_drm::DRMQsyncMode::NONE;
-      if (hw_layers->hw_avr_info.mode == kContinuousMode) {
-        mode = sde_drm::DRMQsyncMode::CONTINUOUS;
-      } else if (hw_layers->hw_avr_info.mode == kOneShotMode) {
-        mode = sde_drm::DRMQsyncMode::ONESHOT;
-      }
-      drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_QSYNC_MODE, token_.conn_id, mode);
+  }
+
+  if (hw_layers->hw_avr_info.update) {
+    sde_drm::DRMQsyncMode mode = sde_drm::DRMQsyncMode::NONE;
+    if (hw_layers->hw_avr_info.mode == kContinuousMode) {
+      mode = sde_drm::DRMQsyncMode::CONTINUOUS;
+    } else if (hw_layers->hw_avr_info.mode == kOneShotMode) {
+      mode = sde_drm::DRMQsyncMode::ONESHOT;
     }
+    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_QSYNC_MODE, token_.conn_id, mode);
   }
 
   drm_atomic_intf_->Perform(DRMOps::DPPS_COMMIT_FEATURE, 0 /* argument is not used */);
@@ -1263,11 +1264,13 @@ void HWDeviceDRM::SetupAtomic(HWLayers *hw_layers, bool validate) {
     drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_CRTC, token_.conn_id, token_.crtc_id);
     DRMPowerMode power_mode = pending_doze_ ? DRMPowerMode::DOZE : DRMPowerMode::ON;
     drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, power_mode);
+    last_power_mode_ = power_mode;
   } else if (pending_doze_ && !validate) {
     drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 1);
     drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, DRMPowerMode::DOZE);
     pending_doze_ = false;
     synchronous_commit_ = true;
+    last_power_mode_ = DRMPowerMode::DOZE;
   }
 
   // Set CRTC mode, only if display config changes
