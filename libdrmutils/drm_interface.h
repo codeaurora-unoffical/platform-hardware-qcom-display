@@ -508,9 +508,16 @@ struct DRMCrtcInfo {
   uint32_t min_prefill_lines = 0;
   int secure_disp_blend_stage = -1;
   bool concurrent_writeback = false;
-  uint32_t num_mnocports;
-  uint32_t mnoc_bus_width;
+  uint32_t num_mnocports = 0;
+  uint32_t mnoc_bus_width = 0;
   bool use_baselayer_for_stage = false;
+  uint32_t vig_limit_index = 0;
+  uint32_t dma_limit_index = 0;
+  uint32_t scaling_limit_index = 0;
+  uint32_t rotation_limit_index = 0;
+  uint32_t line_width_constraints_count = 0;
+  std::vector< std::pair <uint32_t, uint32_t> > line_width_limits;
+  float vbif_cmd_ff = 0.0f;
 };
 
 enum struct DRMPlaneType {
@@ -780,6 +787,7 @@ enum struct DRMCWbCaptureMode {
 enum struct DRMQsyncMode {
   NONE = 0,
   CONTINUOUS,
+  ONESHOT,
 };
 
 enum struct DRMTopologyControl {
