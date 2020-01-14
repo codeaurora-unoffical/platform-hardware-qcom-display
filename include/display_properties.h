@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -115,6 +115,8 @@
 // MMNOC efficiency factor for Camera and Non-Camera cases
 #define NORMAL_NOC_EFFICIENCY_FACTOR         DISPLAY_PROP("normal_noc_efficiency_factor")
 #define CAMERA_NOC_EFFICIENCY_FACTOR         DISPLAY_PROP("camera_noc_efficiency_factor")
+#define ENABLE_HISTOGRAM_INTR                DISPLAY_PROP("enable_hist_intr")
+#define DEFER_FPS_FRAME_COUNT                DISPLAY_PROP("defer_fps_frame_count")
 
 // Add all vendor.display properties above
 
@@ -127,6 +129,7 @@
 // Add all persist.vendor.display.properties above
 
 #define ZERO_SWAP_INTERVAL                   "vendor.debug.egl.swapinterval"
+#define WINDOW_RECT_PROP                     DISPLAY_PROP("window_rect")
 
 // Add all other.properties above
 // End of property
