@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2013, 2017 The Linux Foundation. All rights reserved.
- *
+ * Copyright (c) 2011-2018, The Linux Foundation. All rights reserved.
+
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met:
@@ -10,7 +10,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *   * Neither the name of The Linux Foundation or the names of its
+ *   * Neither the name of The Linux Foundation nor the names of its
  *     contributors may be used to endorse or promote products derived
  *     from this software without specific prior written permission.
  *
@@ -27,49 +27,42 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _QD_UTIL_MISC_H
-#define _QD_UTIL_MISC_H
+#ifndef __GR_ALLOCATOR_H__
+#define __GR_ALLOCATOR_H__
 
-#include <utils/threads.h>
-#include <linux/fb.h>
-#include <ctype.h>
-#include <fcntl.h>
-#include <utils/Errors.h>
-#include <log/log.h>
+#include <vector>
+#include <memory>
 
-#include <linux/fb.h>
-#include <sys/ioctl.h>
-#include <sys/poll.h>
-#include <sys/resource.h>
-#include <cutils/properties.h>
-#include <hardware/hwcomposer.h>
+#include "gr_buf_descriptor.h"
+#include "gr_ion_alloc.h"
+#include "gr_utils.h"
+#include "gralloc_priv.h"
 
-namespace qdutils {
+namespace gralloc {
 
-enum HWQueryType {
-    HAS_UBWC = 1,
-    HAS_WB_UBWC = 2
+class Allocator {
+ public:
+  Allocator();
+  ~Allocator();
+  bool Init();
+  int MapBuffer(void **base, unsigned int size, unsigned int offset, int fd);
+  int ImportBuffer(int fd);
+  int FreeBuffer(void *base, unsigned int size, unsigned int offset, int fd, int handle);
+  int CleanBuffer(void *base, unsigned int size, unsigned int offset, int handle, int op, int fd);
+  int AllocateMem(AllocData *data, uint64_t usage, int format);
+  // @return : index of the descriptor with maximum buffer size req
+  bool CheckForBufferSharing(uint32_t num_descriptors,
+                             const std::vector<std::shared_ptr<BufferDescriptor>> &descriptors,
+                             ssize_t *max_index);
+ private:
+  void GetIonHeapInfo(uint64_t usage, unsigned int *ion_heap_id, unsigned int *alloc_type,
+                      unsigned int *ion_flags);
+
+  IonAlloc *ion_allocator_ = NULL;
+
+  bool use_system_heap_for_sensors_ = true;
 };
 
-enum {
-    EDID_RAW_DATA_SIZE = 640,
-    MAX_FRAME_BUFFER_NAME_SIZE = 128,
-    MAX_SYSFS_FILE_PATH = 255,
-    MAX_STRING_LENGTH = 1024,
-};
+}  // namespace gralloc
 
-int querySDEInfo(HWQueryType type, int *value);
-int getEdidRawData(char *buffer);
-int getHDMINode(void);
-bool isDPConnected();
-int getDPTestConfig(uint32_t *panelBpp, uint32_t *patternType);
-
-enum class DriverType {
-    FB = 0,
-    DRM,
-};
-DriverType getDriverType();
-const char *GetHALPixelFormatString(int format);
-
-}; //namespace qdutils
-#endif
+#endif  // __GR_ALLOCATOR_H__

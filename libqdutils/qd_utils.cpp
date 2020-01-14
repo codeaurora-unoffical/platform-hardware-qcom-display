@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013, 2018 The Linux Foundation. All rights reserved.
 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -31,6 +31,7 @@
 #include <gralloc_priv.h>
 #include "qd_utils.h"
 
+static const int kFBNodeMax = 4;
 namespace qdutils {
 
 static int parseLine(char *input, char *tokens[], const uint32_t maxToken, uint32_t *count) {
@@ -57,9 +58,9 @@ static int getExternalNode(const char *type) {
     char msmFbTypePath[MAX_FRAME_BUFFER_NAME_SIZE];
     int j = 0;
 
-    for(j = 0; j < HWC_NUM_DISPLAY_TYPES; j++) {
+    for(j = 0; j < kFBNodeMax; j++) {
         snprintf (msmFbTypePath, sizeof(msmFbTypePath),
-                  "/sys/class/graphics/fb%d/msm_fb_type", j);
+                  "/sys/devices/virtual/graphics/fb%d/msm_fb_type", j);
         displayDeviceFP = fopen(msmFbTypePath, "r");
         if(displayDeviceFP) {
             fread(fbType, sizeof(char), MAX_FRAME_BUFFER_NAME_SIZE,
@@ -71,11 +72,11 @@ static int getExternalNode(const char *type) {
             }
             fclose(displayDeviceFP);
         } else {
-            ALOGE("%s: Failed to open fb node %d", __func__, j);
+            ALOGE("%s: Failed to open fb node %s", __func__, msmFbTypePath);
         }
     }
 
-    if (j < HWC_NUM_DISPLAY_TYPES)
+    if (j < kFBNodeMax)
         return j;
     else
         ALOGE("%s: Failed to find %s node", __func__, type);
@@ -93,7 +94,7 @@ static int querySDEInfoDRM(HWQueryType type, int *value) {
     case HAS_UBWC:
     case HAS_WB_UBWC:  // WFD stack still uses this
         *value = 1;
-        property_get("debug.gralloc.gfx_ubwc_disable", property, "0");
+        property_get(DISABLE_UBWC_PROP, property, "0");
         if(!(strncmp(property, "1", PROPERTY_VALUE_MAX)) ||
                 !(strncmp(property, "true", PROPERTY_VALUE_MAX))) {
             *value = 0;
@@ -186,12 +187,12 @@ int getEdidRawData(char *buffer)
     }
 
     snprintf(msmFbTypePath, sizeof(msmFbTypePath),
-                 "/sys/class/graphics/fb%d/edid_raw_data", node_id);
+                 "/sys/devices/virtual/graphics/fb%d/edid_raw_data", node_id);
 
     edidFile = open(msmFbTypePath, O_RDONLY, 0);
 
     if (edidFile < 0) {
-        ALOGE("%s no edid raw data found", __func__);
+        ALOGE("%s no edid raw data found %s", __func__,msmFbTypePath);
         return 0;
     }
 
@@ -214,11 +215,11 @@ bool isDPConnected() {
     }
 
     snprintf(connectPath, sizeof(connectPath),
-             "/sys/class/graphics/fb%d/connected", nodeId);
+             "/sys/devices/virtual/graphics/fb%d/connected", nodeId);
 
     connectFile = fopen(connectPath, "rb");
     if (!connectFile) {
-        ALOGW("Failed to open connect node for device node %d", nodeId);
+        ALOGW("Failed to open connect node for device node %s", connectPath);
         return false;
     }
 
@@ -253,20 +254,22 @@ int getDPTestConfig(uint32_t *panelBpp, uint32_t *patternType) {
     }
 
     snprintf(configPath, sizeof(configPath),
-             "/sys/class/graphics/fb%d/config", nodeId);
+             "/sys/devices/virtual/graphics/fb%d/config", nodeId);
 
     configFile = fopen(configPath, "rb");
     if (!configFile) {
-        ALOGW("Failed to open config node for device node %d", nodeId);
+        ALOGW("Failed to open config node for device node %s", configPath);
         return -EINVAL;
     }
 
     while (getline(&line, &len, configFile) != -1) {
         if (!parseLine(line, tokens, maxCount, &tokenCount)) {
-            if (!strncmp(tokens[0], "bpp", strlen("bpp"))) {
+            if (tokens[0] != NULL) {
+              if (!strncmp(tokens[0], "bpp", strlen("bpp"))) {
                 *panelBpp = static_cast<uint32_t>(atoi(tokens[1]));
-            } else  if (!strncmp(tokens[0], "pattern", strlen("pattern"))) {
+              } else  if (!strncmp(tokens[0], "pattern", strlen("pattern"))) {
                 *patternType = static_cast<uint32_t>(atoi(tokens[1]));
+              }
             }
         }
     }
@@ -352,6 +355,8 @@ const char *GetHALPixelFormatString(int format) {
     return "YCbCr_420_P010";
   case HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC:
     return "YCbCr_420_TP10_UBWC";
+  case HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS:
+    return "YCbCr_420_P010_VENUS";
   default:
     return "Unknown_format";
   }

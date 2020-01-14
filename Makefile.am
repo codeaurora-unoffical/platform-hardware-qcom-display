@@ -10,7 +10,7 @@ else
 if !ENABLE_SDMHALFB
 SUBDIRS += libqservice
 SUBDIRS += libqdutils
-SUBDIRS += libgralloc
+SUBDIRS += gralloc
 endif
 endif
 SUBDIRS += sdm/libs/core

@@ -68,6 +68,7 @@ AC_CONFIG_FILES([ \
         libqservice/Makefile \
         libqdutils/Makefile \
         libgralloc/Makefile \
+        gralloc/Makefile \
         libdrmutils/Makefile \
         gpu_tonemapper/Makefile \
         sdm/libs/utils/Makefile \
