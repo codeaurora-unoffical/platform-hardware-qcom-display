@@ -250,7 +250,7 @@ void HWColorManagerDrm::FreeDrmFeatureData(DRMPPFeatureInfo *feature) {
       case kFeaturePcc: {
 #ifdef PP_DRM_ENABLE
         drm_msm_pcc *pcc = reinterpret_cast<drm_msm_pcc *>(ptr);
-        delete pcc;
+        delete[] pcc;
 #endif
         break;
       }
@@ -347,9 +347,14 @@ DisplayError HWColorManagerDrm::GetDrmPCC(const PPFeatureInfo &in_data,
     return kErrorParameters;
   }
 
+  uint32_t num_configs = 1;
+  if (in_data.num_configs_ > 1) {
+    num_configs = in_data.num_configs_;
+  }
+
   out_data->type = sde_drm::kPropBlob;
   out_data->version = in_data.feature_version_;
-  out_data->payload_size = sizeof(struct drm_msm_pcc);
+  out_data->payload_size = num_configs * sizeof(struct drm_msm_pcc);
 
   if (in_data.enable_flags_ & kOpsDisable) {
     /* feature disable case */
@@ -360,46 +365,56 @@ DisplayError HWColorManagerDrm::GetDrmPCC(const PPFeatureInfo &in_data,
     return kErrorParameters;
   }
 
-  mdp_pcc = new drm_msm_pcc();
+  mdp_pcc = new struct drm_msm_pcc[num_configs];
   if (!mdp_pcc) {
     DLOGE("Failed to allocate memory for pcc");
     return kErrorMemory;
   }
 
-  mdp_pcc->flags = 0;
-
-  for (i = 0; i < kMaxPCCChanel; i++) {
-    switch (i) {
-    case 0:
-      sde_pcc_coeffs = &sde_pcc->red;
-      mdp_pcc_coeffs = &mdp_pcc->r;
-      mdp_pcc->r_rr = sde_pcc_coeffs->rr;
-      mdp_pcc->r_gg = sde_pcc_coeffs->gg;
-      mdp_pcc->r_bb = sde_pcc_coeffs->bb;
-      break;
-    case 1:
-        sde_pcc_coeffs = &sde_pcc->green;
-        mdp_pcc_coeffs = &mdp_pcc->g;
-        mdp_pcc->g_rr = sde_pcc_coeffs->rr;
-        mdp_pcc->g_gg = sde_pcc_coeffs->gg;
-        mdp_pcc->g_bb = sde_pcc_coeffs->bb;
-      break;
-    case 2:
-        sde_pcc_coeffs = &sde_pcc->blue;
-        mdp_pcc_coeffs = &mdp_pcc->b;
-        mdp_pcc->b_rr = sde_pcc_coeffs->rr;
-        mdp_pcc->b_gg = sde_pcc_coeffs->gg;
-        mdp_pcc->b_bb = sde_pcc_coeffs->bb;
-      break;
+  struct drm_msm_pcc *curr_pcc = mdp_pcc;
+  struct SDEPccV4Cfg *input_pcc = sde_pcc;
+  for (uint32_t num = 0; num < num_configs; num++) {
+    if (num_configs > 1 && (!num)) { // set config number to the first pcc data
+      curr_pcc->flags = ((uint64_t)(num_configs) << NUM_STRUCT_BITS);
+    } else {
+      curr_pcc->flags = 0;
     }
-    mdp_pcc_coeffs->c = sde_pcc_coeffs->c;
-    mdp_pcc_coeffs->r = sde_pcc_coeffs->r;
-    mdp_pcc_coeffs->g = sde_pcc_coeffs->g;
-    mdp_pcc_coeffs->b = sde_pcc_coeffs->b;
-    mdp_pcc_coeffs->rg = sde_pcc_coeffs->rg;
-    mdp_pcc_coeffs->gb = sde_pcc_coeffs->gb;
-    mdp_pcc_coeffs->rb = sde_pcc_coeffs->rb;
-    mdp_pcc_coeffs->rgb = sde_pcc_coeffs->rgb;
+
+    for (i = 0; i < kMaxPCCChanel; i++) {
+      switch (i) {
+      case 0:
+        sde_pcc_coeffs = &input_pcc->red;
+        mdp_pcc_coeffs = &curr_pcc->r;
+        curr_pcc->r_rr = sde_pcc_coeffs->rr;
+        curr_pcc->r_gg = sde_pcc_coeffs->gg;
+        curr_pcc->r_bb = sde_pcc_coeffs->bb;
+        break;
+      case 1:
+        sde_pcc_coeffs = &input_pcc->green;
+        mdp_pcc_coeffs = &curr_pcc->g;
+        curr_pcc->g_rr = sde_pcc_coeffs->rr;
+        curr_pcc->g_gg = sde_pcc_coeffs->gg;
+        curr_pcc->g_bb = sde_pcc_coeffs->bb;
+        break;
+      case 2:
+        sde_pcc_coeffs = &input_pcc->blue;
+        mdp_pcc_coeffs = &curr_pcc->b;
+        curr_pcc->b_rr = sde_pcc_coeffs->rr;
+        curr_pcc->b_gg = sde_pcc_coeffs->gg;
+        curr_pcc->b_bb = sde_pcc_coeffs->bb;
+        break;
+      }
+      mdp_pcc_coeffs->c = sde_pcc_coeffs->c;
+      mdp_pcc_coeffs->r = sde_pcc_coeffs->r;
+      mdp_pcc_coeffs->g = sde_pcc_coeffs->g;
+      mdp_pcc_coeffs->b = sde_pcc_coeffs->b;
+      mdp_pcc_coeffs->rg = sde_pcc_coeffs->rg;
+      mdp_pcc_coeffs->gb = sde_pcc_coeffs->gb;
+      mdp_pcc_coeffs->rb = sde_pcc_coeffs->rb;
+      mdp_pcc_coeffs->rgb = sde_pcc_coeffs->rgb;
+    }
+    curr_pcc++;
+    input_pcc++;
   }
   out_data->payload = mdp_pcc;
 #endif

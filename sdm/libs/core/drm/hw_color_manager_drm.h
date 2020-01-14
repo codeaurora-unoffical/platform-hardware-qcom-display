@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2018, 2020 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -67,6 +67,8 @@ enum PPBlock {
   kDGM,
   kPPBlockMax,
 };
+
+#define NUM_STRUCT_BITS 60
 
 class HWColorManagerDrm {
  public:

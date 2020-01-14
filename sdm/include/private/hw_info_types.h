@@ -214,6 +214,7 @@ class PPFeatureInfo {
   uint32_t feature_id_ = 0;
   uint32_t disp_id_ = 0;
   uint32_t pipe_id_ = 0;
+  uint32_t num_configs_ = 0;
 
   virtual ~PPFeatureInfo() {}
   virtual void *GetConfigData(void) const = 0;
