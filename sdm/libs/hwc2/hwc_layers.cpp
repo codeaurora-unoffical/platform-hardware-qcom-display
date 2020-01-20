@@ -45,13 +45,16 @@ DisplayError SetCSC(const private_handle_t *pvt_handle, ColorMetaData *color_met
         case ITU_R_601_FR:
           // video and display driver uses 601_525
           color_metadata->colorPrimaries = ColorPrimaries_BT601_6_525;
+          color_metadata->matrixCoefficients = MatrixCoEff_BT601_6_525;
           break;
         case ITU_R_709:
           color_metadata->colorPrimaries = ColorPrimaries_BT709_5;
+          color_metadata->matrixCoefficients = MatrixCoEff_BT709_5;
           break;
         case ITU_R_2020:
         case ITU_R_2020_FR:
           color_metadata->colorPrimaries = ColorPrimaries_BT2020;
+          color_metadata->matrixCoefficients = MatrixCoEff_BT2020;
           break;
         default:
           DLOGE("Unsupported CSC: %d", csc);
@@ -64,26 +67,33 @@ DisplayError SetCSC(const private_handle_t *pvt_handle, ColorMetaData *color_met
 }
 
 // Returns true when color primary is supported
-bool GetColorPrimary(const int32_t &dataspace, ColorPrimaries *color_primary) {
+bool GetColorPrimaryAndMatrixCoef(const int32_t &dataspace,
+                                  ColorPrimaries *color_primary,
+                                  MatrixCoEfficients *matrix_coefficients) {
   auto standard = dataspace & HAL_DATASPACE_STANDARD_MASK;
   bool supported_csc = true;
   switch (standard) {
     case  HAL_DATASPACE_STANDARD_BT709:
       *color_primary = ColorPrimaries_BT709_5;
+      *matrix_coefficients = MatrixCoEff_BT709_5;
       break;
     case HAL_DATASPACE_STANDARD_BT601_525:
     case HAL_DATASPACE_STANDARD_BT601_525_UNADJUSTED:
       *color_primary = ColorPrimaries_BT601_6_525;
+      *matrix_coefficients = MatrixCoEff_BT601_6_525;
       break;
     case HAL_DATASPACE_STANDARD_BT601_625:
     case HAL_DATASPACE_STANDARD_BT601_625_UNADJUSTED:
       *color_primary = ColorPrimaries_BT601_6_625;
+      *matrix_coefficients = MatrixCoEff_BT601_6_625;
       break;
     case HAL_DATASPACE_STANDARD_DCI_P3:
       *color_primary = ColorPrimaries_DCIP3;
+      *matrix_coefficients = MatrixCoEff_DCIP3;
       break;
     case HAL_DATASPACE_STANDARD_BT2020:
       *color_primary = ColorPrimaries_BT2020;
+      *matrix_coefficients = MatrixCoEff_BT2020;
       break;
     default:
       DLOGW_IF(kTagClient, "Unsupported Standard Request = %d", standard);
@@ -192,7 +202,8 @@ int32_t TranslateFromLegacyDataspace(const int32_t &legacy_ds) {
 // Retrieve ColorMetaData from android_data_space_t (STANDARD|TRANSFER|RANGE)
 bool GetSDMColorSpace(const int32_t &dataspace, ColorMetaData *color_metadata) {
   bool valid = false;
-  valid = GetColorPrimary(dataspace, &(color_metadata->colorPrimaries));
+  valid = GetColorPrimaryAndMatrixCoef(dataspace, &(color_metadata->colorPrimaries),
+                                       &(color_metadata->matrixCoefficients));
   if (valid) {
     valid = GetTransfer(dataspace, &(color_metadata->transfer));
   }
@@ -915,18 +926,20 @@ void HWCLayer::ValidateAndSetCSC(const private_handle_t *handle) {
 
     if (layer_buffer->color_metadata.transfer != csc.transfer ||
        layer_buffer->color_metadata.colorPrimaries != csc.colorPrimaries ||
+       layer_buffer->color_metadata.matrixCoefficients != csc.matrixCoefficients ||
        layer_buffer->color_metadata.range != csc.range) {
         // ColorMetadata updated. Needs validate.
         needs_validate_ = true;
         // if we are here here, update the sdm layer csc.
         layer_buffer->color_metadata.transfer = csc.transfer;
         layer_buffer->color_metadata.colorPrimaries = csc.colorPrimaries;
+        layer_buffer->color_metadata.matrixCoefficients = csc.matrixCoefficients;
         layer_buffer->color_metadata.range = csc.range;
     }
   }
 
   // Only Video module populates the Color Metadata in handle.
-  if (layer_buffer->flags.video && IsBT2020(layer_buffer->color_metadata.colorPrimaries)) {
+  if (layer_buffer->flags.video) {
      // android_dataspace_t doesnt support mastering display and light levels
      // so retrieve it from metadata for BT2020(HDR)
      use_color_metadata = true;
@@ -937,6 +950,7 @@ void HWCLayer::ValidateAndSetCSC(const private_handle_t *handle) {
     if (sdm::SetCSC(handle, &layer_buffer->color_metadata) == kErrorNone) {
       if ((layer_buffer->color_metadata.colorPrimaries != old_meta_data.colorPrimaries) ||
           (layer_buffer->color_metadata.transfer != old_meta_data.transfer) ||
+          (layer_buffer->color_metadata.matrixCoefficients != old_meta_data.matrixCoefficients) ||
           (layer_buffer->color_metadata.range != old_meta_data.range)) {
         needs_validate_ = true;
       }
