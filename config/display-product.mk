@@ -84,7 +84,8 @@ else
 PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_rotator_ubwc=1 \
     vendor.display.normal_noc_efficiency_factor=0.85 \
-    vendor.display.camera_noc_efficiency_factor=0.70
+    vendor.display.camera_noc_efficiency_factor=0.70 \
+    vendor.display.disable_layer_stitch=0
 endif
 
 ifeq ($(TARGET_BOARD_PLATFORM),kona)
@@ -98,6 +99,17 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.high_fps_early_gl_phase_offset_ns=6500000 \
     debug.sf.perf_fps_early_gl_phase_offset_ns=9000000 \
     debug.sf.phase_offset_threshold_for_next_vsync_ns=6100000
+endif
+
+ifeq ($(TARGET_BOARD_PLATFORM),lito)
+PRODUCT_PROPERTY_OVERRIDES += \
+    debug.sf.high_fps_late_sf_phase_offset_ns=-4000000 \
+    debug.sf.high_fps_early_phase_offset_ns=-4000000 \
+    debug.sf.high_fps_early_gl_phase_offset_ns=-4000000 \
+    debug.sf.perf_fps_late_sf_phase_offset_ns=-5000000 \
+    debug.sf.perf_fps_early_phase_offset_ns=-5000000 \
+    debug.sf.perf_fps_early_gl_phase_offset_ns=-5000000 \
+    debug.sf.enable_advanced_sf_phase_offset=1
 endif
 
 ifneq ($(PLATFORM_VERSION), 10)
