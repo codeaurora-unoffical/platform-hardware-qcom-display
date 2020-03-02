@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+* Copyright (c) 2018-2019, 2020 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -509,6 +509,9 @@ int32_t HWCSidebandStreamSession::UpdateSidebandStream(HWCSidebandStream * stm) 
   for (auto & display : stm->mDisplays) {
     /* only update pending displays */
     if (!(pendingMask & (1 << display)))
+      continue;
+
+    if (hwc_session->hwc_display_[display]->GetGeometryChanges())
       continue;
 
     int32_t retire_fence;
