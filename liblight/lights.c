@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014, 2017 The  Linux Foundation. All rights reserved.
+ * Copyright (C) 2014, 2017, 2020 The  Linux Foundation. All rights reserved.
  * Not a contribution
  * Copyright (C) 2008 The Android Open Source Project
  *
@@ -99,6 +99,10 @@ write_int(char const* path, int value)
     if (fd >= 0) {
         char buffer[20];
         int bytes = snprintf(buffer, sizeof(buffer), "%d\n", value);
+        if (bytes >= 20) {
+            ALOGE("write_int failed with value too long\n");
+            return -errno;
+        }
         ssize_t amt = write(fd, buffer, (size_t)bytes);
         close(fd);
         return amt == -1 ? -errno : 0;
