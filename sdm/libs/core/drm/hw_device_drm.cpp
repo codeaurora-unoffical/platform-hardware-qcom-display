@@ -1563,7 +1563,9 @@ DisplayError HWDeviceDRM::SetPPFeatures(PPFeaturesConfig *feature_list) {
     if (ret)
       break;
 
-    hw_color_mgr_->ToDrmFeatureId(kDSPP, feature->feature_id_, &drm_id);
+    if (feature)
+      hw_color_mgr_->ToDrmFeatureId(kDSPP, feature->feature_id_, &drm_id);
+
     if (drm_id.empty())
       continue;
 
