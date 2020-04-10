@@ -31,6 +31,7 @@
 #include <media/msm_media_info.h>
 #endif
 
+#include <cutils/properties.h>
 #include <algorithm>
 
 #include "gr_adreno_info.h"
@@ -47,6 +48,7 @@ bool IsYuvFormat(int format) {
     case HAL_PIXEL_FORMAT_YCbCr_422_SP:
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
     case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:  // Same as YCbCr_420_SP_VENUS
+    case HAL_PIXEL_FORMAT_NV21_ENCODEABLE:
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS_UBWC:
     case HAL_PIXEL_FORMAT_YCrCb_420_SP:
     case HAL_PIXEL_FORMAT_YCrCb_422_SP:
@@ -536,6 +538,7 @@ void GetYuvSPPlaneInfo(const BufferInfo &info, int format, uint32_t width, uint3
       c_size = ALIGN(2 * ALIGN(unaligned_width / 2, 32) * ALIGN(unaligned_height / 2, 32), 4096);
       break;
     case HAL_PIXEL_FORMAT_YCrCb_420_SP_VENUS:
+    case HAL_PIXEL_FORMAT_NV21_ENCODEABLE:
       c_height = VENUS_UV_SCANLINES(COLOR_FMT_NV21, height);
       c_size = c_stride * c_height;
       break;
@@ -1061,6 +1064,7 @@ void GetAlignedWidthAndHeight(const BufferInfo &info, unsigned int *alignedw,
       aligned_h = INT(VENUS_Y_SCANLINES(COLOR_FMT_NV12, height));
       break;
     case HAL_PIXEL_FORMAT_YCrCb_420_SP_VENUS:
+    case HAL_PIXEL_FORMAT_NV21_ENCODEABLE:
       aligned_w = INT(VENUS_Y_STRIDE(COLOR_FMT_NV21, width));
       aligned_h = INT(VENUS_Y_SCANLINES(COLOR_FMT_NV21, height));
       break;
@@ -1122,6 +1126,7 @@ int GetBufferLayout(private_handle_t *hnd, uint32_t stride[4], uint32_t offset[4
     case HAL_PIXEL_FORMAT_YCrCb_420_SP:
     case HAL_PIXEL_FORMAT_YCrCb_420_SP_VENUS:
     case HAL_PIXEL_FORMAT_YCrCb_422_SP:
+    case HAL_PIXEL_FORMAT_NV21_ENCODEABLE:
       offset[1] = static_cast<uint32_t>(reinterpret_cast<uint64_t>(yuvInfo.cr) - hnd->base);
       break;
     case HAL_PIXEL_FORMAT_YV12:
@@ -1305,7 +1310,11 @@ int GetImplDefinedFormat(uint64_t usage, int format) {
       }
     } else if (usage & BufferUsage::CAMERA_OUTPUT) {
       if (format == HAL_PIXEL_FORMAT_YCbCr_420_888) {
-        gr_format = HAL_PIXEL_FORMAT_NV21_ZSL;  // NV21
+        if ((usage & BufferUsage::PROTECTED) && (!CanAllocateZSLForSecureCamera())) {
+          gr_format = HAL_PIXEL_FORMAT_YCrCb_420_SP;  // NV21
+        } else {
+          gr_format = HAL_PIXEL_FORMAT_NV21_ZSL;  // NV21
+        }
       } else {
         gr_format = HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS;  // NV12 preview
       }
@@ -1365,6 +1374,7 @@ int GetYUVPlaneInfo(const BufferInfo &info, int32_t format, int32_t width, int32
     case HAL_PIXEL_FORMAT_YCbCr_422_SP:
     case HAL_PIXEL_FORMAT_YCbCr_420_SP_VENUS:
     case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:  // Same as YCbCr_420_SP_VENUS
+    case HAL_PIXEL_FORMAT_NV21_ENCODEABLE:
     case HAL_PIXEL_FORMAT_NV12_HEIF:
     case HAL_PIXEL_FORMAT_YCrCb_420_SP:
     case HAL_PIXEL_FORMAT_YCrCb_422_SP:
@@ -1596,6 +1606,7 @@ void GetYuvSubSamplingFactor(int32_t format, int *h_subsampling, int *v_subsampl
     case HAL_PIXEL_FORMAT_YCrCb_420_SP_VENUS:
     case HAL_PIXEL_FORMAT_YCrCb_420_SP:
     case HAL_PIXEL_FORMAT_NV12_ENCODEABLE:  // Same as YCbCr_420_SP_VENUS
+    case HAL_PIXEL_FORMAT_NV21_ENCODEABLE:
     case HAL_PIXEL_FORMAT_YV12:
     case HAL_PIXEL_FORMAT_NV12_HEIF:
       *h_subsampling = 1;
@@ -1697,4 +1708,20 @@ void GetRGBPlaneInfo(const BufferInfo &info, int32_t format, int32_t width, int3
   plane_info->scanlines = height;
 }
 
+bool CanAllocateZSLForSecureCamera() {
+  static bool inited = false;
+  static bool can_allocate = true;
+  if (inited) {
+    return can_allocate;
+  }
+  char property[PROPERTY_VALUE_MAX];
+  property_get("vendor.display.secure_preview_buffer_format", property, "0");
+  if (!(strncmp(property, "420_sp", PROPERTY_VALUE_MAX))) {
+    can_allocate = false;
+  }
+  inited = true;
+  ALOGI("CanAllocateZSLForSecureCamera: %d", can_allocate);
+
+  return can_allocate;
+}
 }  // namespace gralloc
