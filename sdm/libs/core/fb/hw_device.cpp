@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2018, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2018, 2020 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -52,7 +52,6 @@
 #include "hw_primary.h"
 #include "hw_hdmi.h"
 #include "hw_virtual.h"
-#include "hw_info_interface.h"
 
 #define __CLASS__ "HWDevice"
 

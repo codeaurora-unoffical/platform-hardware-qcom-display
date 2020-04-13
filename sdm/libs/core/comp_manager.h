@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2019, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2020, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -27,6 +27,7 @@
 
 #include <core/display_interface.h>
 #include <private/extension_interface.h>
+#include <private/hw_info_interface.h>
 #include <utils/locker.h>
 #include <bitset>
 #include <set>
@@ -41,7 +42,7 @@ namespace sdm {
 
 class CompManager {
  public:
-  DisplayError Init(const HWResourceInfo &hw_res_info_, ExtensionInterface *extension_intf,
+  DisplayError Init(HWInfoInterface *hw_info_intf, ExtensionInterface *extension_intf,
                     BufferAllocator *buffer_allocator, BufferSyncHandler *buffer_sync_handler,
                     SocketHandler *socket_handler);
   DisplayError Deinit();
@@ -88,6 +89,7 @@ class CompManager {
   void GenerateROI(Handle display_ctx, HWLayers *hw_layers);
   bool CanSkipValidate(Handle display_ctx);
   DisplayError CheckEnforceSplit(Handle comp_handle, uint32_t new_refresh_rate);
+  DisplayError GetNotifierInterface(NotifierInterface **interface);
 
  private:
   static const int kMaxThermalLevel = 3;
@@ -129,6 +131,7 @@ class CompManager {
   uint32_t max_sde_ext_layers_ = 0;
   uint32_t max_sde_builtin_layers_ = 2;
   DppsControlInterface *dpps_ctrl_intf_ = NULL;
+  NotifierInterface *notifier_intf_ = NULL;
 };
 
 }  // namespace sdm

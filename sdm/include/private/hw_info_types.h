@@ -235,9 +235,18 @@ struct HWPipeCaps {
   uint32_t dgm_csc_version = 0;
   std::map<HWToneMapLut, uint32_t> tm_lut_version_map = {};
   bool block_sec_ui = false;
+  bool support_handoff = false;
   // Allow all pipelines to be usable on all displays by default
   std::bitset<32> hw_block_mask = std::bitset<32>().set();
 };
+
+struct HWPipeStateInfo {
+  uint32_t id = 0;
+  int32_t hw_block_id = -1;
+  std::bitset<32> hw_block_mask = std::bitset<32>().set();
+};
+
+typedef std::vector<HWPipeStateInfo> HWPipesStateInfo;
 
 struct HWRotatorInfo {
   enum { ROT_TYPE_MDSS, ROT_TYPE_V4L2 };

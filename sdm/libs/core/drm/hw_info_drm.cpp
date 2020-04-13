@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -436,6 +436,7 @@ void HWInfoDRM::GetHWPlanesInfo(HWResourceInfo *hw_resource) {
           pipe_obj.second.block_sec_ui, pipe_obj.second.hw_block_mask.to_ulong());
     pipe_caps.inverse_pma = pipe_obj.second.inverse_pma;
     pipe_caps.dgm_csc_version = pipe_obj.second.dgm_csc_version;
+    pipe_caps.support_handoff = pipe_obj.second.has_handoff;
     // disable src tonemap feature if its disabled using property.
     if (!disable_src_tonemap) {
       for (auto &it : pipe_obj.second.tonemap_lut_version_map) {
@@ -923,6 +924,33 @@ DisplayError HWInfoDRM::GetMaxDisplaysSupported(const DisplayType type, int32_t 
   log_once = kTagDisplay;
 
   return kErrorNone;
+}
+
+DisplayError HWInfoDRM::GetPipesStatus(HWPipesStateInfo *hw_pipes_info, bool update) {
+  if (!hw_pipes_info)
+    return kErrorParameters;
+
+  sde_drm::DRMPlanesStateInfo planes;
+  drm_mgr_intf_->GetPlanesStateInfo(&planes, update);
+
+  hw_pipes_info->clear();
+  for (auto &plane : planes) {
+    HWPipeStateInfo pipe_info;
+    pipe_info.id = plane.plane_id;
+    pipe_info.hw_block_id = plane.crtc_id ? (int32_t)plane.crtc_index : -1;
+    pipe_info.hw_block_mask = std::bitset<32>(plane.possible_crtcs);
+    hw_pipes_info->push_back(pipe_info);
+  }
+
+  return kErrorNone;
+}
+
+DisplayError HWInfoDRM::SetPipeHandoff(uint32_t pipe_id) {
+  if (drm_mgr_intf_->HandoffPlane(pipe_id)) {
+    return kErrorResources;
+  } else {
+    return kErrorNone;
+  }
 }
 
 }  // namespace sdm

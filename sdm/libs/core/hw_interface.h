@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2019, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2020, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -30,9 +30,8 @@
 #include <core/display_interface.h>
 #include <private/hw_info_types.h>
 #include <private/color_interface.h>
+#include <private/hw_info_interface.h>
 #include <utils/constants.h>
-
-#include "hw_info_interface.h"
 
 namespace sdm {
 
