@@ -75,6 +75,9 @@ DisplayError SetCSC(const private_handle_t *pvt_handle, ColorMetaData *color_met
 HWCLayer::HWCLayer(hwc2_display_t display_id, HWCBufferAllocator *buf_allocator)
   : id_(next_id_++), display_id_(display_id), buffer_allocator_(buf_allocator) {
   layer_ = new Layer();
+  // Fences are deferred, so the first time this layer is presented, return -1
+  // TODO(user): Verify that fences are properly obtained on suspend/resume
+  release_fences_.push(-1);
 }
 
 HWCLayer::~HWCLayer() {
