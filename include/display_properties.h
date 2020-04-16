@@ -123,6 +123,8 @@
 #define DISABLE_INLINE_ROTATOR_UI_PROP       DISPLAY_PROP("disable_inline_rotator_ui")
 #define ENABLE_POMS_DURING_DOZE              DISPLAY_PROP("enable_poms_during_doze")
 #define DISABLE_DYNAMIC_FPS                  DISPLAY_PROP("disable_dynamic_fps")
+// Multi qdcm xml support property
+#define QDCM_MULTI_XML_SUPPORT_PROP          DISPLAY_PROP("qdcm.support_multi_xml")
 
 // Add all vendor.display properties above
 

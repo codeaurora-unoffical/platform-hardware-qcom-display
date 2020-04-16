@@ -449,6 +449,7 @@ class SDEGamutCfgWrapper : private SDEGamutCfg {
   // This factory method will be used by libsdm-color.so data producer to be populated with
   // converted config values for SDE feature blocks.
   static SDEGamutCfgWrapper *Init(uint32_t arg);
+  static SDEGamutCfgWrapper *InitMultiConfig(uint32_t mode, uint32_t arg);
 
   // Data consumer<Commit thread> will be responsible to destroy it once the feature is commited.
   ~SDEGamutCfgWrapper() {
@@ -467,6 +468,7 @@ class SDEGamutCfgWrapper : private SDEGamutCfg {
 class SDEPaCfgWrapper : private SDEPaData {
  public:
   static SDEPaCfgWrapper *Init(uint32_t arg = 0);
+  static SDEPaCfgWrapper *InitMultiConfig(uint32_t mode, uint32_t arg);
   ~SDEPaCfgWrapper() {
     if (buffer_)
       delete[] buffer_;
@@ -495,6 +497,8 @@ class SDEIgcLUTWrapper : private SDEIgcLUTData {
 class SDEIgcV30LUTWrapper : private SDEIgcV30LUTData {
  public:
   static SDEIgcV30LUTWrapper *Init(uint32_t arg __attribute__((__unused__)));
+  static SDEIgcV30LUTWrapper *InitMultiConfig(uint32_t mode __attribute__((__unused__)),
+                                              uint32_t arg);
   ~SDEIgcV30LUTWrapper() {
     if (buffer_)
       delete[] buffer_;
@@ -512,6 +516,8 @@ class SDEIgcV30LUTWrapper : private SDEIgcV30LUTData {
 class SDEPgcLUTWrapper : private SDEPgcLUTData {
  public:
   static SDEPgcLUTWrapper *Init(uint32_t arg __attribute__((__unused__)));
+  static SDEPgcLUTWrapper *InitMultiConfig(uint32_t mode __attribute__((__unused__)),
+                                           uint32_t arg);
   ~SDEPgcLUTWrapper() {
     if (buffer_)
       delete[] buffer_;
@@ -546,6 +552,19 @@ class TPPFeatureInfo : public PPFeatureInfo {
     TPPFeatureInfo *info = new TPPFeatureInfo();
     if (info) {
       info->params_ = T::Init(arg);
+      if (!info->params_) {
+        delete info;
+        info = NULL;
+      }
+    }
+
+    return info;
+  }
+
+  static TPPFeatureInfo *InitMultiConfig(uint32_t mode = 0, uint32_t arg = 0) {
+    TPPFeatureInfo *info = new TPPFeatureInfo();
+    if (info) {
+      info->params_ = T::InitMultiConfig(mode, arg);
       if (!info->params_) {
         delete info;
         info = NULL;

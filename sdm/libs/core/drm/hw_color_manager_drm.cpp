@@ -259,7 +259,7 @@ void HWColorManagerDrm::FreeDrmFeatureData(DRMPPFeatureInfo *feature) {
       case kFeatureVigIgc: {
 #ifdef PP_DRM_ENABLE
         drm_msm_igc_lut *igc = reinterpret_cast<drm_msm_igc_lut *>(ptr);
-        delete igc;
+        delete[] igc;
 #endif
         break;
       }
@@ -267,7 +267,7 @@ void HWColorManagerDrm::FreeDrmFeatureData(DRMPPFeatureInfo *feature) {
       case kFeatureDgmGc: {
 #ifdef PP_DRM_ENABLE
         drm_msm_pgc_lut *pgc = reinterpret_cast<drm_msm_pgc_lut *>(ptr);
-        delete pgc;
+        delete[] pgc;
 #endif
         break;
       }
@@ -282,7 +282,7 @@ void HWColorManagerDrm::FreeDrmFeatureData(DRMPPFeatureInfo *feature) {
       case kFeatureVigGamut: {
 #ifdef PP_DRM_ENABLE
         drm_msm_3d_gamut *gamut = reinterpret_cast<drm_msm_3d_gamut *>(ptr);
-        delete gamut;
+        delete[] gamut;
 #endif
         break;
       }
@@ -296,14 +296,14 @@ void HWColorManagerDrm::FreeDrmFeatureData(DRMPPFeatureInfo *feature) {
       case kFeaturePAHsic: {
 #if defined(PP_DRM_ENABLE) && defined(DRM_MSM_PA_HSIC)
         drm_msm_pa_hsic *hsic = reinterpret_cast<drm_msm_pa_hsic *>(ptr);
-        delete hsic;
+        delete[] hsic;
 #endif
         break;
       }
       case kFeaturePASixZone: {
 #if defined(PP_DRM_ENABLE) && defined(DRM_MSM_SIXZONE)
         drm_msm_sixzone *sixzone = reinterpret_cast<drm_msm_sixzone *>(ptr);
-        delete sixzone;
+        delete[] sixzone;
 #endif
         break;
       }
@@ -313,7 +313,7 @@ void HWColorManagerDrm::FreeDrmFeatureData(DRMPPFeatureInfo *feature) {
       case kFeaturePAMemColProt: {
 #if defined(PP_DRM_ENABLE) && defined(DRM_MSM_MEMCOL)
         drm_msm_memcol *memcol = reinterpret_cast<drm_msm_memcol *>(ptr);
-        delete memcol;
+        delete[] memcol;
 #endif
         break;
       }
@@ -375,9 +375,9 @@ DisplayError HWColorManagerDrm::GetDrmPCC(const PPFeatureInfo &in_data,
   struct SDEPccV4Cfg *input_pcc = sde_pcc;
   for (uint32_t num = 0; num < num_configs; num++) {
     if (num_configs > 1 && (!num)) { // set config number to the first pcc data
-      curr_pcc->flags = ((uint64_t)(num_configs) << NUM_STRUCT_BITS);
+      curr_pcc->flags |= ((uint64_t)(num_configs) << NUM_STRUCT_BITS);
     } else {
-      curr_pcc->flags = 0;
+      curr_pcc->flags |= 0;
     }
 
     for (i = 0; i < kMaxPCCChanel; i++) {
@@ -425,7 +425,7 @@ DisplayError HWColorManagerDrm::GetDrmIGC(const PPFeatureInfo &in_data,
                                           DRMPPFeatureInfo *out_data) {
   DisplayError ret = kErrorNone;
 #ifdef PP_DRM_ENABLE
-  struct SDEIgcV30LUTData *sde_igc;
+  SDEIgcV30LUTWrapper *sde_igc_wrapper = NULL;
   struct drm_msm_igc_lut *mdp_igc;
   uint32_t *c0_c1_data_ptr = NULL;
   uint32_t *c2_data_ptr = NULL;
@@ -433,16 +433,20 @@ DisplayError HWColorManagerDrm::GetDrmIGC(const PPFeatureInfo &in_data,
   switch (in_data.feature_version_) {
   case PPFeatureVersion::kSDEIgcV30:
   case kSourceFeatureV5:
-    sde_igc = (struct SDEIgcV30LUTData *) in_data.GetConfigData();
+    sde_igc_wrapper = (SDEIgcV30LUTWrapper *)in_data.GetConfigData();
     break;
   default:
     DLOGE("Unsupported igc feature version: %d", in_data.feature_version_);
     return kErrorParameters;
   }
 
+  uint32_t num_configs = 1;
+  if (in_data.num_configs_ > 1) {
+    num_configs = in_data.num_configs_;
+  }
   out_data->type = sde_drm::kPropBlob;
   out_data->version = in_data.feature_version_;
-  out_data->payload_size = sizeof(struct drm_msm_igc_lut);
+  out_data->payload_size = num_configs * sizeof(struct drm_msm_igc_lut);
 
   if (in_data.enable_flags_ & kOpsDisable) {
     /* feature disable case */
@@ -453,29 +457,43 @@ DisplayError HWColorManagerDrm::GetDrmIGC(const PPFeatureInfo &in_data,
     return kErrorParameters;
   }
 
-  mdp_igc = new drm_msm_igc_lut();
+  mdp_igc = new drm_msm_igc_lut[num_configs];
   if (!mdp_igc) {
     DLOGE("Failed to allocate memory for igc");
     return kErrorMemory;
   }
 
-  mdp_igc->flags = IGC_DITHER_ENABLE;
-  mdp_igc->strength = sde_igc->strength;
+  struct drm_msm_igc_lut *curr_igc = mdp_igc;
+  struct SDEIgcV30LUTData *input_igc = (struct SDEIgcV30LUTData *) sde_igc_wrapper;
+  for (uint32_t num = 0; num < num_configs; num++) {
+    curr_igc->flags = IGC_DITHER_ENABLE;
+    curr_igc->strength = input_igc->strength;
+    if (num_configs > 1 && (!num)) {
+      curr_igc->flags |= ((uint64_t)(num_configs) << NUM_STRUCT_BITS);
+    } else {
+      curr_igc->flags |= 0;
+    }
 
-  c0_c1_data_ptr = reinterpret_cast<uint32_t*>(sde_igc->c0_c1_data);
-  c2_data_ptr = reinterpret_cast<uint32_t*>(sde_igc->c2_data);
+    c0_c1_data_ptr = reinterpret_cast<uint32_t*>(input_igc->c0_c1_data);
+    c2_data_ptr = reinterpret_cast<uint32_t*>(input_igc->c2_data);
 
-  if (!c0_c1_data_ptr || !c2_data_ptr) {
-    DLOGE("Invaid igc data pointer");
-    delete mdp_igc;
-    out_data->payload = NULL;
-    return kErrorParameters;
-  }
+    if (!c0_c1_data_ptr || !c2_data_ptr) {
+      DLOGE("Invaid igc data pointer");
+      delete mdp_igc;
+      curr_igc = NULL;
+      input_igc = NULL;
+      out_data->payload = NULL;
+      return kErrorParameters;
+    }
 
-  for (int i = 0; i < IGC_TBL_LEN; i++) {
-    mdp_igc->c0[i] = c0_c1_data_ptr[i] & kIgcDataMask;
-    mdp_igc->c1[i] = (c0_c1_data_ptr[i] >> kIgcShift) & kIgcDataMask;
-    mdp_igc->c2[i] = c2_data_ptr[i] & kIgcDataMask;
+    for (int i = 0; i < IGC_TBL_LEN; i++) {
+      curr_igc->c0[i] = c0_c1_data_ptr[i] & kIgcDataMask;
+      curr_igc->c1[i] = (c0_c1_data_ptr[i] >> kIgcShift) & kIgcDataMask;
+      curr_igc->c2[i] = c2_data_ptr[i] & kIgcDataMask;
+    }
+    curr_igc++;
+    sde_igc_wrapper++;
+    input_igc = (struct SDEIgcV30LUTData *) sde_igc_wrapper;
   }
   out_data->payload = mdp_igc;
 #endif
@@ -486,14 +504,18 @@ DisplayError HWColorManagerDrm::GetDrmPGC(const PPFeatureInfo &in_data,
                                           DRMPPFeatureInfo *out_data) {
   DisplayError ret = kErrorNone;
 #ifdef PP_DRM_ENABLE
-  struct SDEPgcLUTData *sde_pgc;
+  SDEPgcLUTWrapper *sde_pgc_wrapper = NULL;
   struct drm_msm_pgc_lut *mdp_pgc;
 
-  sde_pgc = (struct SDEPgcLUTData *)in_data.GetConfigData();
+  sde_pgc_wrapper = (SDEPgcLUTWrapper *)in_data.GetConfigData();
+  uint32_t num_configs = 1;
+  if (in_data.num_configs_ > 1) {
+    num_configs = in_data.num_configs_;
+  }
 
   out_data->type = sde_drm::kPropBlob;
   out_data->version = in_data.feature_version_;
-  out_data->payload_size = sizeof(struct drm_msm_pgc_lut);
+  out_data->payload_size = num_configs * sizeof(struct drm_msm_pgc_lut);
 
   if (in_data.enable_flags_ & kOpsDisable) {
     /* feature disable case */
@@ -504,21 +526,32 @@ DisplayError HWColorManagerDrm::GetDrmPGC(const PPFeatureInfo &in_data,
     return kErrorParameters;
   }
 
-  mdp_pgc = new drm_msm_pgc_lut();
+  mdp_pgc = new drm_msm_pgc_lut[num_configs];
   if (!mdp_pgc) {
     DLOGE("Failed to allocate memory for pgc");
     return kErrorMemory;
   }
 
-  mdp_pgc->flags = 0;
+  struct drm_msm_pgc_lut *curr_pgc = mdp_pgc;
+  struct SDEPgcLUTData *input_pgc = (struct SDEPgcLUTData *)sde_pgc_wrapper;;
+  for (uint32_t num = 0; num < num_configs; num++) {
+    if (num_configs > 1 && (!num)) {
+      curr_pgc->flags |= ((uint64_t)(num_configs) << NUM_STRUCT_BITS);
+    } else {
+      curr_pgc->flags |= 0;
+    }
 
-  for (int i = 0, j = 0; i < PGC_TBL_LEN; i++, j += 2) {
-    mdp_pgc->c0[i] = (sde_pgc->c0_data[j] & kPgcDataMask) |
-        (sde_pgc->c0_data[j + 1] & kPgcDataMask) << kPgcShift;
-    mdp_pgc->c1[i] = (sde_pgc->c1_data[j] & kPgcDataMask) |
-        (sde_pgc->c1_data[j + 1] & kPgcDataMask) << kPgcShift;
-    mdp_pgc->c2[i] = (sde_pgc->c2_data[j] & kPgcDataMask) |
-        (sde_pgc->c2_data[j + 1] & kPgcDataMask) << kPgcShift;
+    for (int i = 0, j = 0; i < PGC_TBL_LEN; i++, j += 2) {
+      curr_pgc->c0[i] = (input_pgc->c0_data[j] & kPgcDataMask) |
+        (input_pgc->c0_data[j + 1] & kPgcDataMask) << kPgcShift;
+      curr_pgc->c1[i] = (input_pgc->c1_data[j] & kPgcDataMask) |
+        (input_pgc->c1_data[j + 1] & kPgcDataMask) << kPgcShift;
+      curr_pgc->c2[i] = (input_pgc->c2_data[j] & kPgcDataMask) |
+        (input_pgc->c2_data[j + 1] & kPgcDataMask) << kPgcShift;
+    }
+    curr_pgc++;
+    sde_pgc_wrapper++;
+    input_pgc = (struct SDEPgcLUTData *)sde_pgc_wrapper;
   }
   out_data->payload = mdp_pgc;
 #endif
@@ -541,10 +574,14 @@ DisplayError HWColorManagerDrm::GetDrmPAHsic(const PPFeatureInfo &in_data,
   DisplayError ret = kErrorNone;
 #if defined(PP_DRM_ENABLE) && defined(DRM_MSM_PA_HSIC)
   struct SDEPaData *sde_pa;
+  SDEPaCfgWrapper *sde_pa_wrapper = NULL;
   struct drm_msm_pa_hsic *mdp_hsic;
-
-  sde_pa = (struct SDEPaData *) in_data.GetConfigData();
-
+  sde_pa_wrapper = (SDEPaCfgWrapper *)in_data.GetConfigData();
+  sde_pa = (struct SDEPaData *) sde_pa_wrapper;
+  uint32_t num_configs = 1;
+  if (in_data.num_configs_ > 1) {
+    num_configs = in_data.num_configs_;
+  }
   out_data->type = sde_drm::kPropBlob;
   out_data->version = in_data.feature_version_;
   out_data->payload_size = 0;
@@ -564,34 +601,45 @@ DisplayError HWColorManagerDrm::GetDrmPAHsic(const PPFeatureInfo &in_data,
     return ret;
   }
 
-  mdp_hsic = new drm_msm_pa_hsic();
+  mdp_hsic = new drm_msm_pa_hsic[num_configs];
   if (!mdp_hsic) {
     DLOGE("Failed to allocate memory for pa hsic");
     return kErrorMemory;
   }
 
-  mdp_hsic->flags = 0;
+  struct drm_msm_pa_hsic *curr_hsic = mdp_hsic;
+  struct SDEPaData *input_pa = sde_pa;
 
-  if (in_data.enable_flags_ & kPaHueEnable) {
-    mdp_hsic->flags |= PA_HSIC_HUE_ENABLE;
-    mdp_hsic->hue = sde_pa->hue_adj;
+  for (uint32_t num = 0; num < num_configs; num++) {
+    curr_hsic->flags = 0;
+    if (in_data.enable_flags_ & kPaHueEnable) {
+      curr_hsic->flags |= PA_HSIC_HUE_ENABLE;
+      curr_hsic->hue = input_pa->hue_adj;
+    }
+    if (in_data.enable_flags_ & kPaSatEnable) {
+      curr_hsic->flags |= PA_HSIC_SAT_ENABLE;
+      curr_hsic->saturation = input_pa->sat_adj;
+    }
+    if (in_data.enable_flags_ & kPaValEnable) {
+      curr_hsic->flags |= PA_HSIC_VAL_ENABLE;
+      curr_hsic->value = input_pa->val_adj;
+    }
+    if (in_data.enable_flags_ & kPaContEnable) {
+      curr_hsic->flags |= PA_HSIC_CONT_ENABLE;
+      curr_hsic->contrast = input_pa->cont_adj;
+    }
+    if (num_configs > 1 && (!num)) {
+      curr_hsic->flags |= ((uint64_t)(num_configs) << NUM_STRUCT_BITS);
+    } else {
+      curr_hsic->flags |= ((uint64_t)0 << 60);
+    }
+    curr_hsic++;
+    sde_pa_wrapper++;
+    input_pa = (struct SDEPaData *) sde_pa_wrapper;
   }
-  if (in_data.enable_flags_ & kPaSatEnable) {
-    mdp_hsic->flags |= PA_HSIC_SAT_ENABLE;
-    mdp_hsic->saturation = sde_pa->sat_adj;
-  }
-  if (in_data.enable_flags_ & kPaValEnable) {
-    mdp_hsic->flags |= PA_HSIC_VAL_ENABLE;
-    mdp_hsic->value = sde_pa->val_adj;
-  }
-  if (in_data.enable_flags_ & kPaContEnable) {
-    mdp_hsic->flags |= PA_HSIC_CONT_ENABLE;
-    mdp_hsic->contrast = sde_pa->cont_adj;
-  }
-
   if (mdp_hsic->flags) {
     out_data->payload = mdp_hsic;
-    out_data->payload_size = sizeof(struct drm_msm_pa_hsic);
+    out_data->payload_size = num_configs * sizeof(struct drm_msm_pa_hsic);
   } else {
     /* PA HSIC configuration unchanged, no better return code available */
     delete mdp_hsic;
@@ -606,9 +654,14 @@ DisplayError HWColorManagerDrm::GetDrmPASixZone(const PPFeatureInfo &in_data,
   DisplayError ret = kErrorNone;
 #if defined(PP_DRM_ENABLE) && defined(DRM_MSM_SIXZONE)
   struct SDEPaData *sde_pa;
+  SDEPaCfgWrapper *sde_pa_wrapper = NULL;
 
-  sde_pa = (struct SDEPaData *) in_data.GetConfigData();
-
+  sde_pa_wrapper = (SDEPaCfgWrapper *)in_data.GetConfigData();
+  sde_pa = (struct SDEPaData *) sde_pa_wrapper;
+  uint32_t num_configs = 1;
+  if (in_data.num_configs_ > 1) {
+    num_configs = in_data.num_configs_;
+  }
   out_data->type = sde_drm::kPropBlob;
   out_data->version = in_data.feature_version_;
   out_data->payload_size = 0;
@@ -622,8 +675,7 @@ DisplayError HWColorManagerDrm::GetDrmPASixZone(const PPFeatureInfo &in_data,
     return kErrorParameters;
   }
 
-  if (!(sde_pa->mode & (kSixZoneHueMask | kSixZoneSatMask |
-                        kSixZoneValMask))) {
+  if (!(sde_pa->mode & (kSixZoneHueMask | kSixZoneSatMask | kSixZoneValMask))) {
     /* PA SixZone feature disable case, but other PA features active */
     return ret;
   }
@@ -637,41 +689,51 @@ DisplayError HWColorManagerDrm::GetDrmPASixZone(const PPFeatureInfo &in_data,
         return kErrorParameters;
     }
 
-    mdp_sixzone = new drm_msm_sixzone();
+    mdp_sixzone = new drm_msm_sixzone[num_configs];
     if (!mdp_sixzone) {
       DLOGE("Failed to allocate memory for six zone");
       return kErrorMemory;
     }
+    struct drm_msm_sixzone *curr_sixzone = mdp_sixzone;
+    struct SDEPaData *input_pa = sde_pa;
+    for (uint32_t num = 0; num < num_configs; num++) {
+      curr_sixzone->flags = 0;
+      if (num_configs > 1 && (!num)) {
+        curr_sixzone->flags = ((uint64_t)(num_configs) << NUM_STRUCT_BITS);
+      } else {
+        curr_sixzone->flags = 0;
+      }
 
-    mdp_sixzone->flags = 0;
+      if (input_pa->mode & kSixZoneHueMask) {
+        curr_sixzone->flags |= SIXZONE_HUE_ENABLE;
+      }
+      if (input_pa->mode & kSixZoneSatMask) {
+        curr_sixzone->flags |= SIXZONE_SAT_ENABLE;
+      }
+      if (input_pa->mode & kSixZoneValMask) {
+        curr_sixzone->flags |= SIXZONE_VAL_ENABLE;
+      }
 
-    if (sde_pa->mode & kSixZoneHueMask) {
-      mdp_sixzone->flags |= SIXZONE_HUE_ENABLE;
-    }
-    if (sde_pa->mode & kSixZoneSatMask) {
-      mdp_sixzone->flags |= SIXZONE_SAT_ENABLE;
-    }
-    if (sde_pa->mode & kSixZoneValMask) {
-      mdp_sixzone->flags |= SIXZONE_VAL_ENABLE;
-    }
+      curr_sixzone->threshold = input_pa->six_zone_thresh;
+      curr_sixzone->adjust_p0 = input_pa->six_zone_adj_p0;
+      curr_sixzone->adjust_p1 = input_pa->six_zone_adj_p1;
+      curr_sixzone->sat_hold = input_pa->six_zone_sat_hold;
+      curr_sixzone->val_hold = input_pa->six_zone_val_hold;
 
-    mdp_sixzone->threshold = sde_pa->six_zone_thresh;
-    mdp_sixzone->adjust_p0 = sde_pa->six_zone_adj_p0;
-    mdp_sixzone->adjust_p1 = sde_pa->six_zone_adj_p1;
-    mdp_sixzone->sat_hold = sde_pa->six_zone_sat_hold;
-    mdp_sixzone->val_hold = sde_pa->six_zone_val_hold;
-
-    for (int i = 0; i < SIXZONE_LUT_SIZE; i++) {
-      mdp_sixzone->curve[i].p0 = sde_pa->six_zone_curve_p0[i] & kSixZoneP0Mask;
-      mdp_sixzone->curve[i].p1 = sde_pa->six_zone_curve_p1[i] & kSixZoneP1Mask;
+      for (int i = 0; i < SIXZONE_LUT_SIZE; i++) {
+        curr_sixzone->curve[i].p0 = input_pa->six_zone_curve_p0[i] & kSixZoneP0Mask;
+        curr_sixzone->curve[i].p1 = input_pa->six_zone_curve_p1[i] & kSixZoneP1Mask;
+      }
+      curr_sixzone++;
+      sde_pa_wrapper++;
+      input_pa = (struct SDEPaData *) sde_pa_wrapper;
     }
     out_data->payload = mdp_sixzone;
-    out_data->payload_size = sizeof(struct drm_msm_sixzone);
+    out_data->payload_size = num_configs * sizeof(struct drm_msm_sixzone);
   } else {
     /* PA SixZone configuration unchanged, no better return code available */
     ret = kErrorPermission;
   }
-
 #endif
   return ret;
 }
@@ -681,9 +743,14 @@ DisplayError HWColorManagerDrm::GetDrmPAMemColSkin(const PPFeatureInfo &in_data,
   DisplayError ret = kErrorNone;
 #if defined(PP_DRM_ENABLE) && defined(DRM_MSM_MEMCOL)
   struct SDEPaData *sde_pa;
+  SDEPaCfgWrapper *sde_pa_wrapper = NULL;
 
-  sde_pa = (struct SDEPaData *) in_data.GetConfigData();
-
+  sde_pa_wrapper = (SDEPaCfgWrapper *)in_data.GetConfigData();
+  sde_pa = (struct SDEPaData *) sde_pa_wrapper;
+  uint32_t num_configs = 1;
+  if (in_data.num_configs_ > 1) {
+    num_configs = in_data.num_configs_;
+  }
   out_data->type = sde_drm::kPropBlob;
   out_data->version = in_data.feature_version_;
   out_data->payload_size = 0;
@@ -706,25 +773,38 @@ DisplayError HWColorManagerDrm::GetDrmPAMemColSkin(const PPFeatureInfo &in_data,
     struct drm_msm_memcol *mdp_memcol = NULL;
     struct SDEPaMemColorData *pa_memcol = &sde_pa->skin;
 
-    mdp_memcol = new drm_msm_memcol();
+    mdp_memcol = new drm_msm_memcol[num_configs];
     if (!mdp_memcol) {
       DLOGE("Failed to allocate memory for memory color skin");
       return kErrorMemory;
     }
 
-    mdp_memcol->prot_flags = 0;
-    mdp_memcol->color_adjust_p0 = pa_memcol->adjust_p0;
-    mdp_memcol->color_adjust_p1 = pa_memcol->adjust_p1;
-    mdp_memcol->color_adjust_p2 = pa_memcol->adjust_p2;
-    mdp_memcol->blend_gain = pa_memcol->blend_gain;
-    mdp_memcol->sat_hold = pa_memcol->sat_hold;
-    mdp_memcol->val_hold = pa_memcol->val_hold;
-    mdp_memcol->hue_region = pa_memcol->hue_region;
-    mdp_memcol->sat_region = pa_memcol->sat_region;
-    mdp_memcol->val_region = pa_memcol->val_region;
-
+    struct drm_msm_memcol *curr_memcol = mdp_memcol;
+    struct SDEPaMemColorData *input_memcol = pa_memcol;
+    struct SDEPaData *input_pa = sde_pa;
+    for (uint32_t num = 0; num < num_configs; num++) {
+      if (num_configs > 1 && (!num)) {
+        curr_memcol->flags |= ((uint64_t)(num_configs) << NUM_STRUCT_BITS);
+      } else {
+        curr_memcol->flags |= ((uint64_t)0 << 60);
+      }
+      curr_memcol->prot_flags = 0;
+      curr_memcol->color_adjust_p0 = input_memcol->adjust_p0;
+      curr_memcol->color_adjust_p1 = input_memcol->adjust_p1;
+      curr_memcol->color_adjust_p2 = input_memcol->adjust_p2;
+      curr_memcol->blend_gain = input_memcol->blend_gain;
+      curr_memcol->sat_hold = input_memcol->sat_hold;
+      curr_memcol->val_hold = input_memcol->val_hold;
+      curr_memcol->hue_region = input_memcol->hue_region;
+      curr_memcol->sat_region = input_memcol->sat_region;
+      curr_memcol->val_region = input_memcol->val_region;
+      curr_memcol++;
+      sde_pa_wrapper++;
+      input_pa = (struct SDEPaData *) sde_pa_wrapper;
+      input_memcol = &input_pa->skin;
+    }
     out_data->payload = mdp_memcol;
-    out_data->payload_size = sizeof(struct drm_msm_memcol);
+    out_data->payload_size = num_configs * sizeof(struct drm_msm_memcol);
   } else {
     /* PA MemColSkin configuration unchanged, no better return code available */
     ret = kErrorPermission;
@@ -738,9 +818,14 @@ DisplayError HWColorManagerDrm::GetDrmPAMemColSky(const PPFeatureInfo &in_data,
   DisplayError ret = kErrorNone;
 #if defined(PP_DRM_ENABLE) && defined(DRM_MSM_MEMCOL)
   struct SDEPaData *sde_pa;
+  SDEPaCfgWrapper *sde_pa_wrapper = NULL;
 
-  sde_pa = (struct SDEPaData *) in_data.GetConfigData();
-
+  sde_pa_wrapper = (SDEPaCfgWrapper *)in_data.GetConfigData();
+  sde_pa = (struct SDEPaData *) sde_pa_wrapper;
+  uint32_t num_configs = 1;
+  if (in_data.num_configs_ > 1) {
+    num_configs = in_data.num_configs_;
+  }
   out_data->type = sde_drm::kPropBlob;
   out_data->version = in_data.feature_version_;
   out_data->payload_size = 0;
@@ -763,25 +848,37 @@ DisplayError HWColorManagerDrm::GetDrmPAMemColSky(const PPFeatureInfo &in_data,
     struct drm_msm_memcol *mdp_memcol = NULL;
     struct SDEPaMemColorData *pa_memcol = &sde_pa->sky;
 
-    mdp_memcol = new drm_msm_memcol();
+    mdp_memcol = new drm_msm_memcol[num_configs];
     if (!mdp_memcol) {
       DLOGE("Failed to allocate memory for memory color sky");
       return kErrorMemory;
     }
-
-    mdp_memcol->prot_flags = 0;
-    mdp_memcol->color_adjust_p0 = pa_memcol->adjust_p0;
-    mdp_memcol->color_adjust_p1 = pa_memcol->adjust_p1;
-    mdp_memcol->color_adjust_p2 = pa_memcol->adjust_p2;
-    mdp_memcol->blend_gain = pa_memcol->blend_gain;
-    mdp_memcol->sat_hold = pa_memcol->sat_hold;
-    mdp_memcol->val_hold = pa_memcol->val_hold;
-    mdp_memcol->hue_region = pa_memcol->hue_region;
-    mdp_memcol->sat_region = pa_memcol->sat_region;
-    mdp_memcol->val_region = pa_memcol->val_region;
-
+    struct drm_msm_memcol *curr_memcol = mdp_memcol;
+    struct SDEPaMemColorData *input_memcol = pa_memcol;
+    struct SDEPaData *input_pa = sde_pa;
+    for (uint32_t num = 0; num < num_configs; num++) {
+      if (num_configs > 1 && (!num)) {
+        curr_memcol->flags |= ((uint64_t)(num_configs) << NUM_STRUCT_BITS);
+      } else {
+        curr_memcol->flags |= ((uint64_t)0 << 60);
+      }
+      curr_memcol->prot_flags = 0;
+      curr_memcol->color_adjust_p0 = input_memcol->adjust_p0;
+      curr_memcol->color_adjust_p1 = input_memcol->adjust_p1;
+      curr_memcol->color_adjust_p2 = input_memcol->adjust_p2;
+      curr_memcol->blend_gain = input_memcol->blend_gain;
+      curr_memcol->sat_hold = input_memcol->sat_hold;
+      curr_memcol->val_hold = input_memcol->val_hold;
+      curr_memcol->hue_region = input_memcol->hue_region;
+      curr_memcol->sat_region = input_memcol->sat_region;
+      curr_memcol->val_region = input_memcol->val_region;
+      curr_memcol++;
+      sde_pa_wrapper++;
+      input_pa = (struct SDEPaData *) sde_pa_wrapper;
+      input_memcol = &input_pa->skin;
+    }
     out_data->payload = mdp_memcol;
-    out_data->payload_size = sizeof(struct drm_msm_memcol);
+    out_data->payload_size = num_configs * sizeof(struct drm_msm_memcol);
   } else {
     /* PA MemColSky configuration unchanged, no better return code available */
     ret = kErrorPermission;
@@ -795,9 +892,14 @@ DisplayError HWColorManagerDrm::GetDrmPAMemColFoliage(const PPFeatureInfo &in_da
   DisplayError ret = kErrorNone;
 #if defined(PP_DRM_ENABLE) && defined(DRM_MSM_MEMCOL)
   struct SDEPaData *sde_pa;
+  SDEPaCfgWrapper *sde_pa_wrapper = NULL;
 
-  sde_pa = (struct SDEPaData *) in_data.GetConfigData();
-
+  sde_pa_wrapper = (SDEPaCfgWrapper *)in_data.GetConfigData();
+  sde_pa = (struct SDEPaData *) sde_pa_wrapper;
+  uint32_t num_configs = 1;
+  if (in_data.num_configs_ > 1) {
+    num_configs = in_data.num_configs_;
+  }
   out_data->type = sde_drm::kPropBlob;
   out_data->version = in_data.feature_version_;
   out_data->payload_size = 0;
@@ -820,25 +922,37 @@ DisplayError HWColorManagerDrm::GetDrmPAMemColFoliage(const PPFeatureInfo &in_da
     struct drm_msm_memcol *mdp_memcol = NULL;
     struct SDEPaMemColorData *pa_memcol = &sde_pa->foliage;
 
-    mdp_memcol = new drm_msm_memcol();
+    mdp_memcol = new drm_msm_memcol[num_configs];
     if (!mdp_memcol) {
       DLOGE("Failed to allocate memory for memory color foliage");
       return kErrorMemory;
     }
-
-    mdp_memcol->prot_flags = 0;
-    mdp_memcol->color_adjust_p0 = pa_memcol->adjust_p0;
-    mdp_memcol->color_adjust_p1 = pa_memcol->adjust_p1;
-    mdp_memcol->color_adjust_p2 = pa_memcol->adjust_p2;
-    mdp_memcol->blend_gain = pa_memcol->blend_gain;
-    mdp_memcol->sat_hold = pa_memcol->sat_hold;
-    mdp_memcol->val_hold = pa_memcol->val_hold;
-    mdp_memcol->hue_region = pa_memcol->hue_region;
-    mdp_memcol->sat_region = pa_memcol->sat_region;
-    mdp_memcol->val_region = pa_memcol->val_region;
-
+    struct drm_msm_memcol *curr_memcol = mdp_memcol;
+    struct SDEPaMemColorData *input_memcol = pa_memcol;
+    struct SDEPaData *input_pa = sde_pa;
+    for (uint32_t num = 0; num < num_configs; num++) {
+      if (num_configs > 1 && (!num)) {
+        curr_memcol->flags |= ((uint64_t)(num_configs) << NUM_STRUCT_BITS);
+      } else {
+        curr_memcol->flags |= ((uint64_t)0 << 60);
+      }
+      curr_memcol->prot_flags = 0;
+      curr_memcol->color_adjust_p0 = input_memcol->adjust_p0;
+      curr_memcol->color_adjust_p1 = input_memcol->adjust_p1;
+      curr_memcol->color_adjust_p2 = input_memcol->adjust_p2;
+      curr_memcol->blend_gain = input_memcol->blend_gain;
+      curr_memcol->sat_hold = input_memcol->sat_hold;
+      curr_memcol->val_hold = input_memcol->val_hold;
+      curr_memcol->hue_region = input_memcol->hue_region;
+      curr_memcol->sat_region = input_memcol->sat_region;
+      curr_memcol->val_region = input_memcol->val_region;
+      curr_memcol++;
+      sde_pa_wrapper++;
+      input_pa = (struct SDEPaData *) sde_pa_wrapper;
+      input_memcol = &input_pa->foliage;
+    }
     out_data->payload = mdp_memcol;
-    out_data->payload_size = sizeof(struct drm_msm_memcol);
+    out_data->payload_size = num_configs * sizeof(struct drm_msm_memcol);
   } else {
     /* PA MemColFoliage configuration unchanged, no better return code available */
     ret = kErrorPermission;
@@ -853,9 +967,14 @@ DisplayError HWColorManagerDrm::GetDrmPAMemColProt(const PPFeatureInfo &in_data,
 #if defined(PP_DRM_ENABLE) && defined(DRM_MSM_MEMCOL)
   struct SDEPaData *sde_pa;
   struct drm_msm_memcol *mdp_memcol;
+  SDEPaCfgWrapper *sde_pa_wrapper = NULL;
 
-  sde_pa = (struct SDEPaData *) in_data.GetConfigData();
-
+  sde_pa_wrapper = (SDEPaCfgWrapper *)in_data.GetConfigData();
+  sde_pa = (struct SDEPaData *) sde_pa_wrapper;
+  uint32_t num_configs = 1;
+  if (in_data.num_configs_ > 1) {
+    num_configs = in_data.num_configs_;
+  }
   out_data->type = sde_drm::kPropBlob;
   out_data->version = in_data.feature_version_;
   out_data->payload_size = sizeof(struct drm_msm_memcol);
@@ -870,28 +989,39 @@ DisplayError HWColorManagerDrm::GetDrmPAMemColProt(const PPFeatureInfo &in_data,
   }
 
   out_data->payload = NULL;
-  if (!(sde_pa->mode & kMemColorProtMask)) {
-    /* PA MemColProt feature disable case, but other PA features active */
-    return ret;
-  }
 
-  mdp_memcol = new drm_msm_memcol();
+  mdp_memcol = new drm_msm_memcol[num_configs];
   if (!mdp_memcol) {
     DLOGE("Failed to allocate memory for memory color prot");
     return kErrorMemory;
   }
+  struct drm_msm_memcol *curr_memcol = mdp_memcol;
+  struct SDEPaData *input_pa = sde_pa;
+  for (uint32_t num = 0; num < num_configs; num++) {
+    if (num_configs > 1 && (!num)) {
+        curr_memcol->flags |= ((uint64_t)(num_configs) << NUM_STRUCT_BITS);
+      } else {
+        curr_memcol->flags |= ((uint64_t)0 << 60);
+    }
+    if (!(input_pa->mode & kMemColorProtMask)) {
+      /* PA MemColProt feature disable case, but other PA features active */
+      return ret;
+    }
 
-  mdp_memcol->prot_flags = 0;
-
-  if (sde_pa->mode & kMemColorProtMask) {
-    mdp_memcol->prot_flags |= (sde_pa->mode & kMemColorProtMask);
+    curr_memcol->prot_flags = 0;
+    if (input_pa->mode & kMemColorProtMask) {
+      curr_memcol->prot_flags |= (input_pa->mode & kMemColorProtMask);
+    }
+    curr_memcol++;
+    sde_pa_wrapper++;
+    input_pa = (struct SDEPaData *) sde_pa_wrapper;
   }
-
   out_data->payload = mdp_memcol;
-
+  out_data->payload_size = num_configs * sizeof(struct drm_msm_memcol);
 #endif
   return ret;
 }
+
 
 DisplayError HWColorManagerDrm::GetDrmDither(const PPFeatureInfo &in_data,
                                              DRMPPFeatureInfo *out_data) {
@@ -936,15 +1066,18 @@ DisplayError HWColorManagerDrm::GetDrmGamut(const PPFeatureInfo &in_data,
                                             DRMPPFeatureInfo *out_data) {
   DisplayError ret = kErrorNone;
 #ifdef PP_DRM_ENABLE
-  struct SDEGamutCfg *sde_gamut = NULL;
+  SDEGamutCfgWrapper * sde_gamut_wrapper = NULL;
   struct drm_msm_3d_gamut *mdp_gamut = NULL;
   uint32_t size = 0;
 
-  sde_gamut = (struct SDEGamutCfg *)in_data.GetConfigData();
-
+  sde_gamut_wrapper = (SDEGamutCfgWrapper *)in_data.GetConfigData();
+  uint32_t num_configs = 1;
+  if (in_data.num_configs_ > 1) {
+    num_configs = in_data.num_configs_;
+  }
   out_data->type = sde_drm::kPropBlob;
   out_data->version = in_data.feature_version_;
-  out_data->payload_size = sizeof(struct drm_msm_3d_gamut);
+  out_data->payload_size = num_configs * sizeof(struct drm_msm_3d_gamut);
   if (in_data.enable_flags_ & kOpsDisable) {
     /* feature disable case */
     out_data->payload = NULL;
@@ -954,50 +1087,61 @@ DisplayError HWColorManagerDrm::GetDrmGamut(const PPFeatureInfo &in_data,
     return kErrorParameters;
   }
 
-  mdp_gamut = new drm_msm_3d_gamut();
+  mdp_gamut = new drm_msm_3d_gamut[num_configs];
   if (!mdp_gamut) {
     DLOGE("Failed to allocate memory for gamut");
     return kErrorMemory;
   }
 
-  if (sde_gamut->map_en)
-    mdp_gamut->flags = GAMUT_3D_MAP_EN;
-  else
-    mdp_gamut->flags = 0;
-
-  switch (sde_gamut->mode) {
-    case SDEGamutCfgWrapper::GAMUT_FINE_MODE:
-      mdp_gamut->mode = GAMUT_3D_MODE_17;
-      size = GAMUT_3D_MODE17_TBL_SZ;
-      break;
-    case SDEGamutCfgWrapper::GAMUT_COARSE_MODE:
-      mdp_gamut->mode = GAMUT_3D_MODE_5;
-      size = GAMUT_3D_MODE5_TBL_SZ;
-      break;
-    case SDEGamutCfgWrapper::GAMUT_COARSE_MODE_13:
-      mdp_gamut->mode = GAMUT_3D_MODE_13;
-      size = GAMUT_3D_MODE13_TBL_SZ;
-      break;
-    default:
-      DLOGE("Invalid gamut mode %d", sde_gamut->mode);
-      delete mdp_gamut;
-      return kErrorParameters;
-  }
-
-  if (sde_gamut->map_en) {
-    std::memcpy(&mdp_gamut->scale_off[0][0], sde_gamut->scale_off_data[0],
-                sizeof(uint32_t) * GAMUT_3D_SCALE_OFF_SZ);
-    std::memcpy(&mdp_gamut->scale_off[1][0], sde_gamut->scale_off_data[1],
-                sizeof(uint32_t) * GAMUT_3D_SCALE_OFF_SZ);
-    std::memcpy(&mdp_gamut->scale_off[2][0], sde_gamut->scale_off_data[2],
-                sizeof(uint32_t) * GAMUT_3D_SCALE_OFF_SZ);
-  }
-
-  for (uint32_t row = 0; row < GAMUT_3D_TBL_NUM; row++) {
-    for (uint32_t col = 0; col < size; col++) {
-      mdp_gamut->col[row][col].c0 = sde_gamut->c0_data[row][col];
-      mdp_gamut->col[row][col].c2_c1 = sde_gamut->c1_c2_data[row][col];
+  struct drm_msm_3d_gamut *curr_gamut = mdp_gamut;
+  struct SDEGamutCfg *input_gamut = (struct SDEGamutCfg *)sde_gamut_wrapper;
+  for (uint32_t num = 0; num < num_configs; num++) {
+    if (input_gamut->map_en)
+      curr_gamut->flags = GAMUT_3D_MAP_EN;
+    else
+      curr_gamut->flags = 0;
+    if (num_configs > 1 && (!num)) {
+      curr_gamut->flags |= ((uint64_t)(num_configs) << NUM_STRUCT_BITS);
+    } else {
+      curr_gamut->flags |= ((uint64_t)(0) << 60);
     }
+
+    switch (input_gamut->mode) {
+      case SDEGamutCfgWrapper::GAMUT_FINE_MODE:
+        curr_gamut->mode = GAMUT_3D_MODE_17;
+        size = GAMUT_3D_MODE17_TBL_SZ;
+        break;
+      case SDEGamutCfgWrapper::GAMUT_COARSE_MODE:
+        curr_gamut->mode = GAMUT_3D_MODE_5;
+        size = GAMUT_3D_MODE5_TBL_SZ;
+        break;
+      case SDEGamutCfgWrapper::GAMUT_COARSE_MODE_13:
+        curr_gamut->mode = GAMUT_3D_MODE_13;
+        size = GAMUT_3D_MODE13_TBL_SZ;
+        break;
+      default:
+        DLOGE("Invalid gamut mode %d", input_gamut->mode);
+        delete mdp_gamut;
+        return kErrorParameters;
+    }
+    if (input_gamut->map_en) {
+      std::memcpy(&curr_gamut->scale_off[0][0], input_gamut->scale_off_data[0],
+                  sizeof(uint32_t) * GAMUT_3D_SCALE_OFF_SZ);
+      std::memcpy(&curr_gamut->scale_off[1][0], input_gamut->scale_off_data[1],
+                  sizeof(uint32_t) * GAMUT_3D_SCALE_OFF_SZ);
+      std::memcpy(&curr_gamut->scale_off[2][0], input_gamut->scale_off_data[2],
+                  sizeof(uint32_t) * GAMUT_3D_SCALE_OFF_SZ);
+    }
+
+    for (uint32_t row = 0; row < GAMUT_3D_TBL_NUM; row++) {
+      for (uint32_t col = 0; col < size; col++) {
+        curr_gamut->col[row][col].c0 = input_gamut->c0_data[row][col];
+        curr_gamut->col[row][col].c2_c1 = input_gamut->c1_c2_data[row][col];
+      }
+    }
+    curr_gamut++;
+    sde_gamut_wrapper++;
+    input_gamut = (struct SDEGamutCfg *)sde_gamut_wrapper;
   }
   out_data->payload = mdp_gamut;
 #endif
