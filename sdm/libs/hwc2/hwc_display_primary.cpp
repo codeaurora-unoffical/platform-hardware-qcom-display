@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2016, 2019 The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2016, 2019-2020 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -237,7 +237,9 @@ HWC2::Error HWCDisplayPrimary::Present(int32_t *out_retire_fence) {
     }
   }
 
-  CloseAcquireFds();
+  if (status != HWC2::Error::NotValidated) {
+    CloseAcquireFds();
+  }
   return status;
 }
 
