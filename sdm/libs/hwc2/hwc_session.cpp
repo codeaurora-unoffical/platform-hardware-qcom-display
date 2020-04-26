@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -1299,6 +1299,7 @@ android::status_t HWCSession::QdcmCMDHandler(const android::Parcel *input_parcel
   uint32_t display_id(0);
   PPPendingParams pending_action;
   PPDisplayAPIPayload resp_payload, req_payload;
+  bool invalidate_needed = true;
 
   if (!color_mgr_) {
     return -1;
@@ -1328,6 +1329,7 @@ android::status_t HWCSession::QdcmCMDHandler(const android::Parcel *input_parcel
 
   switch (pending_action.action) {
     case kInvalidating:
+      invalidate_needed = false;
       Refresh(HWC_DISPLAY_PRIMARY);
       break;
     case kEnterQDCMMode:
@@ -1370,6 +1372,7 @@ android::status_t HWCSession::QdcmCMDHandler(const android::Parcel *input_parcel
       Refresh(HWC_DISPLAY_PRIMARY);
       break;
     case kNoAction:
+      invalidate_needed = false;
       break;
     default:
       DLOGW("Invalid pending action = %d!", pending_action.action);
@@ -1381,8 +1384,10 @@ android::status_t HWCSession::QdcmCMDHandler(const android::Parcel *input_parcel
   HWCColorManager::MarshallStructIntoParcel(resp_payload, output_parcel);
   req_payload.DestroyPayload();
   resp_payload.DestroyPayload();
-  hwc_display_[display_id]->ResetValidation();
 
+  if (invalidate_needed) {
+    hwc_display_[display_id]->ResetValidation();
+  }
   return (ret ? -EINVAL : 0);
 }
 
