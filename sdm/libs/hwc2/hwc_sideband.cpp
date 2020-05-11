@@ -495,8 +495,14 @@ int32_t HWCSidebandStreamSession::UpdateSidebandStream(HWCSidebandStream * stm) 
   for (auto & pair : stm->mLayers) {
     hwc2_layer_t layer = pair.first;
     hwc2_display_t display = pair.second;
-    HWCSession::CallLayerFunction(hwc_session, display, layer, &HWCLayer::SetLayerSidebandStream, stm->GetBuffer());
     stm->displayValidateMask_ &= ~(1 << display );
+
+    /* only update pending displays */
+    if (!(pendingMask & (1 << display)))
+      continue;
+
+    HWCSession::CallLayerFunction(hwc_session, display, layer,
+                                  &HWCLayer::SetLayerSidebandStream, stm->GetBuffer());
   }
 
   if (validateMask) {
