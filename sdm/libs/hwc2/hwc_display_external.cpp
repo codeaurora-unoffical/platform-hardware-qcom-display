@@ -118,7 +118,7 @@ HWC2::Error HWCDisplayExternal::Validate(uint32_t *out_num_types, uint32_t *out_
   BuildLayerStack();
 
   if (layer_set_.empty()) {
-    validated_ = true;
+    validated_.set(id_);
     flush_ = true;
     return status;
   }
