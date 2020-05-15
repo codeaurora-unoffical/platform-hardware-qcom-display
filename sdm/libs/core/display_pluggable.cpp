@@ -114,9 +114,10 @@ DisplayError DisplayPluggable::Init() {
     HWInterface::Destroy(hw_intf_);
     DLOGE("Failed to create hardware events interface. Error = %d", error);
   }
-
-  InitializeColorModes();
-
+  // if qdcm colormodes are not enabled, initialize colormodes using panel info(EOTF).
+  if (!enable_qdcm_colormodes_on_external_) {
+    InitializeColorModes();
+  }
   current_refresh_rate_ = hw_panel_info_.max_fps;
 
   return error;
@@ -358,6 +359,9 @@ static PrimariesTransfer GetBlendSpaceFromAttributes(const std::string &color_ga
 }
 
 DisplayError DisplayPluggable::SetColorMode(const std::string &color_mode) {
+  if (enable_qdcm_colormodes_on_external_ == 1) {
+    return  DisplayBase::SetColorMode(color_mode);
+  }
   auto current_color_attr_ = color_mode_attr_map_.find(color_mode);
   if (current_color_attr_ == color_mode_attr_map_.end()) {
     DLOGW("Failed to get the color mode = %s", color_mode.c_str());
@@ -394,6 +398,10 @@ DisplayError DisplayPluggable::SetColorMode(const std::string &color_mode) {
 }
 
 DisplayError DisplayPluggable::GetColorModeCount(uint32_t *mode_count) {
+  if (enable_qdcm_colormodes_on_external_ == 1) {
+     return DisplayBase::GetColorModeCount(mode_count);
+  }
+
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   if (!mode_count) {
     return kErrorParameters;
@@ -407,6 +415,10 @@ DisplayError DisplayPluggable::GetColorModeCount(uint32_t *mode_count) {
 
 DisplayError DisplayPluggable::GetColorModes(uint32_t *mode_count,
                                              std::vector<std::string> *color_modes) {
+  if (enable_qdcm_colormodes_on_external_ == 1) {
+    return  DisplayBase::GetColorModes(mode_count, color_modes);
+  }
+
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   if (!mode_count || !color_modes) {
     return kErrorParameters;
@@ -421,6 +433,10 @@ DisplayError DisplayPluggable::GetColorModes(uint32_t *mode_count,
 }
 
 DisplayError DisplayPluggable::GetColorModeAttr(const std::string &color_mode, AttrVal *attr) {
+  if (enable_qdcm_colormodes_on_external_ == 1) {
+     return DisplayBase::GetColorModeAttr(color_mode, attr);
+  }
+
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   if (!attr) {
     return kErrorParameters;

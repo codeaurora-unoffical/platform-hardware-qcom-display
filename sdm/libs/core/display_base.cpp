@@ -96,7 +96,7 @@ DisplayError DisplayBase::Init() {
   }
   auto max_mixer_stages = hw_resource_info_.num_blending_stages;
   int property_value = Debug::GetMaxPipesPerMixer(display_type_);
-
+  Debug::GetProperty(ENABLE_QDCM_COLORMODES_ON_EXTERNAL, &enable_qdcm_colormodes_on_external_);
   uint32_t active_index = 0;
   int drop_vsync = 0;
   hw_intf_->GetActiveConfig(&active_index);
@@ -131,14 +131,17 @@ DisplayError DisplayBase::Init() {
   }
 
   // ColorManager supported for built-in display.
-  if (kBuiltIn == display_type_) {
+  // ColorManager also supported for pluggable dispaly if ENABLE_QDCM_COLORMODES_ON_EXTERNAL
+  // vendor property is set.
+  if ((kBuiltIn == display_type_) ||
+     ((kPluggable == display_type_) && (enable_qdcm_colormodes_on_external_ == 1))) {
     DppsControlInterface *dpps_intf = comp_manager_->GetDppsControlIntf();
     color_mgr_ = ColorManagerProxy::CreateColorManagerProxy(display_type_, hw_intf_,
                                                             display_attributes_, hw_panel_info_,
                                                             dpps_intf);
 
     if (color_mgr_) {
-      if (InitializeColorModes() != kErrorNone) {
+      if (DisplayBase::InitializeColorModes() != kErrorNone) {
         DLOGW("InitColorModes failed for display %d-%d", display_id_, display_type_);
       }
       color_mgr_->ColorMgrCombineColorModes();

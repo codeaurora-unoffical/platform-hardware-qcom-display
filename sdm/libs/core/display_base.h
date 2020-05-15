@@ -253,6 +253,7 @@ class DisplayBase : public DisplayInterface {
   bool pending_power_on_ = false;
   QSyncMode qsync_mode_ = kQSyncModeNone;
   bool needs_avr_update_ = false;
+  int enable_qdcm_colormodes_on_external_ = 0;
 
   static Locker display_power_reset_lock_;
   static bool display_power_reset_pending_;
