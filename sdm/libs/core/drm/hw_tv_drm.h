@@ -67,6 +67,7 @@ class HWTVDRM : public HWDeviceDRM {
   struct timeval hdr_reset_end_ = {};
   bool reset_hdr_flag_ = false;
   bool in_multiset_ = false;
+  int enable_qdcm_colormodes_on_external_ = 0;
 };
 
 }  // namespace sdm

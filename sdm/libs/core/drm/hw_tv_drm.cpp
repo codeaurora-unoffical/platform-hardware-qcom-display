@@ -105,6 +105,11 @@ HWTVDRM::HWTVDRM(int32_t display_id, BufferSyncHandler *buffer_sync_handler,
   disp_type_ = DRMDisplayType::TV;
   device_name_ = "TV";
   display_id_ = display_id;
+
+  Debug::GetProperty(ENABLE_QDCM_COLORMODES_ON_EXTERNAL, &enable_qdcm_colormodes_on_external_);
+  if (enable_qdcm_colormodes_on_external_ == 1) {
+    topology_control_ = UINT32(sde_drm::DRMTopologyControl::DSPP);
+  }
 }
 
 DisplayError HWTVDRM::SetDisplayAttributes(uint32_t index) {
@@ -225,6 +230,11 @@ void HWTVDRM::PopulateHWPanelInfo() {
   hw_panel_info_.hdr_metadata_type_one = connector_info_.ext_hdr_prop.hdr_metadata_type_one;
   hw_panel_info_.hdr_eotf = connector_info_.ext_hdr_prop.hdr_eotf;
   hw_panel_info_.supported_colorspaces = connector_info_.supported_colorspaces;
+
+  if (enable_qdcm_colormodes_on_external_ == 1) {
+    snprintf(hw_panel_info_.panel_name, sizeof(hw_panel_info_.panel_name),
+             "dp_display_panel");
+  }
 
   // Convert the raw luminance values from driver to Candela per meter^2 unit.
   float max_luminance = FLOAT(connector_info_.ext_hdr_prop.hdr_max_luminance);
