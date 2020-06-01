@@ -118,8 +118,14 @@ HWC2::Error HWCLayer::SetLayerCscData(const int64_t *out_csc_coeff,
 
 HWC2::Error HWCLayer::SetLayerBuffer(buffer_handle_t buffer, int32_t acquire_fence) {
   if (!buffer) {
-    DLOGE("Invalid buffer handle: %p on layer: %d", buffer, id_);
-    return HWC2::Error::BadParameter;
+      if (client_requested_ == HWC2::Composition::Device ||
+          client_requested_ == HWC2::Composition::Cursor) {
+          DLOGE("Invalid buffer handle: %p on layer: %d client requested comp type %d", buffer, id_, client_requested_);
+          ::close(acquire_fence);
+          return HWC2::Error::BadParameter;
+      } else {
+          return HWC2::Error::None;
+      }
   }
 
   if (acquire_fence == 0) {
