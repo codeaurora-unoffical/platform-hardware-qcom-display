@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2017, 2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2017, 2019-2020 The Linux Foundation. All rights reserved.
  * Not a Contribution
  *
  * Copyright (C) 2010 The Android Open Source Project
@@ -690,20 +690,45 @@ gralloc1_error_t BufferManager::Perform(int operation, va_list args) {
       *color_space = 0;
 #ifdef USE_COLOR_METADATA
       ColorMetaData color_metadata;
+
+      /* If the color space is not set then get color metadata */
       if (getMetaData(hnd, GET_COLOR_METADATA, &color_metadata) == 0) {
-        switch (color_metadata.colorPrimaries) {
-          case ColorPrimaries_BT709_5:
-            *color_space = HAL_CSC_ITU_R_709;
-            break;
-          case ColorPrimaries_BT601_6_525:
-            *color_space = ((color_metadata.range) ? HAL_CSC_ITU_R_601_FR : HAL_CSC_ITU_R_601);
-            break;
-          case ColorPrimaries_BT2020:
-            *color_space = (color_metadata.range) ? HAL_CSC_ITU_R_2020_FR : HAL_CSC_ITU_R_2020;
-            break;
-          default:
-            ALOGE("Unknown Color Space = %d", color_metadata.colorPrimaries);
-            break;
+        /* Check for matrix coefficient */
+        if (color_metadata.matrixCoefficients != MatrixCoEff_Identity) {
+          /* Case : Matrx coeficient is set */
+          switch (color_metadata.matrixCoefficients) {
+            case MatrixCoEff_BT709_5:
+              *color_space = HAL_CSC_ITU_R_709;
+              break;
+            case MatrixCoEff_BT601_6_525:
+            case MatrixCoEff_BT601_6_625:
+              *color_space = ((color_metadata.range) ?
+                             HAL_CSC_ITU_R_601_FR : HAL_CSC_ITU_R_601);
+              break;
+            case MatrixCoEff_BT2020:
+              *color_space = (color_metadata.range) ?
+                             HAL_CSC_ITU_R_2020_FR : HAL_CSC_ITU_R_2020;
+              break;
+            default:
+              break;
+          }
+        } else {
+          /* Case : Matrx coeficient is not set */
+          switch (color_metadata.colorPrimaries) {
+            case ColorPrimaries_BT709_5:
+              *color_space = HAL_CSC_ITU_R_709;
+              break;
+            case ColorPrimaries_BT601_6_525:
+              *color_space = ((color_metadata.range) ?
+                             HAL_CSC_ITU_R_601_FR : HAL_CSC_ITU_R_601);
+              break;
+            case ColorPrimaries_BT2020:
+              *color_space = (color_metadata.range) ?
+                             HAL_CSC_ITU_R_2020_FR : HAL_CSC_ITU_R_2020;
+              break;
+            default:
+              break;
+          }
         }
         break;
       }
@@ -712,6 +737,7 @@ gralloc1_error_t BufferManager::Perform(int operation, va_list args) {
       }
 #endif
     } break;
+
     case GRALLOC_MODULE_PERFORM_GET_YUV_PLANE_INFO: {
       private_handle_t *hnd = va_arg(args, private_handle_t *);
       android_ycbcr *ycbcr = va_arg(args, struct android_ycbcr *);
