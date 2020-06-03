@@ -509,6 +509,8 @@ class HWCDisplay : public DisplayEventHandler {
   int fbt_release_fence_ = -1;
   int release_fence_ = -1;
   hwc2_config_t pending_config_index_ = 0;
+  bool pending_first_commit_config_ = false;
+  hwc2_config_t pending_first_commit_config_index_ = 0;
   bool game_supported_ = false;
   uint64_t elapse_timestamp_ = 0;
   int async_power_mode_ = 0;
