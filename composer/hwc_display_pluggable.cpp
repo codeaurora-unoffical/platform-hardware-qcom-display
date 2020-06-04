@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -96,6 +96,8 @@ int HWCDisplayPluggable::Init() {
   color_mode_ = new HWCColorMode(display_intf_);
   color_mode_->Init();
 
+  Debug::GetProperty(ENABLE_QDCM_COLORMODES_ON_EXTERNAL, &enable_qdcm_colormodes_);
+
   return status;
 }
 
@@ -134,9 +136,11 @@ HWC2::Error HWCDisplayPluggable::Validate(uint32_t *out_num_types, uint32_t *out
   }
 
   // Apply current Color Mode and Render Intent.
-  if (color_mode_->ApplyCurrentColorModeWithRenderIntent(
-      static_cast<bool>(layer_stack_.flags.hdr_present)) != HWC2::Error::None) {
-    // Fallback to GPU Composition, if Color Mode can't be applied.
+  status = color_mode_->ApplyCurrentColorModeWithRenderIntent(
+                        static_cast<bool>(layer_stack_.flags.hdr_present));
+  if (status != HWC2::Error::None || color_tranform_failed_) {
+    // Fallback to GPU Composition if Color Mode can't be applied or if a color tranform needs to
+    // be applied.
     MarkLayersForClientComposition();
   }
 
@@ -332,6 +336,63 @@ HWC2::Error HWCDisplayPluggable::UpdatePowerMode(HWC2::PowerMode mode) {
   current_power_mode_ = mode;
   validated_ = false;
   return HWC2::Error::None;
+}
+
+HWC2::Error HWCDisplayPluggable::SetColorTransform(const float *matrix,
+                                                   android_color_transform_t hint) {
+  if (!enable_qdcm_colormodes_) {
+    return HWC2::Error::Unsupported;
+  }
+
+  if (!matrix) {
+    return HWC2::Error::BadParameter;
+  }
+
+  auto status = color_mode_->SetColorTransform(matrix, hint);
+  if (status != HWC2::Error::None) {
+    DLOGE("failed for hint = %d", hint);
+    color_tranform_failed_ = true;
+    return status;
+  }
+
+  callbacks_->Refresh(id_);
+  color_tranform_failed_ = false;
+  validated_ = false;
+
+  return status;
+}
+
+HWC2::Error HWCDisplayPluggable::RestoreColorTransform() {
+  if (!enable_qdcm_colormodes_) {
+    return HWC2::Error::Unsupported;
+  }
+
+  auto status = color_mode_->RestoreColorTransform();
+  if (status != HWC2::Error::None) {
+    DLOGE("failed to RestoreColorTransform");
+    return status;
+  }
+
+  callbacks_->Refresh(id_);
+
+  return status;
+}
+
+HWC2::Error HWCDisplayPluggable::SetColorModeById(int32_t color_mode_id) {
+  if (!enable_qdcm_colormodes_) {
+    return HWC2::Error::Unsupported;
+  }
+
+  auto status = color_mode_->SetColorModeById(color_mode_id);
+  if (status != HWC2::Error::None) {
+    DLOGE("failed for mode = %d", color_mode_id);
+    return status;
+  }
+
+  callbacks_->Refresh(id_);
+  validated_ = false;
+
+  return status;
 }
 
 }  // namespace sdm

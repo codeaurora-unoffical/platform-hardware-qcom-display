@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -55,6 +55,9 @@ class HWCDisplayPluggable : public HWCDisplay {
   virtual HWC2::Error SetColorMode(ColorMode mode);
   virtual HWC2::Error SetColorModeWithRenderIntent(ColorMode mode, RenderIntent intent);
   virtual HWC2::Error UpdatePowerMode(HWC2::PowerMode mode);
+  virtual HWC2::Error SetColorTransform(const float *matrix, android_color_transform_t hint);
+  virtual HWC2::Error RestoreColorTransform();
+  virtual HWC2::Error SetColorModeById(int32_t color_mode_id);
 
  private:
   HWCDisplayPluggable(CoreInterface *core_intf, HWCBufferAllocator *buffer_allocator,
@@ -68,6 +71,7 @@ class HWCDisplayPluggable : public HWCDisplay {
   DisplayNullExternal display_null_;
   int underscan_width_ = 0;
   int underscan_height_ = 0;
+  int enable_qdcm_colormodes_ = 0;
 };
 
 }  // namespace sdm
