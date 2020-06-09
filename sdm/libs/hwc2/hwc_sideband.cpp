@@ -415,20 +415,23 @@ int32_t HWCSidebandStreamSession::SetLayerSidebandStream(hwc2_display_t display,
 
   //destroy previous stream attached to the same layer
   if (new_layer) {
-    std::vector<int32_t> removeList;
+    std::vector<std::pair<int32_t, HWCSidebandStream*>> removeList;
     for (auto & sbstream : mSidebandStreamList) {
       if (sbstream.second != stm &&
           sbstream.second->RemoveLayer(layer) == HWC2_ERROR_NO_RESOURCES) {
-        removeList.push_back(sbstream.first);
+        removeList.push_back(sbstream);
       }
     }
 
-    // there is no need to hold the session locker
+    // remove stream from list in locked context
+    for (auto & sbstream : removeList) {
+      mSidebandStreamList.erase(sbstream.first);
+    }
+
+    // delete stream from unlocked context
     hwc_session->locker_.Unlock();
-    for (auto stream_id : removeList) {
-      auto sbstream = mSidebandStreamList[stream_id];
-      mSidebandStreamList.erase(stream_id);
-      delete sbstream;
+    for (auto & sbstream : removeList) {
+      delete sbstream.second;
     }
     hwc_session->locker_.Lock();
   }
@@ -437,19 +440,22 @@ int32_t HWCSidebandStreamSession::SetLayerSidebandStream(hwc2_display_t display,
 }
 
 int32_t HWCSidebandStreamSession::DestroyLayer(hwc2_display_t display, hwc2_layer_t layer) {
-  std::vector<int32_t> removeList;
+  std::vector<std::pair<int32_t, HWCSidebandStream*>> removeList;
   for (auto & sbstream : mSidebandStreamList) {
     if (sbstream.second->RemoveLayer(layer) == HWC2_ERROR_NO_RESOURCES) {
-      removeList.push_back(sbstream.first);
+      removeList.push_back(sbstream);
     }
   }
 
-  // there is no need to hold the session locker
+  // remove stream from list in locked context
+  for (auto & sbstream : removeList) {
+    mSidebandStreamList.erase(sbstream.first);
+  }
+
+  // delete stream from unlocked context
   hwc_session->locker_.Unlock();
-  for (auto stream_id : removeList) {
-    auto sbstream = mSidebandStreamList[stream_id];
-    mSidebandStreamList.erase(stream_id);
-    delete sbstream;
+  for (auto & sbstream : removeList) {
+    delete sbstream.second;
   }
   hwc_session->locker_.Lock();
 
