@@ -26,12 +26,23 @@ AC_ARG_WITH([core_includes],
 
 if test "x$with_core_includes" != "xno"; then
    CFLAGS="${CFLAGS} -I${core_incdir}"
+   CPPFLAGS="${CPPFLAGS} -I${core_incdir}"
 fi
 
 AC_ARG_WITH(sanitized-headers,
    AS_HELP_STRING([--with-sanitized-headers=DIR],
        [Specify the location of the sanitized Linux headers]),
-   [CPPFLAGS="$CPPFLAGS -I$withval"])
+       [sanitized_headers=$withval], [with_sanitized_headers=no])
+
+if test "x${sanitized_headers}" != "xno"; then
+   CFLAGS="${CFLAGS} -I${sanitized_headers}"
+   CPPFLAGS="${CPPFLAGS} -I${sanitized_headers}"
+fi
+
+AC_ARG_WITH([gbm], [--with-gbm], [gbm="${enableval}"], [gbm="no"])
+if test "x$gbm" = "xyes"; then
+  CPPFLAGS="${CPPFLAGS} -D__GBM__"
+fi
 
 AC_ARG_ENABLE([sdmhaldrm],
      AC_HELP_STRING([--enable-sdmhaldrm],
@@ -41,6 +52,19 @@ AC_ARG_ENABLE([sdmhaldrm],
 
 AM_CONDITIONAL([ENABLE_SDMHALDRM], [test "x${enable_sdmhaldrm}" = "xyes"])
 
+if test "x$enable_sdmhaldrm" != "xno"; then
+   CPPFLAGS="${CPPFLAGS} -DCOMPILE_DRM"
+fi
+
+AC_ARG_ENABLE([headless-target],
+     AC_HELP_STRING([--enable-headless-target],
+        [enable headless-target, build display-hal-linux with headless-target]),
+        [enable_headless-target="${enableval}"],
+        enable_headless-target=no)
+
+if test "x$enable_headless-target" != "xno"; then
+   CPPFLAGS="${CPPFLAGS} -DTARGET_HEADLESS"
+fi
 
 AC_ARG_ENABLE([sdmhalfb],
      AC_HELP_STRING([--enable-sdmhalfb],
