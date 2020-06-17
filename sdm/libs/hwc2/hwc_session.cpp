@@ -565,7 +565,9 @@ int32_t HWCSession::PresentDisplay(hwc2_device_t *device, hwc2_display_t display
     CALC_FPS();
   }
 
-  hwc_session->sideband_stream_.StopPresentation(display);
+  if (status == HWC2::Error::None)
+    hwc_session->sideband_stream_.StopPresentation(display);
+
   return INT32(status);
 }
 
