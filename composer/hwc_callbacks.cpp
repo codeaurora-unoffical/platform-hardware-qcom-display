@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2017, 2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2017, 2019-2020 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -36,7 +36,7 @@
 namespace sdm {
 
 HWC2::Error HWCCallbacks::Hotplug(hwc2_display_t display, HWC2::Connection state) {
-  SCOPE_LOCK(callbacks_lock_);
+  SCOPE_LOCK(hotplug_lock_);
   DTRACE_SCOPED();
 
   // If client has not registered hotplug, wait for it finitely:
@@ -47,7 +47,7 @@ HWC2::Error HWCCallbacks::Hotplug(hwc2_display_t display, HWC2::Connection state
   while (!hotplug_) {
     DLOGW("Attempting to send client a hotplug too early Display = %" PRIu64 " state = %d", display,
           state);
-    int ret = callbacks_lock_.WaitFinite(5000);
+    int ret = hotplug_lock_.WaitFinite(5000);
     if (ret == ETIMEDOUT) {
       DLOGW("Client didn't connect on time, dropping hotplug!");
       return HWC2::Error::None;
@@ -61,6 +61,7 @@ HWC2::Error HWCCallbacks::Hotplug(hwc2_display_t display, HWC2::Connection state
 }
 
 HWC2::Error HWCCallbacks::Refresh(hwc2_display_t display) {
+  SCOPE_LOCK(refresh_lock_);
   // Do not lock, will cause hotplug deadlock
   DTRACE_SCOPED();
   // If client has not registered refresh, drop it
@@ -73,6 +74,7 @@ HWC2::Error HWCCallbacks::Refresh(hwc2_display_t display) {
 }
 
 HWC2::Error HWCCallbacks::Vsync(hwc2_display_t display, int64_t timestamp) {
+  SCOPE_LOCK(vsync_lock_);
   // Do not lock, may cause hotplug deadlock
   DTRACE_SCOPED();
   // If client has not registered vsync, drop it
@@ -85,21 +87,26 @@ HWC2::Error HWCCallbacks::Vsync(hwc2_display_t display, int64_t timestamp) {
 
 HWC2::Error HWCCallbacks::Register(HWC2::Callback descriptor, hwc2_callback_data_t callback_data,
                                    hwc2_function_pointer_t pointer) {
-  SCOPE_LOCK(callbacks_lock_);
   switch (descriptor) {
-    case HWC2::Callback::Hotplug:
-      hotplug_data_ = callback_data;
-      hotplug_ = reinterpret_cast<HWC2_PFN_HOTPLUG>(pointer);
-      client_connected_ = true;
-      callbacks_lock_.Broadcast();
+    case HWC2::Callback::Hotplug: {
+        SCOPE_LOCK(hotplug_lock_);
+        hotplug_data_ = callback_data;
+        hotplug_ = reinterpret_cast<HWC2_PFN_HOTPLUG>(pointer);
+        client_connected_ = true;
+        hotplug_lock_.Broadcast();
+      }
       break;
-    case HWC2::Callback::Refresh:
-      refresh_data_ = callback_data;
-      refresh_ = reinterpret_cast<HWC2_PFN_REFRESH>(pointer);
+    case HWC2::Callback::Refresh: {
+        SCOPE_LOCK(refresh_lock_);
+        refresh_data_ = callback_data;
+        refresh_ = reinterpret_cast<HWC2_PFN_REFRESH>(pointer);
+      }
       break;
-    case HWC2::Callback::Vsync:
-      vsync_data_ = callback_data;
-      vsync_ = reinterpret_cast<HWC2_PFN_VSYNC>(pointer);
+    case HWC2::Callback::Vsync: {
+        SCOPE_LOCK(vsync_lock_);
+        vsync_data_ = callback_data;
+        vsync_ = reinterpret_cast<HWC2_PFN_VSYNC>(pointer);
+      }
       break;
     default:
       return HWC2::Error::BadParameter;
