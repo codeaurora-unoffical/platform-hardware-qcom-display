@@ -37,6 +37,7 @@ PRODUCT_PACKAGES += \
     vendor.qti.hardware.display.mapper@3.0.vendor \
     vendor.qti.hardware.display.mapper@4.0.vendor \
     init.qti.display_boot.sh \
+    init.qti.display_boot.rc \
     modetest \
     vndservicemanager
 
@@ -66,10 +67,13 @@ PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_default.xml:$
 PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_default.xml:$(TARGET_COPY_OUT_VENDOR)/etc/qdcm_calib_data_r66451_amoled_cmd_mode_dsi_visionox_panel_with_DSC.xml
 PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_default.xml:$(TARGET_COPY_OUT_VENDOR)/etc/qdcm_calib_data_r66451_amoled_video_mode_dsi_visionox_panel_with_DSC.xml
 #QDCM calibration xml file for nt35597 truly panel
-PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_default.xml:$(TARGET_COPY_OUT_VENDOR)/etc/qdcm_calib_data_Dual_nt35597_cmd_mode_dsi_truly_panel_without_DSC.xml
-PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_default.xml:$(TARGET_COPY_OUT_VENDOR)/etc/qdcm_calib_data_Dual_nt35597_video_mode_dsi_truly_panel_without_DSC.xml
+PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_nt35597_cmd_mode_dsi_truly_panel_with_DSC.xml:$(TARGET_COPY_OUT_VENDOR)/etc/qdcm_calib_data_Dual_nt35597_cmd_mode_dsi_truly_panel_without_DSC.xml
+PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_nt35597_cmd_mode_dsi_truly_panel_with_DSC.xml:$(TARGET_COPY_OUT_VENDOR)/etc/qdcm_calib_data_Dual_nt35597_video_mode_dsi_truly_panel_without_DSC.xml
 #QDCM calibration xml file for Sharp qhd panel
 PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_default.xml:$(TARGET_COPY_OUT_VENDOR)/etc/qdcm_calib_data_Sharp_qhd_cmd_mode_dsi_panel.xml
+#QDCM calibration xml file for rm69299 amoled fhd+ panel
+PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_default.xml:$(TARGET_COPY_OUT_VENDOR)/etc/qdcm_calib_data_rm69299_amoled_fhd+_video_mode_dsi_visionox_panel.xml
+PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_default.xml:$(TARGET_COPY_OUT_VENDOR)/etc/qdcm_calib_data_rm69299_amoled_fhd+_cmd_mode_dsi_visionox_panel.xml
 
 #Multi-stc libraries config xml file
 PRODUCT_COPY_FILES += hardware/qcom/display/config/snapdragon_color_libs_config.xml:$(TARGET_COPY_OUT_VENDOR)/etc/snapdragon_color_libs_config.xml
@@ -94,7 +98,8 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.enable_advanced_sf_phase_offset=1 \
     debug.sf.high_fps_late_sf_phase_offset_ns=-4000000 \
     debug.sf.high_fps_early_phase_offset_ns=-4000000 \
-    debug.sf.high_fps_early_gl_phase_offset_ns=-4000000
+    debug.sf.high_fps_early_gl_phase_offset_ns=-4000000 \
+    debug.sf.disable_client_composition_cache=1
 
 # Enable offline rotator for Bengal.
 ifneq ($(TARGET_BOARD_PLATFORM),bengal)
