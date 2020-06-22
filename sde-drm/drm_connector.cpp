@@ -541,6 +541,7 @@ void DRMConnector::ParseCapabilities(uint64_t blob_id, DRMConnectorInfo *info) {
   }
 
   drmModeFreePropertyBlob(blob);
+  delete[] fmt_str;
 }
 
 void DRMConnector::ParseCapabilities(uint64_t blob_id, drm_panel_hdr_properties *hdr_info) {
@@ -630,6 +631,7 @@ void DRMConnector::ParseModeProperties(uint64_t blob_id, DRMConnectorInfo *info)
   }
 
   drmModeFreePropertyBlob(blob);
+  delete[] fmt_str;
 }
 
 void DRMConnector::ParseCapabilities(uint64_t blob_id, drm_msm_ext_hdr_properties *hdr_info) {
