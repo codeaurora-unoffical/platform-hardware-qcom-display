@@ -767,37 +767,46 @@ static int32_t SetVsyncEnabled(hwc2_device_t *device, hwc2_display_t display, in
 
 int32_t HWCSession::ValidateDisplay(hwc2_device_t *device, hwc2_display_t display,
                                     uint32_t *out_num_types, uint32_t *out_num_requests) {
-  DTRACE_SCOPED();
-  SCOPE_LOCK(locker_);
+
+  auto status = HWC2::Error::BadDisplay;
+  bool needs_refresh_ = false;
   HWCSession *hwc_session = static_cast<HWCSession *>(device);
+
+  DTRACE_SCOPED();
   if (!device) {
     return HWC2_ERROR_BAD_DISPLAY;
   }
 
-  // TODO(user): Handle secure session, handle QDCM solid fill
-  // Handle external_pending_connect_ in CreateVirtualDisplay
-  auto status = HWC2::Error::BadDisplay;
-  if (hwc_session->hwc_display_[display]) {
-    if (display == HWC_DISPLAY_PRIMARY) {
-      // TODO(user): This can be moved to HWCDisplayPrimary
-      if (hwc_session->reset_panel_) {
-        DLOGW("panel is in bad state, resetting the panel");
-        hwc_session->ResetPanel();
+  {
+    SCOPE_LOCK(locker_);
+    // TODO(user): Handle secure session, handle QDCM solid fill
+    // Handle external_pending_connect_ in CreateVirtualDisplay
+    if (hwc_session->hwc_display_[display]) {
+      if (display == HWC_DISPLAY_PRIMARY) {
+        // TODO(user): This can be moved to HWCDisplayPrimary
+        if (hwc_session->reset_panel_) {
+          DLOGW("panel is in bad state, resetting the panel");
+          hwc_session->ResetPanel();
+        }
+
+        if (hwc_session->need_invalidate_) {
+          needs_refresh_ = true;
+        }
+        if (hwc_session->color_mgr_) {
+          hwc_session->color_mgr_->SetColorModeDetailEnhancer(hwc_session->hwc_display_[display]);
+        }
       }
 
-      if (hwc_session->need_invalidate_) {
-        hwc_session->Refresh(display);
-      }
+      status = hwc_session->hwc_display_[display]->Validate(out_num_types, out_num_requests);
 
-      if (hwc_session->color_mgr_) {
-        hwc_session->color_mgr_->SetColorModeDetailEnhancer(hwc_session->hwc_display_[display]);
-      }
+      hwc_session->sideband_stream_.StartPresentation(display);
     }
-
-    status = hwc_session->hwc_display_[display]->Validate(out_num_types, out_num_requests);
-
-    hwc_session->sideband_stream_.StartPresentation(display);
   }
+
+  if (needs_refresh_) {
+     hwc_session->Refresh(display);
+  }
+
   return INT32(status);
 }
 
@@ -1292,7 +1301,6 @@ void HWCSession::DynamicDebug(const android::Parcel *input_parcel) {
 
 android::status_t HWCSession::QdcmCMDHandler(const android::Parcel *input_parcel,
                                              android::Parcel *output_parcel) {
-  SCOPE_LOCK(locker_);
 
   int ret = 0;
   int32_t *brightness_value = NULL;
@@ -1339,13 +1347,19 @@ android::status_t HWCSession::QdcmCMDHandler(const android::Parcel *input_parcel
       ret = color_mgr_->EnableQDCMMode(false, hwc_display_[HWC_DISPLAY_PRIMARY]);
       break;
     case kApplySolidFill:
-      ret =
-          color_mgr_->SetSolidFill(pending_action.params, true, hwc_display_[HWC_DISPLAY_PRIMARY]);
+      {
+        SCOPE_LOCK(locker_);
+        ret = color_mgr_->SetSolidFill(pending_action.params, true,
+                                       hwc_display_[HWC_DISPLAY_PRIMARY]);
+      }
       Refresh(HWC_DISPLAY_PRIMARY);
       break;
     case kDisableSolidFill:
-      ret =
-          color_mgr_->SetSolidFill(pending_action.params, false, hwc_display_[HWC_DISPLAY_PRIMARY]);
+      {
+        SCOPE_LOCK(locker_);
+        ret = color_mgr_->SetSolidFill(pending_action.params, false,
+                                       hwc_display_[HWC_DISPLAY_PRIMARY]);
+      }
       Refresh(HWC_DISPLAY_PRIMARY);
       break;
     case kSetPanelBrightness:

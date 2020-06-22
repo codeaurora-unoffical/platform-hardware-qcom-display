@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2018, 2020 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -198,19 +198,25 @@ Return<void> HWCSession::getActiveConfig(IDisplayConfig::DisplayType dpy,
 }
 
 int32_t HWCSession::SetActiveConfigIndex(int disp_id, uint32_t config) {
+ bool needs_refresh_ =  false;
+ int32_t error = -EINVAL;
+
+ if ((disp_id < HWC_DISPLAY_PRIMARY) || (disp_id >= MAX_TOTAL_DISPLAY_NUM)) {
+   return -EINVAL;
+ }
+
+ {
   SCOPE_LOCK(locker_);
-
-  if ((disp_id < HWC_DISPLAY_PRIMARY) || (disp_id >= MAX_TOTAL_DISPLAY_NUM)) {
-    return -EINVAL;
-  }
-
-  int32_t error = -EINVAL;
   if (hwc_display_[disp_id]) {
     error = hwc_display_[disp_id]->SetActiveDisplayConfig(config);
     if (!error) {
-      Refresh(0);
+      needs_refresh_ = true;
     }
   }
+ }
+
+ if (needs_refresh_)
+   Refresh(0);
 
   return error;
 }
@@ -310,7 +316,6 @@ Return<int32_t> HWCSession::minHdcpEncryptionLevelChanged(IDisplayConfig::Displa
 }
 
 Return<int32_t> HWCSession::refreshScreen() {
-  SCOPE_LOCK(locker_);
 
   Refresh(HWC_DISPLAY_PRIMARY);
 
@@ -318,37 +323,38 @@ Return<int32_t> HWCSession::refreshScreen() {
 }
 
 int32_t HWCSession::ControlPartialUpdate(int disp_id, bool enable) {
-  SCOPE_LOCK(locker_);
+  {
+    SCOPE_LOCK(locker_);
 
-  if (disp_id < 0) {
-    return -EINVAL;
-  }
-
-  if (disp_id != HWC_DISPLAY_PRIMARY) {
-    DLOGW("CONTROL_PARTIAL_UPDATE is not applicable for display = %d", disp_id);
-    return -EINVAL;
-  }
-
-  HWCDisplay *hwc_display = hwc_display_[HWC_DISPLAY_PRIMARY];
-  if (!hwc_display) {
-    DLOGE("primary display object is not instantiated");
-    return -EINVAL;
-  }
-
-  uint32_t pending = 0;
-  DisplayError hwc_error = hwc_display->ControlPartialUpdate(enable, &pending);
-
-  if (hwc_error == kErrorNone) {
-    if (!pending) {
-      return 0;
+    if (disp_id < 0) {
+      return -EINVAL;
     }
-  } else if (hwc_error == kErrorNotSupported) {
-    return 0;
-  } else {
-    return -EINVAL;
+
+    if (disp_id != HWC_DISPLAY_PRIMARY) {
+      DLOGW("CONTROL_PARTIAL_UPDATE is not applicable for display = %d", disp_id);
+      return -EINVAL;
+    }
+
+    HWCDisplay *hwc_display = hwc_display_[HWC_DISPLAY_PRIMARY];
+    if (!hwc_display) {
+      DLOGE("primary display object is not instantiated");
+      return -EINVAL;
+    }
+
+    uint32_t pending = 0;
+    DisplayError hwc_error = hwc_display->ControlPartialUpdate(enable, &pending);
+
+    if (hwc_error == kErrorNone) {
+      if (!pending) {
+        return 0;
+      }
+    } else if (hwc_error == kErrorNotSupported) {
+      return 0;
+    } else {
+      return -EINVAL;
+    }
   }
 
-  // Todo(user): Unlock it before sending events to client. It may cause deadlocks in future.
   Refresh(HWC_DISPLAY_PRIMARY);
 
   // Wait until partial update control is complete

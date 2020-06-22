@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+* Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -144,6 +144,8 @@ struct color_data_pack {
     int32_t UpdateSidebandStream(HWCSidebandStream * stream);
 
    private:
+    int32_t UpdateSidebandStreamLocked(HWCSidebandStream * stm,
+                                    std::vector<hwc2_display_t> *refresh_list);
     HWCSession * hwc_session = NULL;
     std::map<int32_t, HWCSidebandStream*> mSidebandStreamList;
     uint32_t present_start = 0;
