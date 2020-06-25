@@ -621,7 +621,8 @@ DisplayError HWDeviceDRM::PopulateDisplayAttributes(uint32_t index) {
   display_attributes_[index].is_device_split =
       (topology == DRMTopology::DUAL_LM || topology == DRMTopology::DUAL_LM_MERGE ||
        topology == DRMTopology::DUAL_LM_MERGE_DSC || topology == DRMTopology::DUAL_LM_DSC ||
-       topology == DRMTopology::DUAL_LM_DSCMERGE);
+       topology == DRMTopology::DUAL_LM_DSCMERGE || topology == DRMTopology::QUAD_LM_MERGE ||
+       topology == DRMTopology::QUAD_LM_DSCMERGE || topology == DRMTopology::QUAD_LM_MERGE_DSC);
   display_attributes_[index].clock_khz = mode.clock;
 
   // If driver doesn't return panel width/height information, default to 320 dpi
@@ -636,14 +637,15 @@ DisplayError HWDeviceDRM::PopulateDisplayAttributes(uint32_t index) {
   SetTopology(topology, &display_attributes_[index].topology);
 
   DLOGI("Display attributes[%d]: WxH: %dx%d, DPI: %fx%f, FPS: %d, LM_SPLIT: %d, V_BACK_PORCH: %d," \
-        " V_FRONT_PORCH: %d, V_PULSE_WIDTH: %d, V_TOTAL: %d, H_TOTAL: %d, CLK: %dKHZ, TOPOLOGY: %d",
-        index, display_attributes_[index].x_pixels, display_attributes_[index].y_pixels,
-        display_attributes_[index].x_dpi, display_attributes_[index].y_dpi,
-        display_attributes_[index].fps, display_attributes_[index].is_device_split,
-        display_attributes_[index].v_back_porch, display_attributes_[index].v_front_porch,
-        display_attributes_[index].v_pulse_width, display_attributes_[index].v_total,
-        display_attributes_[index].h_total, display_attributes_[index].clock_khz,
-        display_attributes_[index].topology);
+        " V_FRONT_PORCH: %d, V_PULSE_WIDTH: %d, V_TOTAL: %d, H_TOTAL: %d, CLK: %dKHZ," \
+        " TOPOLOGY: %d, HW_SPLIT: %d", index, display_attributes_[index].x_pixels,
+        display_attributes_[index].y_pixels, display_attributes_[index].x_dpi,
+        display_attributes_[index].y_dpi, display_attributes_[index].fps,
+        display_attributes_[index].is_device_split, display_attributes_[index].v_back_porch,
+        display_attributes_[index].v_front_porch, display_attributes_[index].v_pulse_width,
+        display_attributes_[index].v_total, display_attributes_[index].h_total,
+        display_attributes_[index].clock_khz, display_attributes_[index].topology,
+        mixer_attributes_.split_type);
 
   return kErrorNone;
 }
@@ -1513,16 +1515,16 @@ void HWDeviceDRM::SelectCscType(const LayerBuffer &input_buffer, DRMCscType *typ
     return;
   }
 
-  switch (input_buffer.color_metadata.colorPrimaries) {
-    case ColorPrimaries_BT601_6_525:
-    case ColorPrimaries_BT601_6_625:
+  switch (input_buffer.color_metadata.matrixCoefficients) {
+    case MatrixCoEff_BT601_6_525:
+    case MatrixCoEff_BT601_6_625:
       *type = ((input_buffer.color_metadata.range == Range_Full) ?
                DRMCscType::kCscYuv2Rgb601FR : DRMCscType::kCscYuv2Rgb601L);
       break;
-    case ColorPrimaries_BT709_5:
+    case MatrixCoEff_BT709_5:
       *type = DRMCscType::kCscYuv2Rgb709L;
       break;
-    case ColorPrimaries_BT2020:
+    case MatrixCoEff_BT2020:
       *type = ((input_buffer.color_metadata.range == Range_Full) ?
                 DRMCscType::kCscYuv2Rgb2020FR : DRMCscType::kCscYuv2Rgb2020L);
       break;
@@ -1792,8 +1794,15 @@ DisplayError HWDeviceDRM::SetMixerAttributes(const HWMixerAttributes &mixer_attr
 
   mixer_attributes_ = mixer_attributes;
   mixer_attributes_.split_left = mixer_attributes_.width;
+  mixer_attributes_.split_type = kNoSplit;
   if (display_attributes_[index].is_device_split) {
     mixer_attributes_.split_left = UINT32(FLOAT(mixer_attributes.width) * mixer_split_ratio);
+    mixer_attributes_.split_type = kDualSplit;
+    if (display_attributes_[index].topology == kQuadLMMerge ||
+        display_attributes_[index].topology == kQuadLMDSCMerge ||
+        display_attributes_[index].topology == kQuadLMMergeDSC) {
+      mixer_attributes_.split_type = kQuadSplit;
+    }
   }
 
   return kErrorNone;
@@ -1880,7 +1889,18 @@ void HWDeviceDRM::UpdateMixerAttributes() {
                                      ? hw_panel_info_.split_info.left_split
                                      : mixer_attributes_.width;
   mixer_attributes_.mixer_index = token_.crtc_index;
-  DLOGI("Mixer WxH %dx%d for %s", mixer_attributes_.width, mixer_attributes_.height, device_name_);
+  mixer_attributes_.split_type = kNoSplit;
+  if (display_attributes_[index].is_device_split) {
+    mixer_attributes_.split_type = kDualSplit;
+    if (display_attributes_[index].topology == kQuadLMMerge ||
+        display_attributes_[index].topology == kQuadLMDSCMerge ||
+        display_attributes_[index].topology == kQuadLMMergeDSC) {
+      mixer_attributes_.split_type = kQuadSplit;
+    }
+  }
+
+  DLOGI("Mixer WxH %dx%d-%d for %s", mixer_attributes_.width, mixer_attributes_.height,
+        mixer_attributes_.split_type, device_name_);
   update_mode_ = true;
 }
 
@@ -1919,6 +1939,9 @@ void HWDeviceDRM::SetTopology(sde_drm::DRMTopology drm_topology, HWTopology *hw_
     case DRMTopology::DUAL_LM_MERGE:      *hw_topology = kDualLMMerge;     break;
     case DRMTopology::DUAL_LM_MERGE_DSC:  *hw_topology = kDualLMMergeDSC;  break;
     case DRMTopology::DUAL_LM_DSCMERGE:   *hw_topology = kDualLMDSCMerge;  break;
+    case DRMTopology::QUAD_LM_MERGE:      *hw_topology = kQuadLMMerge;     break;
+    case DRMTopology::QUAD_LM_DSCMERGE:   *hw_topology = kQuadLMDSCMerge;  break;
+    case DRMTopology::QUAD_LM_MERGE_DSC:  *hw_topology = kQuadLMMergeDSC;  break;
     case DRMTopology::PPSPLIT:            *hw_topology = kPPSplit;         break;
     default:                              *hw_topology = kUnknown;         break;
   }

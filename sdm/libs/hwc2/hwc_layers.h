@@ -46,7 +46,9 @@ using PerFrameMetadataKey =
 namespace sdm {
 
 DisplayError SetCSC(const private_handle_t *pvt_handle, ColorMetaData *color_metadata);
-bool GetColorPrimary(const int32_t &dataspace, ColorPrimaries *color_primary);
+bool GetColorPrimaryAndMatrixCoef(const int32_t &dataspace,
+                                  ColorPrimaries *color_primary,
+                                  MatrixCoEfficients *matrix_coefficients);
 bool GetTransfer(const int32_t &dataspace, GammaTransfer *gamma_transfer);
 bool GetRange(const int32_t &dataspace, ColorRange *color_range);
 bool GetSDMColorSpace(const int32_t &dataspace, ColorMetaData *color_metadata);
