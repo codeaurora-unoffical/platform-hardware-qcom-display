@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2018,2020, The Linux Foundation. All rights reserved.
 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -183,7 +183,10 @@ bool Allocator::CheckForBufferSharing(uint32_t num_descriptors,
     }
 
     // For same format type, find the descriptor with bigger size
-    GetAlignedWidthAndHeight(GetBufferInfo(*descriptors[i]), &alignedw, &alignedh);
+    int err = GetAlignedWidthAndHeight(GetBufferInfo(*descriptors[i]), &alignedw, &alignedh);
+    if (err) {
+      return false;
+    }
     unsigned int size = GetSize(GetBufferInfo(*descriptors[i]), alignedw, alignedh);
     if (max_size < size) {
       *max_index = INT(i);

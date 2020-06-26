@@ -103,7 +103,7 @@ PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.wcg_composition_dataspa
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.protected_contents=true
 endif
 
-ifeq ($(TARGET_BOARD_PLATFORM), msmnile)
+ifneq ($(filter $(MSMSTEPPE) sdmshrike msmnile,$(TARGET_BOARD_PLATFORM)),)
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.protected_contents=true
 endif
 
