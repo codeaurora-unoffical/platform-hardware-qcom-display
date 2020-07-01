@@ -221,6 +221,7 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   bool is_smart_panel_ = false;
   const char *kDisplayBwName = "display_bw";
   bool enable_bw_limits_ = false;
+  bool enhance_idle_time_ = false;
 };
 
 }  // namespace sdm
