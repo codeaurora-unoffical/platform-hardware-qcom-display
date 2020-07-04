@@ -712,19 +712,19 @@ void HWDeviceDRM::PopulateHWPanelInfo() {
     break;
   case kDualSplit:
     hw_panel_info_.split_info.left_split = hw_panel_info_.split_info.right_split =
-        display_attributes_[index].x_pixels / 2;
+        (display_attributes_[index].x_pixels + 1) / 2;
     break;
   case kTripleSplit:
     hw_panel_info_.split_info.left_split = hw_panel_info_.split_info.right_split =
-        display_attributes_[index].x_pixels * 2 / 3;
+        (display_attributes_[index].x_pixels * 2 + 2) / 3;
     break;
   case kQuadSplit:
     hw_panel_info_.split_info.left_split = hw_panel_info_.split_info.right_split =
-        display_attributes_[index].x_pixels / 2;
+        (display_attributes_[index].x_pixels + 1) / 2;
     break;
   case kSixSplit:
     hw_panel_info_.split_info.left_split = hw_panel_info_.split_info.right_split =
-        display_attributes_[index].x_pixels / 3;
+        (display_attributes_[index].x_pixels + 2) / 3;
     break;
   }
 
