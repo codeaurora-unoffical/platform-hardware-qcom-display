@@ -144,6 +144,7 @@ class HWDeviceDRM : public HWInterface {
   void GetHWDisplayPortAndMode();
   bool EnableHotPlugDetection(int enable);
   void UpdateMixerAttributes();
+  void UpdateMixerSplitType(uint32_t index);
   void SetSolidfillStages();
   void AddSolidfillStage(const HWSolidfillStage &sf, uint32_t plane_alpha);
   void ClearSolidfillStages();
