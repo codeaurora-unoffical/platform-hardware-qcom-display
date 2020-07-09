@@ -444,13 +444,14 @@ void CompManager::Purge(Handle display_ctx) {
   display_comp_ctx->strategy->Purge();
 }
 
-DisplayError CompManager::SetIdleTimeoutMs(Handle display_ctx, uint32_t active_ms) {
+DisplayError CompManager::SetIdleTimeoutMs(Handle display_ctx, uint32_t active_ms,
+                                           uint32_t inactive_ms) {
   SCOPE_LOCK(locker_);
 
   DisplayCompositionContext *display_comp_ctx =
                              reinterpret_cast<DisplayCompositionContext *>(display_ctx);
 
-  return display_comp_ctx->strategy->SetIdleTimeoutMs(active_ms);
+  return display_comp_ctx->strategy->SetIdleTimeoutMs(active_ms, inactive_ms);
 }
 
 void CompManager::ProcessIdleTimeout(Handle display_ctx) {
@@ -462,7 +463,7 @@ void CompManager::ProcessIdleTimeout(Handle display_ctx) {
   if (!display_comp_ctx) {
     return;
   }
-
+  DLOGI("QIPL idle time");
   display_comp_ctx->idle_fallback = true;
 }
 
