@@ -338,6 +338,7 @@ HWC2::Error HWCLayer::SetLayerPlaneAlpha(float alpha) {
 
 HWC2::Error HWCLayer::SetLayerSidebandStream(android::sp<SidebandStreamBuf> buf) {
   private_handle_t * handle = buf->mSBHandle;
+  uint32_t geometry_changes = geometry_changes_;
 
   // mark buffer as sideband
   layer_->input_buffer.flags.sideband = true;
@@ -358,6 +359,9 @@ HWC2::Error HWCLayer::SetLayerSidebandStream(android::sp<SidebandStreamBuf> buf)
 
   // bookeep current buffer
   mSidebandStreamBuffer = buf;
+
+  // clear geometry changes by sideband stream buffer update
+  geometry_changes_ = geometry_changes;
 
   return HWC2::Error::None;
 }
