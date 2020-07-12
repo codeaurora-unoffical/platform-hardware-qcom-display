@@ -171,6 +171,10 @@ HWC2::Error HWCColorMode::CacheColorModeWithRenderIntent(ColorMode mode, RenderI
   return HWC2::Error::None;
 }
 
+void HWCColorMode::SetApplyMode(bool enable) {
+  apply_mode_ = enable;
+}
+
 HWC2::Error HWCColorMode::ApplyCurrentColorModeWithRenderIntent(bool hdr_present) {
   // If panel does not support color modes, do not set color mode.
   if (color_mode_map_.size() <= 1) {
@@ -199,6 +203,13 @@ HWC2::Error HWCColorMode::ApplyCurrentColorModeWithRenderIntent(bool hdr_present
        curr_dynamic_range_ == kHdrType) {
       // fall back to display_p3/display_bt2020 SDR mode if there is no HDR mode
       mode_string = color_mode_map_[current_color_mode_][current_render_intent_][kSdrType];
+    }
+
+    if (mode_string.empty() &&
+       (current_color_mode_ == ColorMode::BT2100_PQ) && (curr_dynamic_range_ == kSdrType)) {
+      // fallback to hdr mode.
+      mode_string = color_mode_map_[current_color_mode_][current_render_intent_][kHdrType];
+      DLOGI("fall back to hdr mode for ColorMode::BT2100_PQ kSdrType");
     }
   }
 
@@ -951,9 +962,15 @@ HWC2::Error HWCDisplay::SetPowerMode(HWC2::PowerMode mode, bool teardown) {
       }
       break;
     case HWC2::PowerMode::On:
+      if (color_mode_) {
+        color_mode_->SetApplyMode(true);
+      }
       state = kStateOn;
       break;
     case HWC2::PowerMode::Doze:
+      if (color_mode_) {
+        color_mode_->SetApplyMode(true);
+      }
       state = kStateDoze;
       break;
     case HWC2::PowerMode::DozeSuspend:
@@ -1218,13 +1235,32 @@ HWC2::Error HWCDisplay::SetClientTarget(buffer_handle_t target, int32_t acquire_
 
 HWC2::Error HWCDisplay::SetActiveConfig(hwc2_config_t config) {
   DTRACE_SCOPED();
-
   hwc2_config_t current_config = 0;
   GetActiveConfig(&current_config);
   if (current_config == config) {
     return HWC2::Error::None;
   }
+
+  // DRM driver expects DRM_PREFERRED_MODE to be set as part of first commit.
+  if (!IsFirstCommitDone()) {
+    // Store client's config.
+    // Set this as part of post commit.
+    pending_first_commit_config_ = true;
+    pending_first_commit_config_index_ = config;
+    DLOGI("Defer config change to %d until first commit", UINT32(config));
+    return HWC2::Error::None;
+  } else if (pending_first_commit_config_) {
+    // Config override request from client.
+    // Honour latest request.
+    pending_first_commit_config_ = false;
+  }
+
   DLOGI("Active configuration changed to: %d", config);
+
+  // Cache refresh rate set by client.
+  DisplayConfigVariableInfo info = {};
+  GetDisplayAttributesForConfig(INT(config), &info);
+  active_refresh_rate_ = info.fps;
 
   // Store config index to be applied upon refresh.
   pending_config_ = true;
@@ -1295,6 +1331,7 @@ DisplayError HWCDisplay::HandleEvent(DisplayEvent event) {
       break;
     }
     case kInvalidateDisplay:
+    case kIdlePowerCollapse:
     case kThermalEvent: {
       SEQUENCE_WAIT_SCOPE_LOCK(HWCSession::locker_[id_]);
       validated_ = false;
@@ -1318,8 +1355,6 @@ DisplayError HWCDisplay::HandleEvent(DisplayEvent event) {
               id_);
       }
     } break;
-    case kIdlePowerCollapse:
-      break;
     default:
       DLOGW("Unknown event: %d", event);
       break;
@@ -1704,10 +1739,17 @@ HWC2::Error HWCDisplay::PostCommitLayerStack(int32_t *out_retire_fence) {
   flush_ = false;
   skip_commit_ = false;
 
+  // Handle pending config changes.
+  if (pending_first_commit_config_) {
+    DLOGI("Changing active config to %d", UINT32(pending_first_commit_config_));
+    pending_first_commit_config_ = false;
+    SetActiveConfig(pending_first_commit_config_index_);
+  }
+
   return status;
 }
 
-void HWCDisplay::SetIdleTimeoutMs(uint32_t timeout_ms) {
+void HWCDisplay::SetIdleTimeoutMs(uint32_t timeout_ms, uint32_t inactive_ms) {
   return;
 }
 

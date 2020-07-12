@@ -59,6 +59,7 @@ bool HWCSession::pending_power_mode_[HWCCallbacks::kNumDisplays];
 Locker HWCSession::power_state_[HWCCallbacks::kNumDisplays];
 Locker HWCSession::hdr_locker_[HWCCallbacks::kNumDisplays];
 Locker HWCSession::display_config_locker_;
+Locker HWCSession::system_locker_;
 static const int kSolidFillDelay = 100 * 1000;
 int HWCSession::null_display_mode_ = 0;
 static const uint32_t kBrightnessScaleMax = 100;
@@ -742,6 +743,7 @@ int32_t HWCSession::PresentDisplay(hwc2_display_t display, int32_t *out_retire_f
   auto status = HWC2::Error::BadDisplay;
   DTRACE_SCOPED();
 
+  SCOPE_LOCK(system_locker_);
   if (display >= HWCCallbacks::kNumDisplays) {
     DLOGW("Invalid Display : display = %" PRIu64, display);
     return HWC2_ERROR_BAD_DISPLAY;
@@ -894,6 +896,14 @@ void HWCSession::RegisterCallback(int32_t descriptor, hwc2_callback_data_t callb
     // Notfify all displays.
     NotifyClientStatus(client_connected_);
   }
+
+  // On SF stop, disable the idle time.
+  if (!pointer && is_idle_time_up_ && hwc_display_[HWC_DISPLAY_PRIMARY]) { // De-registering…
+    DLOGI("disable idle time");
+    hwc_display_[HWC_DISPLAY_PRIMARY]->SetIdleTimeoutMs(0,0);
+    is_idle_time_up_ = false;
+  }
+
   need_invalidate_ = false;
 }
 
@@ -1132,9 +1142,18 @@ int32_t HWCSession::GetDozeSupport(hwc2_display_t display, int32_t *out_support)
   }
 
   *out_support = 0;
-  uint32_t config = 0;
-  GetActiveConfigIndex(display, &config);
-  *out_support = isSmartPanelConfig(display, config) ? 1 : 0;
+
+  SCOPE_LOCK(locker_[display]);
+  if (!hwc_display_[display]) {
+    DLOGE("Display %d is not created yet.", INT32(display));
+    return HWC2_ERROR_BAD_DISPLAY;
+  }
+
+  if (hwc_display_[display]->GetDisplayClass() != DISPLAY_CLASS_BUILTIN) {
+    return HWC2_ERROR_NONE;
+  }
+
+  *out_support = hwc_display_[display]->HasSmartPanelConfig() ? 1 : 0;
 
   return HWC2_ERROR_NONE;
 }
@@ -2261,7 +2280,7 @@ const char *GetTokenValue(const char *uevent_data, int length, const char *token
 android::status_t HWCSession::SetDsiClk(const android::Parcel *input_parcel) {
   int disp_id = input_parcel->readInt32();
   uint64_t clk = UINT64(input_parcel->readInt64());
-  if (disp_id < 0) {
+  if (disp_id != HWC_DISPLAY_PRIMARY) {
     return -EINVAL;
   }
 
@@ -2276,7 +2295,7 @@ android::status_t HWCSession::SetDsiClk(const android::Parcel *input_parcel) {
 android::status_t HWCSession::GetDsiClk(const android::Parcel *input_parcel,
                                         android::Parcel *output_parcel) {
   int disp_id = input_parcel->readInt32();
-  if (disp_id < 0) {
+  if (disp_id != HWC_DISPLAY_PRIMARY) {
     return -EINVAL;
   }
 
@@ -2295,7 +2314,7 @@ android::status_t HWCSession::GetDsiClk(const android::Parcel *input_parcel,
 android::status_t HWCSession::GetSupportedDsiClk(const android::Parcel *input_parcel,
                                                  android::Parcel *output_parcel) {
   int disp_id = input_parcel->readInt32();
-  if (disp_id < 0) {
+  if (disp_id != HWC_DISPLAY_PRIMARY) {
     return -EINVAL;
   }
 
@@ -2819,8 +2838,9 @@ void HWCSession::DestroyPluggableDisplay(DisplayMapInfo *map_info) {
   DLOGI("Notify hotplug display disconnected: client id = %d", UINT32(client_id));
   callbacks_.Hotplug(client_id, HWC2::Connection::Disconnected);
 
+  SCOPE_LOCK(system_locker_);
   {
-    SCOPE_LOCK(locker_[client_id]);
+    SEQUENCE_WAIT_SCOPE_LOCK(locker_[client_id]);
     auto &hwc_display = hwc_display_[client_id];
     if (!hwc_display) {
       return;
@@ -3143,8 +3163,12 @@ int32_t HWCSession::GetReadbackBufferAttributes(hwc2_display_t display, int32_t 
     return HWC2_ERROR_BAD_PARAMETER;
   }
 
-  if (display != HWC_DISPLAY_PRIMARY) {
+  if (display >= HWCCallbacks::kNumDisplays) {
     return HWC2_ERROR_BAD_DISPLAY;
+  }
+
+  if (display != HWC_DISPLAY_PRIMARY) {
+    return HWC2_ERROR_UNSUPPORTED;
   }
 
   HWCDisplay *hwc_display = hwc_display_[display];
@@ -3166,8 +3190,12 @@ int32_t HWCSession::SetReadbackBuffer(hwc2_display_t display, const native_handl
     return HWC2_ERROR_BAD_PARAMETER;
   }
 
-  if (display != HWC_DISPLAY_PRIMARY) {
+  if (display >= HWCCallbacks::kNumDisplays) {
     return HWC2_ERROR_BAD_DISPLAY;
+  }
+
+  if (display != HWC_DISPLAY_PRIMARY) {
+    return HWC2_ERROR_UNSUPPORTED;
   }
 
   int external_dpy_index = GetDisplayIndex(qdutils::DISPLAY_EXTERNAL);
@@ -3186,8 +3214,12 @@ int32_t HWCSession::GetReadbackBufferFence(hwc2_display_t display, int32_t *rele
     return HWC2_ERROR_BAD_PARAMETER;
   }
 
-  if (display != HWC_DISPLAY_PRIMARY) {
+  if (display >= HWCCallbacks::kNumDisplays) {
     return HWC2_ERROR_BAD_DISPLAY;
+  }
+
+  if (display != HWC_DISPLAY_PRIMARY) {
+    return HWC2_ERROR_UNSUPPORTED;
   }
 
   return CallDisplayFunction(display, &HWCDisplay::GetReadbackBufferFence, release_fence);
@@ -3371,6 +3403,7 @@ void HWCSession::NotifyClientStatus(bool connected) {
     }
     SCOPE_LOCK(locker_[i]);
     hwc_display_[i]->NotifyClientStatus(connected);
+    hwc_display_[i]->SetVsyncEnabled(HWC2::Vsync::Disable);
   }
 }
 

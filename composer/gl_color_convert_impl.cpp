@@ -27,6 +27,8 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <vector>
+
 #include "gl_color_convert_impl.h"
 
 #define __CLASS__ "GLColorConvertImpl"
@@ -148,6 +150,8 @@ int GLColorConvertImpl::CreateContext(GLRenderTarget target, bool secure) {
 
   ctx_.program_id = LoadProgram(1, &kVertexShader, count, fragment_shaders);
 
+  SetRealTimePriority();
+
   return 0;
 }
 
@@ -162,7 +166,8 @@ int GLColorConvertImpl::Blit(const private_handle_t *src_hnd, const private_hand
   SetProgram(ctx_.program_id);
 
   SetSourceBuffer(src_hnd);
-  SetDestinationBuffer(dst_hnd, dst_rect);
+  SetDestinationBuffer(dst_hnd);
+  SetViewport(dst_rect);
 
   glEnableVertexAttribArray(0);
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, kFullScreenVertices);
@@ -170,11 +175,8 @@ int GLColorConvertImpl::Blit(const private_handle_t *src_hnd, const private_hand
   glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, kFullScreenTexCoords);
   glDrawArrays(GL_TRIANGLES, 0, 3);
 
-  int in_fence_fd = -1;
-  buffer_sync_handler_.SyncMerge(src_acquire_fence_fd, dst_acquire_fence_fd, &in_fence_fd);
-  if (in_fence_fd >= 0) {
-    WaitOnInputFence(in_fence_fd);
-  }
+  std::vector<int> fence = {src_acquire_fence_fd, dst_acquire_fence_fd};
+  WaitOnInputFence(fence);
 
   // Create output fence for client to wait on.
   *release_fence_fd = CreateOutputFence();

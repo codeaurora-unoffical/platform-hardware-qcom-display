@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2019, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2020, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -120,6 +120,10 @@ DisplayError DisplayBuiltIn::Init() {
   Debug::Get()->GetProperty(DEFER_FPS_FRAME_COUNT, &value);
   deferred_config_.frame_count = (value > 0) ? UINT32(value) : 0;
 
+  value = 0;
+  DebugHandler::Get()->GetProperty(DISABLE_DYNAMIC_FPS, &value);
+  disable_dyn_fps_ = (value == 1);
+
   return error;
 }
 
@@ -232,6 +236,7 @@ DisplayError DisplayBuiltIn::Commit(LayerStack *layer_stack) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   DisplayError error = kErrorNone;
   uint32_t app_layer_count = hw_layers_.info.app_layer_count;
+  HWDisplayMode panel_mode = hw_panel_info_.mode;
 
   DTRACE_SCOPED();
 
@@ -304,6 +309,10 @@ DisplayError DisplayBuiltIn::Commit(LayerStack *layer_stack) {
     ControlPartialUpdate(true /* enable */, &pending);
   }
 
+  if (panel_mode != hw_panel_info_.mode) {
+    UpdateDisplayModeParams();
+  }
+
   if (dpps_pu_nofiy_pending_) {
     dpps_pu_nofiy_pending_ = false;
     dpps_pu_lock_.Broadcast();
@@ -329,10 +338,22 @@ DisplayError DisplayBuiltIn::Commit(LayerStack *layer_stack) {
   return error;
 }
 
+void DisplayBuiltIn::UpdateDisplayModeParams() {
+  if (hw_panel_info_.mode == kModeVideo) {
+    uint32_t pending = 0;
+    ControlPartialUpdate(false /* enable */, &pending);
+  } else if (hw_panel_info_.mode == kModeCommand) {
+    // Flush idle timeout value currently set.
+    comp_manager_->SetIdleTimeoutMs(display_comp_ctx_, 0, 0);
+    switch_to_cmd_ = true;
+  }
+}
+
 DisplayError DisplayBuiltIn::SetDisplayState(DisplayState state, bool teardown,
                                              int *release_fence) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
   DisplayError error = kErrorNone;
+  HWDisplayMode panel_mode = hw_panel_info_.mode;
 
   if ((state == kStateOn) && deferred_config_.IsDeferredState()) {
     SetDeferredFpsConfig();
@@ -341,6 +362,10 @@ DisplayError DisplayBuiltIn::SetDisplayState(DisplayState state, bool teardown,
   error = DisplayBase::SetDisplayState(state, teardown, release_fence);
   if (error != kErrorNone) {
     return error;
+  }
+
+  if (hw_panel_info_.mode != panel_mode) {
+    UpdateDisplayModeParams();
   }
 
   // Set vsync enable state to false, as driver disables vsync during display power off.
@@ -355,9 +380,9 @@ DisplayError DisplayBuiltIn::SetDisplayState(DisplayState state, bool teardown,
   return kErrorNone;
 }
 
-void DisplayBuiltIn::SetIdleTimeoutMs(uint32_t active_ms) {
+void DisplayBuiltIn::SetIdleTimeoutMs(uint32_t active_ms, uint32_t inactive_ms) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
-  comp_manager_->SetIdleTimeoutMs(display_comp_ctx_, active_ms);
+  comp_manager_->SetIdleTimeoutMs(display_comp_ctx_, active_ms, inactive_ms);
 }
 
 DisplayError DisplayBuiltIn::SetDisplayMode(uint32_t mode) {
@@ -369,7 +394,7 @@ DisplayError DisplayBuiltIn::SetDisplayMode(uint32_t mode) {
     HWDisplayMode hw_display_mode = static_cast<HWDisplayMode>(mode);
     uint32_t pending = 0;
 
-    if (!active_) {
+    if (!active_ && !pending_doze_ && !pending_power_on_) {
       DLOGW("Invalid display state = %d. Panel must be on.", state_);
       return kErrorNotSupported;
     }
@@ -398,7 +423,7 @@ DisplayError DisplayBuiltIn::SetDisplayMode(uint32_t mode) {
       ControlPartialUpdate(false /* enable */, &pending);
     } else if (mode == kModeCommand) {
       // Flush idle timeout value currently set.
-      comp_manager_->SetIdleTimeoutMs(display_comp_ctx_, 0);
+      comp_manager_->SetIdleTimeoutMs(display_comp_ctx_, 0, 0);
       switch_to_cmd_ = true;
     }
   }
@@ -481,7 +506,8 @@ DisplayError DisplayBuiltIn::TeardownConcurrentWriteback(void) {
 DisplayError DisplayBuiltIn::SetRefreshRate(uint32_t refresh_rate, bool final_rate) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
 
-  if (!active_ || !hw_panel_info_.dynamic_fps || qsync_mode_ != kQSyncModeNone) {
+  if (!active_ || !hw_panel_info_.dynamic_fps || qsync_mode_ != kQSyncModeNone ||
+      disable_dyn_fps_) {
     return kErrorNotSupported;
   }
 
@@ -1126,10 +1152,11 @@ DisplayError DisplayBuiltIn::ReconfigureDisplay() {
 
   error = comp_manager_->ReconfigureDisplay(display_comp_ctx_, display_attributes, hw_panel_info,
                                             mixer_attributes, fb_config_,
-                                            &(default_qos_data_.clock_hz));
+                                            &(default_clock_hz_));
   if (error != kErrorNone) {
     return error;
   }
+  cached_qos_data_.clock_hz = default_clock_hz_;
 
   bool disble_pu = true;
   if (mixer_unchanged && panel_unchanged) {
