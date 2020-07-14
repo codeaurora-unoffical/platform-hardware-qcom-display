@@ -517,8 +517,10 @@ int32_t HWCSidebandStreamSession::UpdateSidebandStream(HWCSidebandStream * stm) 
     if (!(pendingMask & (1 << display)))
       continue;
 
-    if (hwc_session->hwc_display_[display]->GetGeometryChanges())
+    if (hwc_session->hwc_display_[display]->GetGeometryChanges()) {
+      refresh_list->push_back(display);
       continue;
+    }
 
     int32_t retire_fence;
     status = hwc_session->hwc_display_[display]->SidebandStreamPresent(&retire_fence);
