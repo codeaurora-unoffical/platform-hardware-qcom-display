@@ -174,6 +174,7 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   void PostCommitStitchLayers();
   int GetBwCode(const DisplayConfigVariableInfo &attr);
   void SetBwLimitHint(bool enable);
+  void ValidateScalingForDozeMode();
 
   // SyncTask methods.
   void OnTask(const LayerStitchTaskCode &task_code,
@@ -223,6 +224,7 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   bool is_smart_panel_ = false;
   const char *kDisplayBwName = "display_bw";
   bool enable_bw_limits_ = false;
+  bool scaling_in_doze_ = false;
 };
 
 }  // namespace sdm
