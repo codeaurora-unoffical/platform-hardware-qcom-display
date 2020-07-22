@@ -88,7 +88,6 @@ class HWCColorMode {
   HWC2::Error Init();
   HWC2::Error DeInit();
   void Dump(std::ostringstream* os);
-  void SetApplyMode(bool enable);
   uint32_t GetColorModeCount();
   uint32_t GetRenderIntentCount(ColorMode mode);
   HWC2::Error GetColorModes(uint32_t *out_num_modes, ColorMode *out_modes);
@@ -376,6 +375,9 @@ class HWCDisplay : public DisplayEventHandler {
   virtual void PostPowerMode();
   virtual HWC2::PowerMode GetPendingPowerMode() {
     return pending_power_mode_;
+  }
+  virtual void SetPendingPowerMode(HWC2::PowerMode mode) {
+    pending_power_mode_ = mode;
   }
   virtual void ClearPendingPowerMode() {
     pending_power_mode_ = current_power_mode_;
