@@ -40,6 +40,7 @@
 #include "xf86drmMode.h"
 #include <drm/msm_drm.h>
 #include <drm/msm_drm_pp.h>
+#include <drm/sde_drm.h>
 
 namespace sde_drm {
 
@@ -157,12 +158,6 @@ enum struct DRMOps {
    *      uint32_t - multirect mode
    */
   PLANE_SET_MULTIRECT_MODE,
-  /*
-   * Op: Sets sspp layout on this plane.
-   * Arg: uint32_t - Plane ID
-   *      uint32_t - SSPP Layout Index
-   */
-  PLANE_SET_SSPP_LAYOUT,
   /*
    * Op: Sets rotator output frame buffer ID for plane.
    * Arg: uint32_t - Plane ID
@@ -787,12 +782,6 @@ enum struct DRMMultiRectMode {
   NONE = 0,
   PARALLEL = 1,
   SERIAL = 2,
-};
-
-enum struct DRMSSPPLayoutIndex {
-  NONE = 0,
-  LEFT = 1,
-  RIGHT = 2,
 };
 
 enum struct DRMCWbCaptureMode {
