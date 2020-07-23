@@ -59,6 +59,7 @@ bool HWCSession::pending_power_mode_[HWCCallbacks::kNumDisplays];
 Locker HWCSession::power_state_[HWCCallbacks::kNumDisplays];
 Locker HWCSession::hdr_locker_[HWCCallbacks::kNumDisplays];
 Locker HWCSession::display_config_locker_;
+Locker HWCSession::system_locker_;
 static const int kSolidFillDelay = 100 * 1000;
 int HWCSession::null_display_mode_ = 0;
 static const uint32_t kBrightnessScaleMax = 100;
@@ -742,6 +743,7 @@ int32_t HWCSession::PresentDisplay(hwc2_display_t display, int32_t *out_retire_f
   auto status = HWC2::Error::BadDisplay;
   DTRACE_SCOPED();
 
+  SCOPE_LOCK(system_locker_);
   if (display >= HWCCallbacks::kNumDisplays) {
     DLOGW("Invalid Display : display = %" PRIu64, display);
     return HWC2_ERROR_BAD_DISPLAY;
@@ -1066,12 +1068,20 @@ int32_t HWCSession::SetPowerMode(hwc2_display_t display, int32_t int_mode) {
     return HWC2_ERROR_BAD_PARAMETER;
   }
 
+  auto mode = static_cast<HWC2::PowerMode>(int_mode);
+
+  // When secure session going on primary, if power request comes on second built-in, cache it and
+  // process once secure session ends.
+  bool is_builtin = (hwc_display_[display]->GetDisplayClass() == DISPLAY_CLASS_BUILTIN);
+  if (secure_session_active_ && is_builtin) {
+    hwc_display_[display]->SetPendingPowerMode(mode);
+    return HWC2_ERROR_NONE;
+  }
+
   if (pending_power_mode_[display]) {
     DLOGW("Set power mode is not allowed during secure display session");
     return HWC2_ERROR_UNSUPPORTED;
   }
-
-  auto mode = static_cast<HWC2::PowerMode>(int_mode);
 
   //  all displays support on/off. Check for doze modes
   int support = 0;
@@ -2836,6 +2846,7 @@ void HWCSession::DestroyPluggableDisplay(DisplayMapInfo *map_info) {
   DLOGI("Notify hotplug display disconnected: client id = %d", UINT32(client_id));
   callbacks_.Hotplug(client_id, HWC2::Connection::Disconnected);
 
+  SCOPE_LOCK(system_locker_);
   {
     SEQUENCE_WAIT_SCOPE_LOCK(locker_[client_id]);
     auto &hwc_display = hwc_display_[client_id];
