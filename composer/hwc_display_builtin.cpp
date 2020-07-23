@@ -1494,6 +1494,17 @@ int HWCDisplayBuiltIn::PostInit() {
     disable_layer_stitch_ = true;
   }
 
+  int enable = 0;
+  HWCDebugHandler::Get()->GetProperty(ENABLE_IDLE_TIME, &enable);
+  if (enable == 1) {
+    // In case Display Config 1.16 isn't supported, idle time gets
+    // enabled thr' property.
+    uint32_t active_ms = 0;
+    uint32_t inactive_ms = 0;
+    Debug::GetIdleTimeoutMs(&active_ms, &inactive_ms);
+    SetIdleTimeoutMs(active_ms, inactive_ms);
+  }
+
   return 0;
 }
 
