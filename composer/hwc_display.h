@@ -152,8 +152,10 @@ class HWCDisplay : public DisplayEventHandler {
     kDisplayStatusInvalid = -1,
     kDisplayStatusOffline,
     kDisplayStatusOnline,
-    kDisplayStatusPause,
-    kDisplayStatusResume,
+    kDisplayStatusPause,       // Pause + PowerOff
+    kDisplayStatusResume,      // Resume + PowerOn
+    kDisplayStatusPauseOnly,
+    kDisplayStatusResumeOnly,
   };
 
   enum DisplayValidateState {
@@ -168,7 +170,10 @@ class HWCDisplay : public DisplayEventHandler {
     std::multiset<HWCLayer *, SortLayersByZ> layer_set;  // Maintain a set sorted by Z
   };
 
-  virtual ~HWCDisplay() {}
+  virtual ~HWCDisplay() {
+    int ret = 0;
+    ret = Fence::CheckFstat(layer_stack_.retire_fence);
+  }
   virtual int Init();
   virtual int Deinit();
 
@@ -188,10 +193,12 @@ class HWCDisplay : public DisplayEventHandler {
   virtual int Perform(uint32_t operation, ...);
   virtual int HandleSecureSession(const std::bitset<kSecureMax> &secure_sessions,
                                   bool *power_on_pending);
+  virtual DisplayError HandleSecureEvent(SecureEvent secure_event) { return kErrorNotSupported; }
   virtual int GetActiveSecureSession(std::bitset<kSecureMax> *secure_sessions);
   virtual DisplayError SetMixerResolution(uint32_t width, uint32_t height);
   virtual DisplayError GetMixerResolution(uint32_t *width, uint32_t *height);
   virtual void GetPanelResolution(uint32_t *width, uint32_t *height);
+  virtual void GetRealPanelResolution(uint32_t *width, uint32_t *height);
   virtual void Dump(std::ostringstream *os);
   virtual DisplayError TeardownConcurrentWriteback(void) {
     return kErrorNotSupported;

@@ -766,6 +766,9 @@ void HWCDisplay::BuildLayerStack() {
       layer->src_rect.top = 0;
       layer->src_rect.right = layer_buffer->width;
       layer->src_rect.bottom = layer_buffer->height;
+      DLOGI("Solid fill layer buffer width=%u, height=%u, unaligned_width=%u, unaligned_height=%u",
+        layer_buffer->width, layer_buffer->height, layer_buffer->unaligned_width,
+        layer_buffer->unaligned_height);
     }
 
     if (hwc_layer->HasMetaDataRefreshRate() && layer->frame_rate > metadata_refresh_rate_) {
@@ -1966,6 +1969,17 @@ void HWCDisplay::GetPanelResolution(uint32_t *x_pixels, uint32_t *y_pixels) {
   *y_pixels = display_config.y_pixels;
 }
 
+void HWCDisplay::GetRealPanelResolution(uint32_t *x_pixels, uint32_t *y_pixels) {
+  DisplayConfigVariableInfo display_config;
+  uint32_t active_index = 0;
+
+  display_intf_->GetActiveConfig(&active_index);
+  display_intf_->GetRealConfig(active_index, &display_config);
+
+  *x_pixels = display_config.x_pixels;
+  *y_pixels = display_config.y_pixels;
+}
+
 int HWCDisplay::SetDisplayStatus(DisplayStatus display_status) {
   int status = 0;
 
@@ -1974,12 +1988,18 @@ int HWCDisplay::SetDisplayStatus(DisplayStatus display_status) {
       display_paused_ = false;
       status = INT32(SetPowerMode(HWC2::PowerMode::On, false /* teardown */));
       break;
+    case kDisplayStatusResumeOnly:
+      display_paused_ = false;
+      break;
     case kDisplayStatusOnline:
       status = INT32(SetPowerMode(HWC2::PowerMode::On, false /* teardown */));
       break;
     case kDisplayStatusPause:
       display_paused_ = true;
       status = INT32(SetPowerMode(HWC2::PowerMode::Off, false /* teardown */));
+      break;
+    case kDisplayStatusPauseOnly:
+      display_paused_ = true;
       break;
     case kDisplayStatusOffline:
       status = INT32(SetPowerMode(HWC2::PowerMode::Off, false /* teardown */));

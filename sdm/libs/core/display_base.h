@@ -62,6 +62,7 @@ class DisplayBase : public DisplayInterface {
   virtual DisplayError GetNumVariableInfoConfigs(uint32_t *count);
   virtual DisplayError GetConfig(uint32_t index, DisplayConfigVariableInfo *variable_info);
   virtual DisplayError GetConfig(DisplayConfigFixedInfo *variable_info);
+  virtual DisplayError GetRealConfig(uint32_t index, DisplayConfigVariableInfo *variable_info);
   virtual DisplayError GetActiveConfig(uint32_t *index);
   virtual DisplayError GetVSyncState(bool *enabled);
   virtual DisplayError SetDisplayState(DisplayState state, bool teardown,
@@ -136,7 +137,7 @@ class DisplayBase : public DisplayInterface {
   virtual DisplayError GetClientTargetSupport(uint32_t width, uint32_t height,
                                               LayerBufferFormat format,
                                               const ColorMetaData &color_metadata);
-  virtual DisplayError HandleSecureEvent(SecureEvent secure_event, LayerStack *layer_stack) {
+  virtual DisplayError HandleSecureEvent(SecureEvent secure_event) {
     return kErrorNotSupported;
   }
   virtual DisplayError SetDisplayDppsAdROI(void *payload) {
@@ -260,6 +261,7 @@ class DisplayBase : public DisplayInterface {
 
   static Locker display_power_reset_lock_;
   static bool display_power_reset_pending_;
+  SecureEvent secure_event_ = kSecureEventMax;
 
  private:
   bool StartDisplayPowerReset();

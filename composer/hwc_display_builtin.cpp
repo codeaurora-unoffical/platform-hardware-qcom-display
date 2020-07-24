@@ -358,14 +358,8 @@ HWC2::Error HWCDisplayBuiltIn::Present(shared_ptr<Fence> *out_retire_fence) {
 
   DTRACE_SCOPED();
 
-  if (!is_primary_ && active_secure_sessions_[kSecureDisplay]) {
+  if ((!is_primary_ && active_secure_sessions_[kSecureDisplay]) || display_paused_) {
     return status;
-  } else if (display_paused_) {
-    DisplayError error = display_intf_->Flush(&layer_stack_);
-    validated_ = false;
-    if (error != kErrorNone) {
-      DLOGE("Flush failed. Error = %d", error);
-    }
   } else {
     CacheAvrStatus();
 
@@ -513,7 +507,13 @@ HWC2::Error HWCDisplayBuiltIn::SetReadbackBuffer(const native_handle_t *buffer,
   }
 
   const private_handle_t *handle = reinterpret_cast<const private_handle_t *>(buffer);
-  if (!handle || (handle->fd < 0)) {
+  if (!handle) {
+    DLOGE("Bad parameter: handle is null");
+    return HWC2::Error::BadParameter;
+  }
+
+  if (handle->fd < 0) {
+    DLOGE("Bad parameter: fd is null");
     return HWC2::Error::BadParameter;
   }
 
@@ -534,6 +534,11 @@ HWC2::Error HWCDisplayBuiltIn::SetReadbackBuffer(const native_handle_t *buffer,
   validated_ = false;
   cwb_client_ = client;
 
+  DLOGV_IF(kTagQDCM, "Successfully configured the buffer: post_processed_output_ %d, " \
+        "readback_buffer_queued_ %d, readback_configured_ %d, validated_ %d, " \
+        "cwb_client_ %d", post_processed_output_, readback_buffer_queued_,
+        readback_configured_, validated_, cwb_client_);
+
   return HWC2::Error::None;
 }
 
@@ -543,6 +548,8 @@ HWC2::Error HWCDisplayBuiltIn::GetReadbackBufferFence(shared_ptr<Fence> *release
   if (readback_configured_ && output_buffer_.release_fence) {
     *release_fence = output_buffer_.release_fence;
   } else {
+    DLOGE("Failed to retrieve readback buffer fence: readback_configured_ %d, " \
+          "output_buffer_.release_fence ", readback_configured_);
     status = HWC2::Error::Unsupported;
   }
 
@@ -551,6 +558,10 @@ HWC2::Error HWCDisplayBuiltIn::GetReadbackBufferFence(shared_ptr<Fence> *release
   readback_configured_ = false;
   output_buffer_ = {};
   cwb_client_ = kCWBClientNone;
+
+  DLOGV_IF(kTagQDCM, "Successfully retrieved the buffer: post_processed_output_ %d, " \
+        "readback_buffer_queued_ %d, readback_configured_ %d", post_processed_output_,
+        readback_buffer_queued_, readback_configured_);
 
   return status;
 }
@@ -736,7 +747,7 @@ int HWCDisplayBuiltIn::HandleSecureSession(const std::bitset<kSecureMax> &secure
   if (active_secure_sessions_[kSecureDisplay] != secure_sessions[kSecureDisplay]) {
     SecureEvent secure_event =
         secure_sessions.test(kSecureDisplay) ? kSecureDisplayStart : kSecureDisplayEnd;
-    DisplayError err = display_intf_->HandleSecureEvent(secure_event, &layer_stack_);
+    DisplayError err = display_intf_->HandleSecureEvent(secure_event);
     if (err != kErrorNone) {
       DLOGE("Set secure event failed");
       return err;
@@ -749,6 +760,21 @@ int HWCDisplayBuiltIn::HandleSecureSession(const std::bitset<kSecureMax> &secure
   active_secure_sessions_ = secure_sessions;
   *power_on_pending = false;
   return 0;
+}
+
+DisplayError HWCDisplayBuiltIn::HandleSecureEvent(SecureEvent secure_event) {
+  if (current_power_mode_ != HWC2::PowerMode::On) {
+    DLOGW("Cannot handle secure event when display is not active");
+    return kErrorPermission;
+  }
+
+  DisplayError err = display_intf_->HandleSecureEvent(secure_event);
+  if (err != kErrorNone) {
+    DLOGE("Handle secure event failed");
+     return err;
+  }
+
+  return kErrorNone;
 }
 
 void HWCDisplayBuiltIn::ForceRefreshRate(uint32_t refresh_rate) {
@@ -782,12 +808,15 @@ void HWCDisplayBuiltIn::SetIdleTimeoutMs(uint32_t timeout_ms) {
 
 void HWCDisplayBuiltIn::HandleFrameOutput() {
   if (readback_buffer_queued_) {
+    DLOGV_IF(kTagQDCM, "No pending readback buffer found on the queue.");
     validated_ = false;
   }
 
   if (frame_capture_buffer_queued_) {
+    DLOGV_IF(kTagQDCM, "frame_capture_buffer_queued_ is in use. Handle frame capture.");
     HandleFrameCapture();
   } else if (dump_output_to_file_) {
+    DLOGV_IF(kTagQDCM, "dump_output_to_file is in use. Handle frame dump.");
     HandleFrameDump();
   }
 }
@@ -803,6 +832,11 @@ void HWCDisplayBuiltIn::HandleFrameCapture() {
   readback_configured_ = false;
   output_buffer_ = {};
   cwb_client_ = kCWBClientNone;
+
+  DLOGV_IF(kTagQDCM, "Frame captured: frame_capture_buffer_queued_ %d " \
+        "readback_buffer_queued_ %d post_processed_output_ %d readback_configured_ %d " \
+        "cwb_client_ %d", frame_capture_buffer_queued_, readback_buffer_queued_,
+        post_processed_output_, readback_configured_, cwb_client_);
 }
 
 void HWCDisplayBuiltIn::HandleFrameDump() {
@@ -843,16 +877,17 @@ void HWCDisplayBuiltIn::HandleFrameDump() {
 HWC2::Error HWCDisplayBuiltIn::SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type,
                                                   int32_t format, bool post_processed) {
   HWCDisplay::SetFrameDumpConfig(count, bit_mask_layer_type, format, post_processed);
-  dump_output_to_file_ = bit_mask_layer_type & (1 << OUTPUT_LAYER_DUMP);
+  bool dump_output_to_file = bit_mask_layer_type & (1 << OUTPUT_LAYER_DUMP);
   DLOGI("output_layer_dump_enable %d", dump_output_to_file_);
 
-  if (dump_output_to_file_) {
+  if (dump_output_to_file) {
     if (cwb_client_ != kCWBClientNone) {
-      DLOGE("CWB is in use with client = %d", cwb_client_);
-      dump_output_to_file_ = false;
+      DLOGW("CWB is in use with client = %d", cwb_client_);
       return HWC2::Error::NoResources;
     }
   }
+
+  dump_output_to_file_ = dump_output_to_file;
 
   if (!count || !dump_output_to_file_ || (output_buffer_info_.alloc_buffer_info.fd >= 0)) {
     return HWC2::Error::None;
@@ -861,8 +896,8 @@ HWC2::Error HWCDisplayBuiltIn::SetFrameDumpConfig(uint32_t count, uint32_t bit_m
   // Allocate and map output buffer
   if (post_processed) {
     // To dump post-processed (DSPP) output, use Panel resolution.
-    GetPanelResolution(&output_buffer_info_.buffer_config.width,
-                       &output_buffer_info_.buffer_config.height);
+    GetRealPanelResolution(&output_buffer_info_.buffer_config.width,
+                           &output_buffer_info_.buffer_config.height);
   } else {
     // To dump Layer Mixer output, use FrameBuffer resolution.
     GetFrameBufferResolution(&output_buffer_info_.buffer_config.width,
