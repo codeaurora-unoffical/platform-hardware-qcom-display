@@ -799,7 +799,9 @@ int32_t HWCSession::PresentDisplay(hwc2_display_t display, int32_t *out_retire_f
   HandlePendingHotplug(display, *out_retire_fence);
   HandlePendingRefresh();
 #ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
-  cwb_.PresentDisplayDone(display);
+  if (status != HWC2::Error::NotValidated) {
+    cwb_.PresentDisplayDone(display);
+  }
 #endif
   display_ready_.set(UINT32(display));
   {
