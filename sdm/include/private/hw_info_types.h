@@ -142,16 +142,22 @@ enum HWTopology {
   kDualLMMerge,
   kDualLMMergeDSC,
   kDualLMDSCMerge,
+  kTripleLM,
+  kTripleLMDSC,
   kQuadLMMerge,
   kQuadLMDSCMerge,
   kQuadLMMergeDSC,
+  kSixLMMerge,
+  kSixLMDSCMerge,
   kPPSplit,
 };
 
 enum HWMixerSplit {
   kNoSplit,
   kDualSplit,
+  kTripleSplit,
   kQuadSplit,
+  kSixSplit,
 };
 
 enum HwHdrEotf {
