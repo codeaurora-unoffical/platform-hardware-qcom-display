@@ -80,10 +80,8 @@ int kgsl_memtrack_get_memory(pid_t pid, enum memtrack_type type,
                  "/sys/class/kgsl/kgsl/proc/%d/gpumem_unmapped", pid);
 
         fp = fopen(syspath, "r");
-        if (fp == NULL) {
-            fclose(fp);
+        if (fp == NULL)
             return -errno;
-        }
 
         ret = fscanf(fp, "%zu", &unaccounted_size);
         if (ret != 1) {
