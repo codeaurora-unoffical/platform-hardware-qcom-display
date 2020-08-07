@@ -451,6 +451,7 @@ DisplayError CompManager::SetIdleTimeoutMs(Handle display_ctx, uint32_t active_m
 }
 
 void CompManager::ProcessIdleTimeout(Handle display_ctx) {
+  DTRACE_SCOPED();
   SCOPE_LOCK(locker_);
 
   DisplayCompositionContext *display_comp_ctx =
@@ -459,7 +460,6 @@ void CompManager::ProcessIdleTimeout(Handle display_ctx) {
   if (!display_comp_ctx) {
     return;
   }
-  DLOGI("QIPL idle time");
   display_comp_ctx->idle_fallback = true;
 }
 

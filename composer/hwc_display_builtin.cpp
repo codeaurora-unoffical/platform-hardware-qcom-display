@@ -164,11 +164,35 @@ int HWCDisplayBuiltIn::Init() {
 
   DLOGI("active_refresh_rate: %d", active_refresh_rate_);
 
+  int enhance_idle_time = 0;
+  HWCDebugHandler::Get()->GetProperty(ENHANCE_IDLE_TIME, &enhance_idle_time);
+  enhance_idle_time_ = (enhance_idle_time == 1);
+  DLOGI("enhance_idle_time: %d", enhance_idle_time);
+
   return status;
 }
 
 std::string HWCDisplayBuiltIn::Dump() {
   return HWCDisplay::Dump() + histogram.Dump();
+}
+
+void HWCDisplayBuiltIn::ValidateScalingForDozeMode() {
+  if (current_power_mode_ == HWC2::PowerMode::Doze) {
+    bool scaling_present = false;
+    for (auto &hwc_layer : layer_set_) {
+      if (hwc_layer->IsScalingPresent()) {
+        scaling_present = true;
+        break;
+      }
+    }
+    if (scaling_present) {
+      scaling_in_doze_ = true;
+    } else {
+      scaling_in_doze_ = false;
+    }
+  } else {
+    scaling_in_doze_ = false;
+  }
 }
 
 HWC2::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
@@ -189,6 +213,9 @@ HWC2::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_n
 
   // Fill in the remaining blanks in the layers and add them to the SDM layerstack
   BuildLayerStack();
+
+  // Check for scaling layers during Doze mode
+  ValidateScalingForDozeMode();
 
   // Add stitch layer to layer stack.
   AppendStitchLayer();
@@ -224,14 +251,16 @@ HWC2::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_n
   }
 
   uint32_t refresh_rate = GetOptimalRefreshRate(one_updating_layer);
-  error = display_intf_->SetRefreshRate(refresh_rate, force_refresh_rate_);
+  bool idle_screen = GetUpdatingAppLayersCount() == 0;
+  error = display_intf_->SetRefreshRate(refresh_rate, force_refresh_rate_, idle_screen);
 
   // Get the refresh rate set.
   display_intf_->GetRefreshRate(&refresh_rate);
   bool vsync_source = (callbacks_->GetVsyncSource() == id_);
 
   if (error == kErrorNone) {
-    if (vsync_source && (current_refresh_rate_ < refresh_rate)) {
+    if (vsync_source && ((current_refresh_rate_ < refresh_rate) ||
+                         (enhance_idle_time_ && (current_refresh_rate_ != refresh_rate)))) {
       DTRACE_BEGIN("HWC2::Vsync::Enable");
       // Display is ramping up from idle.
       // Client realizes need for resync upon change in config.
@@ -480,6 +509,12 @@ HWC2::Error HWCDisplayBuiltIn::Present(int32_t *out_retire_fence) {
 
   CloseFd(&output_buffer_.acquire_fence_fd);
   pending_commit_ = false;
+
+  // In case of scaling layer in Doze, reset validate
+  if (scaling_in_doze_) {
+    validated_ = false;
+    display_intf_->ClearLUTs();
+  }
   return status;
 }
 
@@ -1466,6 +1501,22 @@ bool HWCDisplayBuiltIn::HasReadBackBufferSupport() {
   display_intf_->GetConfig(&fixed_info);
 
   return fixed_info.readback_supported;
+}
+
+uint32_t HWCDisplayBuiltIn::GetUpdatingAppLayersCount() {
+  uint32_t updating_count = 0;
+
+  for (uint i = 0; i < layer_stack_.layers.size(); i++) {
+    auto layer = layer_stack_.layers.at(i);
+    if (layer->composition == kCompositionGPUTarget) {
+      break;
+    }
+    if (layer->flags.updating) {
+      updating_count++;
+    }
+  }
+
+  return updating_count;
 }
 
 }  // namespace sdm
