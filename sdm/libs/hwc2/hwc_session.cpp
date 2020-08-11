@@ -541,7 +541,7 @@ void HWCSession::Dump(hwc2_device_t *device, uint32_t *out_size, char *out_buffe
   }
 
   auto *hwc_session = static_cast<HWCSession *>(device);
-  const size_t max_dump_size = 8192;
+  const size_t max_dump_size = 4096 * HWCCallbacks::kNumRealDisplays;
 
   if (out_buffer == nullptr) {
     *out_size = max_dump_size;
