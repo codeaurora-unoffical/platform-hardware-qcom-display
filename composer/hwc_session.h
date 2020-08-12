@@ -23,7 +23,7 @@
 #ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
 #include <vendor/display/config/1.16/IDisplayConfig.h>
 #else
-#include <vendor/display/config/1.0/IDisplayConfig.h>
+#include <vendor/display/config/1.9/IDisplayConfig.h>
 #endif
 #include <vendor/qti/hardware/display/composer/2.0/IQtiComposerClient.h>
 
@@ -59,7 +59,7 @@ using vendor::display::config::V1_16::IDisplayConfig;
 using vendor::display::config::V1_10::IDisplayCWBCallback;
 using vendor::display::config::V1_15::IDisplayQsyncCallback;
 #else
-using vendor::display::config::V1_0::IDisplayConfig;
+using vendor::display::config::V1_9::IDisplayConfig;
 #endif
 
 using ::android::hardware::Return;
@@ -404,7 +404,6 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   Return<void> displayBWTransactionPending(displayBWTransactionPending_cb _hidl_cb) override;
   Return<int32_t> IdlePowerCollapse(bool enable, bool synchronous);
 
-#ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
   Return<int32_t> setDisplayAnimating(uint64_t display_id, bool animating) override;
   Return<int32_t> setDisplayIndex(IDisplayConfig::DisplayTypeExt disp_type,
                                   uint32_t base, uint32_t count) override;
@@ -426,6 +425,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, IDisplayConfig, public qCli
   Return<int32_t> setPanelLuminanceAttributes(uint32_t disp_id, float min_lum,
                                               float max_lum) override;
   Return<bool> isBuiltInDisplay(uint32_t disp_id) override;
+#ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
   Return<void> getSupportedDSIBitClks(uint32_t disp_id,
                                       getSupportedDSIBitClks_cb _hidl_cb) override;
   Return<uint64_t> getDSIClk(uint32_t disp_id) override;
