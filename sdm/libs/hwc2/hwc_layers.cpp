@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright 2015 The Android Open Source Project
@@ -48,13 +48,16 @@ DisplayError SetCSC(const private_handle_t *pvt_handle, ColorMetaData *color_met
       case ITU_R_601_FR:
         // video and display driver uses 601_525
         color_metadata->colorPrimaries = ColorPrimaries_BT601_6_525;
+        color_metadata->matrixCoefficients = MatrixCoEff_BT601_6_525;
         break;
       case ITU_R_709:
         color_metadata->colorPrimaries = ColorPrimaries_BT709_5;
+        color_metadata->matrixCoefficients = MatrixCoEff_BT709_5;
         break;
       case ITU_R_2020:
       case ITU_R_2020_FR:
         color_metadata->colorPrimaries = ColorPrimaries_BT2020;
+        color_metadata->matrixCoefficients = MatrixCoEff_BT2020;
         break;
       default:
         DLOGE("Unsupported CSC: %d", csc);
