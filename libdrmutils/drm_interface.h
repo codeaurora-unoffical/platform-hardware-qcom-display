@@ -563,10 +563,20 @@ struct DRMPlaneTypeInfo {
   bool block_sec_ui = false;
   // Allow all planes to be usable on all displays by default
   std::bitset<32> hw_block_mask = std::bitset<32>().set();
+  bool has_handoff = false;
 };
 
 // All DRM Planes as map<Plane_id , plane_type_info> listed from highest to lowest priority
 typedef std::vector<std::pair<uint32_t, DRMPlaneTypeInfo>>  DRMPlanesInfo;
+
+struct DRMPlaneStateInfo {
+  uint32_t plane_id = 0;
+  uint32_t crtc_id = 0;
+  uint32_t crtc_index = 0;
+  uint32_t possible_crtcs = 0;
+};
+
+typedef std::vector<DRMPlaneStateInfo> DRMPlanesStateInfo;
 
 enum struct DRMTopology {
   UNKNOWN,  // To be compat with driver defs in sde_rm.h
@@ -577,6 +587,13 @@ enum struct DRMTopology {
   DUAL_LM_MERGE,
   DUAL_LM_MERGE_DSC,
   DUAL_LM_DSCMERGE,
+  TRIPLE_LM,
+  TRIPLE_LM_DSC,
+  QUAD_LM_MERGE,
+  QUAD_LM_DSCMERGE,
+  QUAD_LM_MERGE_DSC,
+  SIX_LM_MERGE,
+  SIX_LM_DSCMERGE,
   PPSPLIT,
 };
 
@@ -983,6 +1000,21 @@ class DRMManagerInterface {
    * [output]: Dpps feature version, info->version
    */
   virtual void GetDppsFeatureInfo(DRMDppsFeatureInfo *info) = 0;
+
+  /*
+   * GetPlanesStateInfo will provide planes' run-time state information.
+   * [input]: DRMPlanesStateInfo Info
+   * [input]: update If plane state need to be updated
+   * [output]: DRMPlanesStateInfo: Run-time state info for planes.
+   */
+  virtual void GetPlanesStateInfo(DRMPlanesStateInfo *info, bool update) = 0;
+
+  /*
+   * Handoff plane
+   * [input]: Plane id
+   * [return]: Error code if the API fails, 0 on success.
+   */
+  virtual int HandoffPlane(uint32_t plane_id) = 0;
 };
 
 }  // namespace sde_drm

@@ -321,7 +321,6 @@ int HWCSession::DisplayConfigImpl::GetPanelBrightness(uint32_t *level) {
   } else {
     *level = static_cast<uint32_t>(254.0f*brightness + 1);
   }
-
   return error;
 }
 

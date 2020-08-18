@@ -2463,6 +2463,26 @@ void HWCSession::UEventHandler(const char *uevent_data, int length) {
     // Pluggable display handler will check all connection status' and take action accordingly.
     const char *str_status = GetTokenValue(uevent_data, length, "status=");
     const char *str_mst = GetTokenValue(uevent_data, length, "MST_HOTPLUG=");
+    const char *str_plane = GetTokenValue(uevent_data, length, "PLANE_POSSIBLE_CRTCS_UPDATED");
+    const char *str_handoff = GetTokenValue(uevent_data, length, "PLANE_HANDOFF_REQUESTED=");
+
+    if (str_plane || str_handoff) {
+      NotifierInterface *notifier = NULL;
+      core_intf_->GetNotifierInterface(&notifier);
+      if (notifier) {
+        if (str_plane) {
+          notifier->PipesAvailabilityChanged();
+        } else if (str_handoff) {
+          int id = atoi(str_handoff);
+          if (notifier->PipeHandoffRequested(id) == kErrorNotValidated) {
+            DLOGI("Refresh handoff needed");
+            Refresh(HWC_DISPLAY_PRIMARY);
+          }
+        }
+      }
+      return;
+    }
+
     if (!str_status && !str_mst) {
       return;
     }

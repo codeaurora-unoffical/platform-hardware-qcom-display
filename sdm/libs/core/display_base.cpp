@@ -37,7 +37,6 @@
 #include <algorithm>
 
 #include "display_base.h"
-#include "hw_info_interface.h"
 
 #define __CLASS__ "DisplayBase"
 

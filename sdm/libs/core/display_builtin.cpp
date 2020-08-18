@@ -34,7 +34,6 @@
 #include <vector>
 
 #include "display_builtin.h"
-#include "hw_info_interface.h"
 #include "hw_interface.h"
 
 #define __CLASS__ "DisplayBuiltIn"

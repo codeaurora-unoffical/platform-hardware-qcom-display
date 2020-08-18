@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2016, 2018 The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2016, 2018, 2020, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -34,7 +34,6 @@
 #include "display_builtin.h"
 #include "display_pluggable.h"
 #include "display_virtual.h"
-#include "hw_info_interface.h"
 
 #define __CLASS__ "CoreImpl"
 
@@ -80,7 +79,7 @@ DisplayError CoreImpl::Init() {
     goto CleanupOnError;
   }
 
-  error = comp_mgr_.Init(hw_resource_, extension_intf_, buffer_allocator_,
+  error = comp_mgr_.Init(hw_info_intf_, extension_intf_, buffer_allocator_,
                          buffer_sync_handler_, socket_handler_);
 
   if (error != kErrorNone) {
@@ -252,6 +251,11 @@ DisplayError CoreImpl::GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) {
 DisplayError CoreImpl::GetMaxDisplaysSupported(DisplayType type, int32_t *max_displays) {
   SCOPE_LOCK(locker_);
   return hw_info_intf_->GetMaxDisplaysSupported(type, max_displays);
+}
+
+DisplayError CoreImpl::GetNotifierInterface(NotifierInterface **interface) {
+  SCOPE_LOCK(locker_);
+  return comp_mgr_.GetNotifierInterface(interface);
 }
 
 }  // namespace sdm

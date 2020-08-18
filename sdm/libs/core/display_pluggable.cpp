@@ -30,7 +30,6 @@
 #include <vector>
 
 #include "display_pluggable.h"
-#include "hw_info_interface.h"
 #include "hw_interface.h"
 
 #define __CLASS__ "DisplayPluggable"

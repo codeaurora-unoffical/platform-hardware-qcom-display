@@ -119,6 +119,9 @@ endif
 ifeq ($(TARGET_BOARD_PLATFORM),$(TRINKET))
 PRODUCT_PROPERTY_OVERRIDES += vendor.display.disable_excl_rect_partial_fb=1
 endif
+ifneq ($(filter $(MSMSTEPPE) sdmshrike msmnile,$(TARGET_BOARD_PLATFORM)),)
+PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.surface_flinger.protected_contents=true
+endif
 
 ifneq (,$(filter userdebug eng, $(TARGET_BUILD_VARIANT)))
 # Recovery is enabled, logging is enabled

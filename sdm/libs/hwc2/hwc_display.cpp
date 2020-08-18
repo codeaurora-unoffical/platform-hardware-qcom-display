@@ -975,7 +975,8 @@ HWC2::Error HWCDisplay::GetClientTargetSupport(uint32_t width, uint32_t height, 
   ColorMetaData color_metadata = {};
   if (dataspace != HAL_DATASPACE_UNKNOWN) {
     dataspace = TranslateFromLegacyDataspace(dataspace);
-    GetColorPrimary(dataspace, &(color_metadata.colorPrimaries));
+    GetColorPrimaryAndMatrixCoef(dataspace, &(color_metadata.colorPrimaries),
+                                 &(color_metadata.matrixCoefficients));
     GetTransfer(dataspace, &(color_metadata.transfer));
     GetRange(dataspace, &(color_metadata.range));
   }
