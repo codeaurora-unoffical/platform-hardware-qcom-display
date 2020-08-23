@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2019, The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2020, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -36,7 +36,7 @@
 
 namespace sdm {
 
-DisplayError CompManager::Init(const HWResourceInfo &hw_res_info,
+DisplayError CompManager::Init(HWInfoInterface *hw_info_intf,
                                ExtensionInterface *extension_intf,
                                BufferAllocator *buffer_allocator,
                                BufferSyncHandler *buffer_sync_handler,
@@ -45,12 +45,17 @@ DisplayError CompManager::Init(const HWResourceInfo &hw_res_info,
 
   DisplayError error = kErrorNone;
 
+  error = hw_info_intf->GetHWResourceInfo(&hw_res_info_);
+  if (error != kErrorNone)
+    return error;
+
   if (extension_intf) {
-    error = extension_intf->CreateResourceExtn(hw_res_info, buffer_allocator, buffer_sync_handler,
+    error = extension_intf->CreateResourceExtn(hw_res_info_, buffer_allocator, buffer_sync_handler,
                                                &resource_intf_);
     extension_intf->CreateDppsControlExtn(&dpps_ctrl_intf_, socket_handler);
+    extension_intf->CreateNotifierExtn(hw_info_intf, resource_intf_, &locker_, &notifier_intf_);
   } else {
-    error = ResourceDefault::CreateResourceDefault(hw_res_info, &resource_intf_);
+    error = ResourceDefault::CreateResourceDefault(hw_res_info_, &resource_intf_);
   }
 
   if (error != kErrorNone) {
@@ -60,7 +65,6 @@ DisplayError CompManager::Init(const HWResourceInfo &hw_res_info,
     return error;
   }
 
-  hw_res_info_ = hw_res_info;
   buffer_allocator_ = buffer_allocator;
   extension_intf_ = extension_intf;
 
@@ -73,6 +77,7 @@ DisplayError CompManager::Deinit() {
   if (extension_intf_) {
     extension_intf_->DestroyResourceExtn(resource_intf_);
     extension_intf_->DestroyDppsControlExtn(dpps_ctrl_intf_);
+    extension_intf_->DestroyNotifierExtn(notifier_intf_);
   } else {
     ResourceDefault::DestroyResourceDefault(resource_intf_);
   }
@@ -673,6 +678,14 @@ bool CompManager::CanSkipValidate(Handle display_ctx) {
       reinterpret_cast<DisplayCompositionContext *>(display_ctx);
 
   return display_comp_ctx->strategy->CanSkipValidate();
+}
+
+DisplayError CompManager::GetNotifierInterface(NotifierInterface **interface) {
+  if (notifier_intf_) {
+    *interface = notifier_intf_;
+    return kErrorNone;
+  }
+  return kErrorNotSupported;
 }
 
 }  // namespace sdm

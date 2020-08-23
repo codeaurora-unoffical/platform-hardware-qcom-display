@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2014 - 2016, 2018 The Linux Foundation. All rights reserved.
+* Copyright (c) 2014 - 2016, 2018, 2020 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without modification, are permitted
 * provided that the following conditions are met:
@@ -40,6 +40,8 @@ class HWInfoInterface {
   virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info) = 0;
   virtual DisplayError GetDisplaysStatus(HWDisplaysInfo *hw_displays_info) = 0;
   virtual DisplayError GetMaxDisplaysSupported(DisplayType type, int32_t *max_displays) = 0;
+  virtual DisplayError GetPipesStatus(HWPipesStateInfo *hw_pipes_info, bool update) = 0;
+  virtual DisplayError SetPipeHandoff(uint32_t pipe_id) = 0;
 
  protected:
   virtual ~HWInfoInterface() { }

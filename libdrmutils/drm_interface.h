@@ -40,6 +40,7 @@
 #include "xf86drmMode.h"
 #include <drm/msm_drm.h>
 #include <drm/msm_drm_pp.h>
+#include <drm/sde_drm.h>
 
 namespace sde_drm {
 
@@ -157,12 +158,6 @@ enum struct DRMOps {
    *      uint32_t - multirect mode
    */
   PLANE_SET_MULTIRECT_MODE,
-  /*
-   * Op: Sets sspp layout on this plane.
-   * Arg: uint32_t - Plane ID
-   *      uint32_t - SSPP Layout Index
-   */
-  PLANE_SET_SSPP_LAYOUT,
   /*
    * Op: Sets rotator output frame buffer ID for plane.
    * Arg: uint32_t - Plane ID
@@ -568,10 +563,20 @@ struct DRMPlaneTypeInfo {
   bool block_sec_ui = false;
   // Allow all planes to be usable on all displays by default
   std::bitset<32> hw_block_mask = std::bitset<32>().set();
+  bool has_handoff = false;
 };
 
 // All DRM Planes as map<Plane_id , plane_type_info> listed from highest to lowest priority
 typedef std::vector<std::pair<uint32_t, DRMPlaneTypeInfo>>  DRMPlanesInfo;
+
+struct DRMPlaneStateInfo {
+  uint32_t plane_id = 0;
+  uint32_t crtc_id = 0;
+  uint32_t crtc_index = 0;
+  uint32_t possible_crtcs = 0;
+};
+
+typedef std::vector<DRMPlaneStateInfo> DRMPlanesStateInfo;
 
 enum struct DRMTopology {
   UNKNOWN,  // To be compat with driver defs in sde_rm.h
@@ -582,9 +587,13 @@ enum struct DRMTopology {
   DUAL_LM_MERGE,
   DUAL_LM_MERGE_DSC,
   DUAL_LM_DSCMERGE,
+  TRIPLE_LM,
+  TRIPLE_LM_DSC,
   QUAD_LM_MERGE,
   QUAD_LM_DSCMERGE,
   QUAD_LM_MERGE_DSC,
+  SIX_LM_MERGE,
+  SIX_LM_DSCMERGE,
   PPSPLIT,
 };
 
@@ -789,12 +798,6 @@ enum struct DRMMultiRectMode {
   SERIAL = 2,
 };
 
-enum struct DRMSSPPLayoutIndex {
-  NONE = 0,
-  LEFT = 1,
-  RIGHT = 2,
-};
-
 enum struct DRMCWbCaptureMode {
   MIXER_OUT = 0,
   DSPP_OUT = 1,
@@ -997,6 +1000,21 @@ class DRMManagerInterface {
    * [output]: Dpps feature version, info->version
    */
   virtual void GetDppsFeatureInfo(DRMDppsFeatureInfo *info) = 0;
+
+  /*
+   * GetPlanesStateInfo will provide planes' run-time state information.
+   * [input]: DRMPlanesStateInfo Info
+   * [input]: update If plane state need to be updated
+   * [output]: DRMPlanesStateInfo: Run-time state info for planes.
+   */
+  virtual void GetPlanesStateInfo(DRMPlanesStateInfo *info, bool update) = 0;
+
+  /*
+   * Handoff plane
+   * [input]: Plane id
+   * [return]: Error code if the API fails, 0 on success.
+   */
+  virtual int HandoffPlane(uint32_t plane_id) = 0;
 };
 
 }  // namespace sde_drm
