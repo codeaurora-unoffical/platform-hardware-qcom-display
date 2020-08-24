@@ -95,6 +95,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
 else
 PRODUCT_PROPERTY_OVERRIDES += \
     vendor.display.disable_rotator_ubwc=1 \
+    vendor.display.enable_idle_time=1 \
     vendor.display.normal_noc_efficiency_factor=0.85 \
     vendor.display.camera_noc_efficiency_factor=0.70 \
     vendor.display.disable_layer_stitch=0 \
