@@ -68,7 +68,7 @@ PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_default.xml:$
 PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_default.xml:$(TARGET_COPY_OUT_VENDOR)/etc/qdcm_calib_data_rm69299_amoled_fhd+_video_mode_dsi_visionox_panel.xml
 PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_default.xml:$(TARGET_COPY_OUT_VENDOR)/etc/qdcm_calib_data_rm69299_amoled_fhd+_cmd_mode_dsi_visionox_panel.xml
 #QDCM calibration xml file for nt36525 truly panel
-PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_bengal_default.xml:$(TARGET_COPY_OUT_VENDOR)/etc/qdcm_calib_data_nt36525_video_mode_dsi_truly_panel.xml
+PRODUCT_COPY_FILES += hardware/qcom/display/config/qdcm_calib_data_nt36525_video_mode_dsi_truly_panel.xml:$(TARGET_COPY_OUT_VENDOR)/etc/qdcm_calib_data_nt36525_video_mode_dsi_truly_panel.xml
 
 PRODUCT_PROPERTY_OVERRIDES += \
     persist.demo.hdmirotationlock=false \
@@ -128,11 +128,18 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.high_fps_early_phase_offset_ns=6100000 \
     debug.sf.high_fps_early_gl_phase_offset_ns=6500000 \
     debug.sf.perf_fps_early_gl_phase_offset_ns=9000000 \
-    debug.sf.phase_offset_threshold_for_next_vsync_ns=6100000
+    debug.sf.phase_offset_threshold_for_next_vsync_ns=6100000 \
+    debug.sf.high2_fps_late_sf_phase_offset_ns=-3000000 \
+    debug.sf.high2_fps_early_phase_offset_ns=-3000000 \
+    debug.sf.high2_fps_early_gl_phase_offset_ns=-3000000 \
+    debug.sf.enable_advanced_sf_phase_offset=1
 endif
 
 ifeq ($(TARGET_BOARD_PLATFORM),lito)
 PRODUCT_PROPERTY_OVERRIDES += \
+    debug.sf.high2_fps_late_sf_phase_offset_ns=-3000000 \
+    debug.sf.high2_fps_early_phase_offset_ns=-3000000 \
+    debug.sf.high2_fps_early_gl_phase_offset_ns=-3000000 \
     debug.sf.high_fps_late_sf_phase_offset_ns=-4000000 \
     debug.sf.high_fps_early_phase_offset_ns=-4000000 \
     debug.sf.high_fps_early_gl_phase_offset_ns=-4000000 \
