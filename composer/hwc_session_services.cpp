@@ -648,7 +648,6 @@ int32_t HWCSession::setDisplayBrightness(uint32_t display, float brightness) {
   return SetDisplayBrightness(static_cast<hwc2_display_t>(display), brightness);
 }
 
-#ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
 Return<int32_t> HWCSession::setDisplayAnimating(uint64_t display_id, bool animating ) {
   return CallDisplayFunction(display_id,
                              &HWCDisplay::SetDisplayAnimating, animating);
@@ -691,23 +690,6 @@ Return<int32_t> HWCSession::updateVSyncSourceOnPowerModeDoze() {
   update_vsync_on_doze_ = true;
 
   return 0;
-}
-
-Return<int32_t> HWCSession::allowIdleFallback() {
-  SEQUENCE_WAIT_SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
-
-  uint32_t active_ms = 0;
-  uint32_t inactive_ms = 0;
-  Debug::GetIdleTimeoutMs(&active_ms, &inactive_ms);
-  if (hwc_display_[HWC_DISPLAY_PRIMARY]) {
-    DLOGI("enable idle time active_ms:%d inactive_ms:%d",active_ms,inactive_ms);
-    hwc_display_[HWC_DISPLAY_PRIMARY]->SetIdleTimeoutMs(active_ms, inactive_ms);
-    is_idle_time_up_ = true;
-    return 0;
-  }
-
-  DLOGW("Display = %d is not connected.", HWC_DISPLAY_PRIMARY);
-  return -ENODEV;
 }
 
 Return<bool> HWCSession::isPowerModeOverrideSupported(uint32_t disp_id) {
@@ -910,6 +892,7 @@ Return<bool> HWCSession::isBuiltInDisplay(uint32_t disp_id) {
   return false;
 }
 
+#ifndef DISPLAY_CONFIG_VERSION_OPTIMAL
 Return<void> HWCSession::getSupportedDSIBitClks(uint32_t disp_id,
                                                 getSupportedDSIBitClks_cb _hidl_cb) {
   SCOPE_LOCK(locker_[disp_id]);
@@ -1196,6 +1179,24 @@ Return<int32_t> HWCSession::registerQsyncCallback(const sp<IDisplayQsyncCallback
 
   return 0;
 }
+
+Return<int32_t> HWCSession::allowIdleFallback() {
+  SEQUENCE_WAIT_SCOPE_LOCK(locker_[HWC_DISPLAY_PRIMARY]);
+
+  uint32_t active_ms = 0;
+  uint32_t inactive_ms = 0;
+  Debug::GetIdleTimeoutMs(&active_ms, &inactive_ms);
+  if (hwc_display_[HWC_DISPLAY_PRIMARY]) {
+    DLOGI("enable idle time active_ms:%d inactive_ms:%d",active_ms,inactive_ms);
+    hwc_display_[HWC_DISPLAY_PRIMARY]->SetIdleTimeoutMs(active_ms, inactive_ms);
+    is_idle_time_up_ = true;
+    return 0;
+  }
+
+  DLOGW("Display = %d is not connected.", HWC_DISPLAY_PRIMARY);
+  return -ENODEV;
+}
+
 #endif
 
 }  // namespace sdm
