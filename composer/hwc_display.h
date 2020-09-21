@@ -170,10 +170,7 @@ class HWCDisplay : public DisplayEventHandler {
     std::multiset<HWCLayer *, SortLayersByZ> layer_set;  // Maintain a set sorted by Z
   };
 
-  virtual ~HWCDisplay() {
-    int ret = 0;
-    ret = Fence::CheckFstat(layer_stack_.retire_fence);
-  }
+  virtual ~HWCDisplay() {}
   virtual int Init();
   virtual int Deinit();
 
@@ -250,6 +247,7 @@ class HWCDisplay : public DisplayEventHandler {
   virtual int GetDisplayConfigCount(uint32_t *count);
   virtual int GetDisplayAttributesForConfig(int config,
                                             DisplayConfigVariableInfo *display_attributes);
+  virtual int GetSupportedDisplayRefreshRates(std::vector<uint32_t> *supported_refresh_rates);
   virtual int SetState(bool connected) {
     return kErrorNotSupported;
   }
@@ -280,6 +278,7 @@ class HWCDisplay : public DisplayEventHandler {
     return (has_client_composition_ || layer_stack_.flags.single_buffered_layer_present);
   }
   bool CheckResourceState();
+  DisplayType GetDisplayType() { return type_; }
   virtual void SetFastPathComposition(bool enable) { fast_path_composition_ = enable; }
   virtual HWC2::Error SetColorModeFromClientApi(int32_t color_mode_id) {
     return HWC2::Error::Unsupported;
@@ -546,6 +545,7 @@ class HWCDisplay : public DisplayEventHandler {
   void UpdateRefreshRate();
   void WaitOnPreviousFence();
   void UpdateActiveConfig();
+  bool IsModeSwitchAllowed(uint32_t mode_switch);
   qService::QService *qservice_ = NULL;
   DisplayClass display_class_;
   uint32_t geometry_changes_ = GeometryChanges::kNone;

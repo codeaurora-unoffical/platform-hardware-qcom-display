@@ -26,6 +26,10 @@
 #define __DISPLAY_BUILTIN_H__
 
 #include <core/dpps_interface.h>
+#include <private/extension_interface.h>
+#include <private/spr_intf.h>
+#include <private/panel_feature_property_intf.h>
+#include <private/panel_feature_factory_intf.h>
 #include <string>
 #include <vector>
 
@@ -74,6 +78,8 @@ struct DeferFpsConfig {
     apply = false;
   }
 };
+
+typedef PanelFeatureFactoryIntf* (*GetPanelFeatureFactoryIntfType)();
 
 class DppsInfo {
  public:
@@ -151,6 +157,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   void ResetPanel();
   DisplayError SetActiveConfig(uint32_t index) override;
   DisplayError ReconfigureDisplay() override;
+  DisplayError CreatePanelfeatures();
 
  private:
   bool CanCompareFrameROI(LayerStack *layer_stack);
@@ -159,6 +166,10 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   bool CanDeferFpsConfig(uint32_t fps);
   void SetDeferredFpsConfig();
   void GetFpsConfig(HWDisplayAttributes *display_attributes, HWPanelInfo *panel_info);
+  PrimariesTransfer GetBlendSpaceFromStcColorMode(const snapdragoncolor::ColorMode &color_mode);
+  DisplayError SetupPanelfeatures();
+  DisplayError SetupSPR();
+  DisplayError SetupDemura();
 
   const uint32_t kPuTimeOutMs = 1000;
   std::vector<HWEvent> event_list_;
@@ -167,6 +178,7 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   bool handle_idle_timeout_ = false;
   bool commit_event_enabled_ = false;
   bool reset_panel_ = false;
+  bool panel_feature_init_ = false;
   DppsInfo dpps_info_ = {};
   FrameTriggerMode trigger_mode_debug_ = kFrameTriggerMax;
   float level_remainder_ = 0.0f;
@@ -177,7 +189,6 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   LayerRect right_frame_roi_ = {};
   Locker dpps_pu_lock_;
   bool dpps_pu_nofiy_pending_ = false;
-  bool first_cycle_ = true;
   shared_ptr<Fence> previous_retire_fence_ = nullptr;
   enum class SamplingState { Off, On } samplingState = SamplingState::Off;
   DisplayError setColorSamplingState(SamplingState state);
@@ -189,6 +200,11 @@ class DisplayBuiltIn : public DisplayBase, HWEventHandler, DppsPropIntf {
   DeferFpsConfig deferred_config_ = {};
 
   snapdragoncolor::ColorMode current_color_mode_ = {};
+  snapdragoncolor::ColorModeList stc_color_modes_ = {};
+
+  std::shared_ptr<SPRIntf> spr_;
+  GetPanelFeatureFactoryIntfType GetPanelFeatureFactoryIntfFunc_ = nullptr;
+  int spr_prop_value_ = 0;
 };
 
 }  // namespace sdm

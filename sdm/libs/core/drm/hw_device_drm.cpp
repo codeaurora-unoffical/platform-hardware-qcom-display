@@ -79,6 +79,8 @@
 #define DRM_FORMAT_MOD_QCOM_TIGHT fourcc_mod_code(QCOM, 0x4)
 #endif
 
+#define DEST_SCALAR_OVERFETCH_SIZE 5
+
 using std::string;
 using std::to_string;
 using std::fstream;
@@ -691,6 +693,7 @@ void HWDeviceDRM::PopulateHWPanelInfo() {
   hw_panel_info_.min_roi_height = connector_info_.modes[index].hmin;
   hw_panel_info_.needs_roi_merge = connector_info_.modes[index].roi_merge;
   hw_panel_info_.transfer_time_us = connector_info_.modes[index].transfer_time_us;
+  hw_panel_info_.allowed_mode_switch = connector_info_.modes[index].allowed_mode_switch;
   hw_panel_info_.dynamic_fps = connector_info_.dynamic_fps;
   hw_panel_info_.qsync_support = connector_info_.qsync_support;
   drmModeModeInfo current_mode = connector_info_.modes[current_mode_index_].mode;
@@ -949,9 +952,11 @@ DisplayError HWDeviceDRM::PowerOn(const HWQosData &qos_data, shared_ptr<Fence> *
     *release_fence = Fence::Create(INT(release_fence_fd), "release_power_on");
     DLOGD_IF(kTagDriverConfig, "RELEASE fence: fd: %s", Fence::GetStr(*release_fence).c_str());
   }
-  pending_doze_ = false;
+  pending_power_state_ = kPowerStateNone;
 
   Fence::Wait(retire_fence, kTimeoutMsPowerOn);
+
+  last_power_mode_ = DRMPowerMode::ON;
 
   return kErrorNone;
 }
@@ -965,6 +970,12 @@ DisplayError HWDeviceDRM::PowerOff(bool teardown) {
 
   if (first_cycle_) {
     return kErrorNone;
+  }
+
+  if (tui_state_ == kTUIStateStart || tui_state_ == kTUIStateInProgress) {
+    DLOGI("Request deferred TUI state %d", tui_state_);
+    pending_power_state_ = kPowerStateOff;
+    return kErrorDeferred;
   }
 
   ResetROI();
@@ -982,9 +993,11 @@ DisplayError HWDeviceDRM::PowerOff(bool teardown) {
   }
 
   shared_ptr<Fence> retire_fence = Fence::Create(INT(retire_fence_fd), "retire_power_off");
-  pending_doze_ = false;
+  pending_power_state_ = kPowerStateNone;
 
   Fence::Wait(retire_fence, kTimeoutMsPowerOff);
+
+  last_power_mode_ = DRMPowerMode::OFF;
 
   return kErrorNone;
 }
@@ -992,8 +1005,8 @@ DisplayError HWDeviceDRM::PowerOff(bool teardown) {
 DisplayError HWDeviceDRM::Doze(const HWQosData &qos_data, shared_ptr<Fence> *release_fence) {
   DTRACE_SCOPED();
 
-  if (!first_cycle_) {
-    pending_doze_ = true;
+  if (!first_cycle_ || tui_state_ != kTUIStateNone || last_power_mode_ != DRMPowerMode::OFF) {
+    pending_power_state_ = kPowerStateDoze;
     return kErrorDeferred;
   }
 
@@ -1028,12 +1041,19 @@ DisplayError HWDeviceDRM::Doze(const HWQosData &qos_data, shared_ptr<Fence> *rel
 
   Fence::Wait(retire_fence, kTimeoutMsDoze);
 
+  last_power_mode_ = DRMPowerMode::DOZE;
+
   return kErrorNone;
 }
 
 DisplayError HWDeviceDRM::DozeSuspend(const HWQosData &qos_data,
                                       shared_ptr<Fence> *release_fence) {
   DTRACE_SCOPED();
+
+  if (tui_state_ == kTUIStateStart || tui_state_ == kTUIStateInProgress) {
+    pending_power_state_ = kPowerStateDozeSuspend;
+    return kErrorDeferred;
+  }
 
   SetQOSData(qos_data);
 
@@ -1065,9 +1085,11 @@ DisplayError HWDeviceDRM::DozeSuspend(const HWQosData &qos_data,
     *release_fence = Fence::Create(release_fence_fd, "release_doze_suspend");
     DLOGD_IF(kTagDriverConfig, "RELEASE fence: fd: %s", Fence::GetStr(*release_fence).c_str());
   }
-  pending_doze_ = false;
+  pending_power_state_ = kPowerStateNone;
 
   Fence::Wait(retire_fence, kTimeoutMsDozeSuspend);
+
+  last_power_mode_ = DRMPowerMode::DOZE_SUSPEND;
 
   return kErrorNone;
 }
@@ -1264,6 +1286,7 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayers *hw_layers,
   }
 
   drm_atomic_intf_->Perform(DRMOps::DPPS_COMMIT_FEATURE, 0 /* argument is not used */);
+  drm_atomic_intf_->Perform(DRMOps::COMMIT_PANEL_FEATURES, 0 /* argument is not used */);
 
   if (reset_output_fence_offset_ && !validate) {
     // Change back the fence_offset
@@ -1319,7 +1342,7 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayers *hw_layers,
     }
   }
 
-  if (first_cycle_ || tui_state_ == kTUIStateEnd) {
+  if (first_cycle_) {
     drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_TOPOLOGY_CONTROL, token_.conn_id,
                               topology_control_);
     drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 1);
@@ -1330,10 +1353,13 @@ void HWDeviceDRM::SetupAtomic(Fence::ScopedRef &scoped_ref, HWLayers *hw_layers,
                               sde_drm::DRMVMRequestState::ACQUIRE);
 #endif
     last_power_mode_ = DRMPowerMode::ON;
-  } else if (pending_doze_ && !validate) {
+  } else if (pending_power_state_ != kPowerStateNone && !validate) {
+    DRMPowerMode power_mode;
     drm_atomic_intf_->Perform(DRMOps::CRTC_SET_ACTIVE, token_.crtc_id, 1);
-    drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, DRMPowerMode::DOZE);
-    last_power_mode_ = DRMPowerMode::DOZE;
+    if (GetDRMPowerMode(pending_power_state_, &power_mode) == kErrorNone) {
+      drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POWER_MODE, token_.conn_id, power_mode);
+      last_power_mode_ = power_mode;
+    }
   }
 
   // Set CRTC mode, only if display config changes
@@ -1572,15 +1598,12 @@ DisplayError HWDeviceDRM::AtomicCommit(HWLayers *hw_layers) {
   first_cycle_ = false;
   update_mode_ = false;
   hw_layers->updates_mask = 0;
-  pending_doze_ = false;
+  pending_power_state_ = kPowerStateNone;
   // Inherently a real commit ensures null commit properties have happened, so update the member
   first_null_cycle_ = false;
 
-  if (tui_state_ == kTUIStateStart) {
-    tui_state_ = kTUIStateInProgress;
-  } else if (tui_state_ == kTUIStateEnd) {
-    tui_state_ = kTUIStateNone;
-  }
+  SetTUIState();
+
 #ifdef TRUSTED_VM
   drm_atomic_intf_->Perform(sde_drm::DRMOps::CRTC_SET_VM_REQ_STATE, token_.crtc_id,
                             sde_drm::DRMVMRequestState::NONE);
@@ -1599,7 +1622,6 @@ DisplayError HWDeviceDRM::Flush(HWLayers *hw_layers) {
     DLOGE("failed with error %d", ret);
     return kErrorHardware;
   }
-
   return kErrorNone;
 }
 
@@ -1726,11 +1748,6 @@ DisplayError HWDeviceDRM::GetPPFeaturesVersion(PPFeatureVersion *vers) {
 }
 
 DisplayError HWDeviceDRM::SetPPFeatures(PPFeaturesConfig *feature_list) {
-  if (pending_doze_) {
-    DLOGI("Doze state pending!! Skip for now");
-    return kErrorNone;
-  }
-
   int ret = 0;
   DRMCrtcInfo crtc_info = {};
   PPFeatureInfo *feature = NULL;
@@ -1904,6 +1921,14 @@ DisplayError HWDeviceDRM::SetMixerAttributes(const HWMixerAttributes &mixer_attr
   }
 
   uint32_t max_input_width = hw_resource_.hw_dest_scalar_info.max_input_width;
+  uint32_t dual_max_input_width = max_input_width - DEST_SCALAR_OVERFETCH_SIZE;
+  if (mixer_attributes_.split_type == kDualSplit &&
+     (mixer_attributes.width > dual_max_input_width)) {
+    DLOGW("Input width exceeds width limit in dual LM mode. input_width %d width_limit %d",
+          mixer_attributes.width, dual_max_input_width);
+    return kErrorNotSupported;
+  }
+
   if (display_attributes_[index].is_device_split) {
     max_input_width *= 2;
   }
@@ -1911,6 +1936,14 @@ DisplayError HWDeviceDRM::SetMixerAttributes(const HWMixerAttributes &mixer_attr
   if (mixer_attributes.width > max_input_width) {
     DLOGW("Input width exceeds width limit! input_width %d width_limit %d", mixer_attributes.width,
           max_input_width);
+    return kErrorNotSupported;
+  }
+
+  uint32_t topology_num_split = 0;
+  GetTopologySplit(display_attributes_[index].topology, &topology_num_split);
+  if (mixer_attributes.width % topology_num_split != 0) {
+    DLOGW("Uneven LM split: topology:%d supported_split:%d mixer_width:%d",
+           display_attributes_[index].topology, topology_num_split, mixer_attributes.width);
     return kErrorNotSupported;
   }
 
@@ -2413,4 +2446,53 @@ DisplayError HWDeviceDRM::SetBlendSpace(const PrimariesTransfer &blend_space) {
   return kErrorNone;
 }
 
+DisplayError HWDeviceDRM::GetDRMPowerMode(const HWPowerState &power_state,
+                                          DRMPowerMode *drm_power_mode) {
+  if (!drm_power_mode) {
+    return kErrorParameters;
+  }
+
+  switch (power_state) {
+    case kPowerStateOn:
+      *drm_power_mode = DRMPowerMode::ON;
+    case kPowerStateOff:
+      *drm_power_mode = DRMPowerMode::OFF;
+    case kPowerStateDoze:
+      *drm_power_mode = DRMPowerMode::DOZE;
+    case kPowerStateDozeSuspend:
+      *drm_power_mode = DRMPowerMode::DOZE_SUSPEND;
+    default:
+      return kErrorParameters;
+  }
+  return kErrorNone;
+}
+
+void HWDeviceDRM::SetTUIState() {
+  if (tui_state_ == kTUIStateStart) {
+    tui_state_ = kTUIStateInProgress;
+  } else if (tui_state_ == kTUIStateEnd) {
+    tui_state_ = kTUIStateNone;
+  }
+}
+
+void HWDeviceDRM::GetTopologySplit(HWTopology hw_topology, uint32_t *split_number) {
+  switch (hw_topology) {
+    case kDualLM:
+    case kDualLMDSC:
+    case kDualLMMerge:
+    case kDualLMMergeDSC:
+    case kDualLMDSCMerge:
+      *split_number = 2;
+      break;
+    case kQuadLMMerge:
+    case kQuadLMDSCMerge:
+    case kQuadLMMergeDSC:
+    case kQuadLMDSC4HSMerge:
+      *split_number = 4;
+      break;
+    case kPPSplit:
+    default:
+      *split_number = 1;
+  }
+}
 }  // namespace sdm

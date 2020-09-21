@@ -1148,12 +1148,17 @@ int32_t HWCSession::GetDozeSupport(hwc2_display_t display, int32_t *out_support)
   }
 
   if (display >= HWCCallbacks::kNumDisplays || (hwc_display_[display] == nullptr)) {
-    DLOGE("Invalid Display %d Handle %s ", display, hwc_display_[display] ?
-          "Valid" : "NULL");
+    // display may come as -1  from VTS test case
+    DLOGE("Invalid Display %d ", UINT32(display));
     return HWC2_ERROR_BAD_DISPLAY;
   }
 
   *out_support = 0;
+  if (hwc_display_[display]->GetDisplayType() != kBuiltIn) {
+    // Doze support check not needed for non-builtin display
+    return HWC2_ERROR_NONE;
+  }
+
   uint32_t config = 0;
   GetActiveConfigIndex(display, &config);
   *out_support = isSmartPanelConfig(display, config) ? 1 : 0;
@@ -2892,7 +2897,7 @@ void HWCSession::DestroyPluggableDisplay(DisplayMapInfo *map_info) {
 
   SCOPE_LOCK(system_locker_);
   {
-    SEQUENCE_WAIT_SCOPE_LOCK(locker_[client_id]);
+    SCOPE_LOCK(locker_[client_id]);
     auto &hwc_display = hwc_display_[client_id];
     if (!hwc_display) {
       return;
@@ -3294,10 +3299,12 @@ int32_t HWCSession::GetDisplayCapabilities(hwc2_display_t display,
     if (has_doze_support) {
       *capabilities = {HwcDisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM,
                        HwcDisplayCapability::DOZE,
-                       HwcDisplayCapability::BRIGHTNESS, HwcDisplayCapability::PROTECTED_CONTENTS};
+                       HwcDisplayCapability::BRIGHTNESS,
+                       HwcDisplayCapability::PROTECTED_CONTENTS};
     } else {
       *capabilities = {HwcDisplayCapability::SKIP_CLIENT_COLOR_TRANSFORM,
-                       HwcDisplayCapability::BRIGHTNESS, HwcDisplayCapability::PROTECTED_CONTENTS};
+                       HwcDisplayCapability::BRIGHTNESS,
+                       HwcDisplayCapability::PROTECTED_CONTENTS};
     }
   }
 
@@ -3315,7 +3322,7 @@ int32_t HWCSession::GetDisplayConnectionType(hwc2_display_t display,
   }
 
   if (!hwc_display_[display]) {
-    DLOGE("Expected valid hwc_display");
+    DLOGW("Expected valid hwc_display");
     return HWC2_ERROR_BAD_DISPLAY;
   }
   *type = HwcDisplayConnectionType::EXTERNAL;

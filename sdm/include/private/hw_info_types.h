@@ -205,6 +205,14 @@ enum class HWRecoveryEvent : uint32_t {
   kDisplayPowerReset,  // driver requesting display power cycle
 };
 
+enum HWPowerState {
+  kPowerStateNone,
+  kPowerStateOff,
+  kPowerStateOn,
+  kPowerStateDoze,
+  kPowerStateDozeSuspend,
+};
+
 typedef std::map<HWSubBlockType, std::vector<LayerBufferFormat>> FormatsMap;
 typedef std::map<LayerBufferFormat, float> CompRatioMap;
 
@@ -351,6 +359,7 @@ struct HWResourceInfo {
   bool use_baselayer_for_stage = false;
   bool has_micro_idle = false;
   uint32_t ubwc_version = 1;
+  uint32_t rc_total_mem_size = 0;
 };
 
 struct HWSplitInfo {
@@ -413,6 +422,7 @@ struct HWPanelInfo {
   HWColorPrimaries primaries = {};    // WRGB color primaries
   HWPanelOrientation panel_orientation = {};  // Panel Orientation
   uint32_t transfer_time_us = 0;       // transfer time in micro seconds to panel's active region
+  uint32_t allowed_mode_switch = 0;    // Allowed mode switch bit mask
   bool qsync_support = false;          // Specifies panel supports qsync feature or not.
   bool dyn_bitclk_support = false;     // Bit clk can be updated to avoid RF interference.
   std::vector<uint64_t> bitclk_rates;  // Supported bit clk levels.
@@ -434,6 +444,7 @@ struct HWPanelInfo {
             (left_roi_count != panel_info.left_roi_count) ||
             (right_roi_count != panel_info.right_roi_count) ||
             (transfer_time_us != panel_info.transfer_time_us) ||
+            (allowed_mode_switch != panel_info.allowed_mode_switch) ||
             (qsync_support != panel_info.qsync_support) ||
             (dyn_bitclk_support != panel_info.dyn_bitclk_support) ||
             (bitclk_rates != panel_info.bitclk_rates));
@@ -674,6 +685,13 @@ struct HWHDRLayerInfo {
   std::vector<uint8_t> dyn_hdr_vsif_payload;  // Dynamic HDR VSIF data.
 };
 
+struct RCLayersInfo {
+  int top_width = 0;
+  int top_height = 0;
+  int bottom_width = 0;
+  int bottom_height = 0;
+};
+
 struct LayerExt {
   std::vector<LayerRect> excl_rects = {};  // list of exclusion rects
 };
@@ -704,6 +722,11 @@ struct HWLayersInfo {
   HWHDRLayerInfo hdr_layer_info = {};
   Handle pvt_data = NULL;   // Private data used by sdm extension only.
   bool game_present = false;  // Indicates there is game layer or not
+  bool rc_config = false;
+  RCLayersInfo rc_layers_info = {};
+  bool spr_enable = false;
+  uint64_t rc_pu_flag_status = 0;
+  bool rc_pu_needs_full_roi = false;
 };
 
 struct HWQosData {

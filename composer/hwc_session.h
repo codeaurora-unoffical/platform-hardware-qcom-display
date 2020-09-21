@@ -54,6 +54,7 @@ using android::hardware::hidl_handle;
 using ::android::hardware::hidl_vec;
 using ::android::sp;
 using ::android::hardware::Void;
+namespace composer_V2_3 = ::android::hardware::graphics::composer::V2_3;
 namespace composer_V2_4 = ::android::hardware::graphics::composer::V2_4;
 using HwcDisplayCapability = composer_V2_4::IComposerClient::DisplayCapability;
 using HwcDisplayConnectionType = composer_V2_4::IComposerClient::DisplayConnectionType;
@@ -384,6 +385,9 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
     virtual int ControlQsyncCallback(bool enable);
     virtual int GetDisplayHwId(uint32_t disp_id, uint32_t *display_hw_id);
     virtual int SendTUIEvent(DispType dpy, DisplayConfig::TUIEventType event_type);
+    virtual int GetSupportedDisplayRefreshRates(DispType dpy,
+                                                std::vector<uint32_t> *supported_refresh_rates);
+    virtual int IsRCSupported(uint32_t disp_id, bool *supported);
 
     std::weak_ptr<DisplayConfig::ConfigCallback> callback_;
     HWCSession *hwc_session_ = nullptr;
@@ -438,6 +442,7 @@ class HWCSession : hwc2_device_t, HWCUEventListener, public qClient::BnQClient,
                           uint32_t v_start, uint32_t v_end, uint32_t factor_in,
                           uint32_t factor_out);
   int ControlIdlePowerCollapse(bool enable, bool synchronous);
+  int GetSupportedDisplayRefreshRates(int disp_id, std::vector<uint32_t> *supported_refresh_rates);
   int32_t SetDynamicDSIClock(int64_t disp_id, uint32_t bitrate);
   int32_t getDisplayBrightness(uint32_t display, float *brightness);
   int32_t setDisplayBrightness(uint32_t display, float brightness);

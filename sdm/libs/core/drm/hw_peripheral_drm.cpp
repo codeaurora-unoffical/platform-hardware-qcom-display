@@ -44,6 +44,8 @@ using sde_drm::DRMOps;
 using sde_drm::DRMPowerMode;
 using sde_drm::DppsFeaturePayload;
 using sde_drm::DRMDppsFeatureInfo;
+using sde_drm::DRMPanelFeatureID;
+using sde_drm::DRMPanelFeatureInfo;
 using sde_drm::DRMSecureMode;
 using sde_drm::DRMCWbCaptureMode;
 
@@ -67,6 +69,7 @@ DisplayError HWPeripheralDRM::Init() {
   InitDestScaler();
 
   PopulateBitClkRates();
+  CreatePanelFeaturePropertyMap();
 
   return kErrorNone;
 }
@@ -367,6 +370,7 @@ DisplayError HWPeripheralDRM::HandleSecureEvent(SecureEvent secure_event,
         if (err != kErrorNone) {
           return err;
         }
+        SetTUIState();
       }
     }
     break;
@@ -553,7 +557,9 @@ DisplayError HWPeripheralDRM::PowerOn(const HWQosData &qos_data,
     return kErrorUndefined;
   }
 
-  if (first_cycle_) {
+  if (first_cycle_ || tui_state_ != kTUIStateNone) {
+    DLOGI("Request deferred TUI state %d", tui_state_);
+    pending_power_state_ = kPowerStateOn;
     return kErrorDeferred;
   }
 
@@ -577,6 +583,37 @@ DisplayError HWPeripheralDRM::PowerOn(const HWQosData &qos_data,
 
   CacheDestScalarData();
 
+  return kErrorNone;
+}
+
+DisplayError HWPeripheralDRM::PowerOff(bool teardown) {
+  SetVMReqState();
+  DisplayError err = HWDeviceDRM::PowerOff(teardown);
+  if (err != kErrorNone) {
+    return err;
+  }
+  SetTUIState();
+  return kErrorNone;
+}
+
+DisplayError HWPeripheralDRM::Doze(const HWQosData &qos_data, shared_ptr<Fence> *release_fence) {
+  SetVMReqState();
+  DisplayError err = HWDeviceDRM::Doze(qos_data, release_fence);
+  if (err != kErrorNone) {
+    return err;
+  }
+  SetTUIState();
+  return kErrorNone;
+}
+
+DisplayError HWPeripheralDRM::DozeSuspend(const HWQosData &qos_data,
+                                          shared_ptr<Fence> *release_fence) {
+  SetVMReqState();
+  DisplayError err = HWDeviceDRM::DozeSuspend(qos_data, release_fence);
+  if (err != kErrorNone) {
+    return err;
+  }
+  SetTUIState();
   return kErrorNone;
 }
 
@@ -637,8 +674,8 @@ DisplayError HWPeripheralDRM::SetFrameTrigger(FrameTriggerMode mode) {
 }
 
 DisplayError HWPeripheralDRM::SetPanelBrightness(int level) {
-  if (pending_doze_) {
-    DLOGI("Doze state pending!! Skip for now");
+  if (pending_power_state_ != kPowerStateNone) {
+    DLOGI("Power state %d pending!! Skip for now", pending_power_state_);
     return kErrorDeferred;
   }
 
@@ -766,6 +803,103 @@ DisplayError HWPeripheralDRM::EnableSelfRefresh() {
 void HWPeripheralDRM::ResetPropertyCache() {
   drm_atomic_intf_->Perform(sde_drm::DRMOps::PLANES_RESET_CACHE, token_.crtc_id);
   drm_atomic_intf_->Perform(sde_drm::DRMOps::CRTC_RESET_CACHE, token_.crtc_id);
+}
+
+void HWPeripheralDRM::CreatePanelFeaturePropertyMap() {
+  panel_feature_property_map_.clear();
+  panel_feature_property_map_[kPanelFeatureSPRInitCfg] = sde_drm::kDRMPanelFeatureSPRInit;
+  panel_feature_property_map_[kPanelFeatureSPRPackType] = sde_drm::kDRMPanelFeatureSPRPackType;
+  panel_feature_property_map_[kPanelFeatureDemuraInitCfg] = sde_drm::kDRMPanelFeatureDemuraInit;
+  panel_feature_property_map_[kPanelFeatureDsppIndex] = sde_drm::kDRMPanelFeatureDsppIndex;
+  panel_feature_property_map_[kPanelFeatureDsppSPRInfo] = sde_drm::kDRMPanelFeatureDsppSPRInfo;
+  panel_feature_property_map_[kPanelFeatureDsppRCInfo] = sde_drm::kDRMPanelFeatureDsppRCInfo;
+  panel_feature_property_map_[kPanelFeatureDsppDemuraInfo] =
+    sde_drm::kDRMPanelFeatureDsppDemuraInfo;
+  panel_feature_property_map_[kPanelFeatureRCInitCfg] = sde_drm::kDRMPanelFeatureRCInit;
+}
+
+int HWPeripheralDRM::GetPanelFeature(PanelFeaturePropertyInfo *feature_info) {
+  int ret = 0;
+  DRMPanelFeatureInfo drm_feature = {};
+
+  if (!feature_info) {
+    DLOGE("Invalid object pointer of PanelFeaturePropertyInfo");
+    return -EINVAL;
+  }
+
+  auto it = panel_feature_property_map_.find(feature_info->prop_id);
+  if (it ==  panel_feature_property_map_.end()) {
+    DLOGE("Failed to find prop-map entry for id %d", feature_info->prop_id);
+    return -EINVAL;
+  }
+
+  drm_feature.prop_id = panel_feature_property_map_[feature_info->prop_id];
+  drm_feature.prop_ptr = feature_info->prop_ptr;
+  drm_feature.prop_size = feature_info->prop_size;
+
+  switch (feature_info->prop_id) {
+    case kPanelFeatureSPRInitCfg:
+    case kPanelFeatureDsppIndex:
+    case kPanelFeatureDsppSPRInfo:
+    case kPanelFeatureDsppDemuraInfo:
+    case kPanelFeatureDsppRCInfo:
+    case kPanelFeatureRCInitCfg:
+      drm_feature.obj_type = DRM_MODE_OBJECT_CRTC;
+      drm_feature.obj_id =  token_.crtc_id;
+     break;
+    case kPanelFeatureSPRPackType:
+      drm_feature.obj_type = DRM_MODE_OBJECT_CONNECTOR;
+      drm_feature.obj_id =  token_.conn_id;
+     break;
+    default:
+     DLOGE("obj id population for property %d not implemented", feature_info->prop_id);
+     return -EINVAL;
+  }
+
+  drm_mgr_intf_->GetPanelFeature(&drm_feature);
+
+  feature_info->version = drm_feature.version;
+  feature_info->prop_size = drm_feature.prop_size;
+
+  return ret;
+}
+
+int HWPeripheralDRM::SetPanelFeature(const PanelFeaturePropertyInfo &feature_info) {
+  int ret = 0;
+  DRMPanelFeatureInfo drm_feature = {};
+  drm_feature.prop_id = panel_feature_property_map_[feature_info.prop_id];
+  drm_feature.prop_ptr = feature_info.prop_ptr;
+  drm_feature.version = feature_info.version;
+  drm_feature.prop_size = feature_info.prop_size;
+
+  switch (feature_info.prop_id) {
+    case kPanelFeatureSPRInitCfg:
+    case kPanelFeatureRCInitCfg:
+      drm_feature.obj_type = DRM_MODE_OBJECT_CRTC;
+      drm_feature.obj_id =  token_.crtc_id;
+     break;
+    case kPanelFeatureSPRPackType:
+      drm_feature.obj_type = DRM_MODE_OBJECT_CONNECTOR;
+      drm_feature.obj_id =  token_.conn_id;
+     break;
+    default:
+     DLOGE("Set Panel feature property %d not implemented", feature_info.prop_id);
+     return -EINVAL;
+  }
+
+  DLOGI("Set Panel feature property %d", feature_info.prop_id);
+  drm_mgr_intf_->SetPanelFeature(drm_feature);
+
+  return ret;
+}
+
+DisplayError HWPeripheralDRM::GetSupportedModeSwitch(uint32_t *allowed_mode_switch) {
+  if (!allowed_mode_switch) {
+    return kErrorParameters;
+  }
+
+  *allowed_mode_switch = connector_info_.modes[current_mode_index_].allowed_mode_switch;
+  return kErrorNone;
 }
 
 }  // namespace sdm

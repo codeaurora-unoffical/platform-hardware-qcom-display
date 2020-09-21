@@ -78,6 +78,10 @@ DisplayError DisplayBuiltIn::Init() {
     return error;
   }
 
+  if (color_mgr_) {
+    color_mgr_->ColorMgrGetStcModes(&stc_color_modes_);
+  }
+
   if (hw_panel_info_.mode == kModeCommand && Debug::IsVideoModeEnabled()) {
     error = hw_intf_->SetDisplayMode(kModeVideo);
     if (error != kErrorNone) {
@@ -121,6 +125,21 @@ DisplayError DisplayBuiltIn::Init() {
   Debug::Get()->GetProperty(DEFER_FPS_FRAME_COUNT, &value);
   deferred_config_.frame_count = (value > 0) ? UINT32(value) : 0;
 
+  spr_prop_value_ = 0;
+  // Enable SPR as default is disabled.
+  Debug::GetProperty(ENABLE_SPR, &spr_prop_value_);
+
+  error = CreatePanelfeatures();
+  if (error != kErrorNone) {
+    DLOGE("Failed to setup panel feature factory, error: %d", error);
+  } else {
+    // Get status of RC enablement property. Default RC is disabled.
+    int rc_prop_value = 0;
+    Debug::GetProperty(ENABLE_ROUNDED_CORNER, &rc_prop_value);
+    rc_enable_prop_ = rc_prop_value ? true : false;
+    DLOGI("RC feature %s.", rc_enable_prop_ ? "enabled" : "disabled");
+  }
+
   return error;
 }
 
@@ -131,6 +150,43 @@ DisplayError DisplayBuiltIn::Deinit() {
     dpps_info_.Deinit();
   }
   return DisplayBase::Deinit();
+}
+
+// Create instance for RC, SPR and demura feature.
+DisplayError DisplayBuiltIn::CreatePanelfeatures() {
+  if (pf_factory_ && prop_intf_) {
+    return kErrorNone;
+  }
+
+  if (!GetPanelFeatureFactoryIntfFunc_) {
+    DynLib feature_impl_lib;
+    if (feature_impl_lib.Open(EXTENSION_LIBRARY_NAME)) {
+      if (!feature_impl_lib.Sym("GetPanelFeatureFactoryIntf",
+                                reinterpret_cast<void **>(&GetPanelFeatureFactoryIntfFunc_))) {
+        DLOGE("Unable to load symbols, error = %s", feature_impl_lib.Error());
+        return kErrorUndefined;
+      }
+    } else {
+      DLOGW("Unable to load = %s, error = %s", EXTENSION_LIBRARY_NAME, feature_impl_lib.Error());
+      DLOGW("Panel features are not supported");
+      return kErrorNotSupported;
+    }
+  }
+
+  pf_factory_ = GetPanelFeatureFactoryIntfFunc_();
+  if (!pf_factory_) {
+    DLOGE("Failed to create PanelFeatureFactoryIntf");
+    return kErrorResources;
+  }
+
+  prop_intf_ = hw_intf_->GetPanelFeaturePropertyIntf();
+  if (!prop_intf_) {
+    DLOGE("Failed to create PanelFeaturePropertyIntf");
+    pf_factory_ = nullptr;
+    return kErrorResources;
+  }
+
+  return kErrorNone;
 }
 
 DisplayError DisplayBuiltIn::Prepare(LayerStack *layer_stack) {
@@ -163,6 +219,22 @@ DisplayError DisplayBuiltIn::Prepare(LayerStack *layer_stack) {
 
   left_frame_roi_ = {};
   right_frame_roi_ = {};
+
+  if (spr_) {
+    GenericPayload out;
+    uint32_t *enable = nullptr;
+    int ret = out.CreatePayload<uint32_t>(enable);
+    if (ret) {
+      DLOGE("Failed to create the payload. Error:%d", ret);
+      return kErrorUndefined;
+    }
+    ret = spr_->GetParameter(kSPRFeatureEnable, &out);
+    if (ret) {
+      DLOGE("Failed to get the spr status. Error:%d", ret);
+      return kErrorUndefined;
+    }
+    spr_enable_ = *enable;
+  }
 
   error = DisplayBase::Prepare(layer_stack);
 
@@ -229,6 +301,35 @@ DisplayError DisplayBuiltIn::colorSamplingOff() {
     return kErrorParameters;
   }
   return setColorSamplingState(SamplingState::Off);
+}
+
+DisplayError DisplayBuiltIn::SetupSPR() {
+  SPRInputConfig spr_cfg;
+  spr_cfg.panel_name = std::string(hw_panel_info_.panel_name);
+  spr_ = pf_factory_->CreateSPRIntf(spr_cfg, prop_intf_);
+  if (!spr_ || spr_->Init() != 0) {
+    DLOGE("Failed to initialize SPR");
+    return kErrorResources;
+  }
+
+  return kErrorNone;
+}
+
+DisplayError DisplayBuiltIn::SetupDemura() {
+  return kErrorNone;
+}
+
+DisplayError DisplayBuiltIn::SetupPanelfeatures() {
+  if (!pf_factory_ || !prop_intf_) {
+    DLOGE("Failed to create PanelFeatures");
+    return kErrorResources;
+  }
+
+  DisplayError ret = kErrorNone;
+  if ((ret = SetupSPR()) != kErrorNone) return ret;
+  if ((ret = SetupDemura()) != kErrorNone) return ret;
+
+  return ret;
 }
 
 DisplayError DisplayBuiltIn::Commit(LayerStack *layer_stack) {
@@ -350,8 +451,16 @@ DisplayError DisplayBuiltIn::SetDisplayState(DisplayState state, bool teardown,
     vsync_enable_ = false;
   }
 
-  if (pending_doze_ || pending_power_on_) {
+  if (pending_power_state_ != kPowerStateNone) {
     event_handler_->Refresh();
+  }
+
+  if (spr_prop_value_ && !panel_feature_init_ && state != kStateOff && state != kStateStandby) {
+    error = SetupPanelfeatures();
+    panel_feature_init_ = true;
+    if (error != kErrorNone) {
+      DLOGE("SetupPanelfeatures failed with error :%d, ignoring!", error);
+    }
   }
 
   return kErrorNone;
@@ -627,12 +736,6 @@ DisplayError DisplayBuiltIn::ControlPartialUpdate(bool enable, uint32_t *pending
     return kErrorParameters;
   }
 
-  if (!hw_panel_info_.partial_update) {
-    // Nothing to be done.
-    DLOGI("partial update is not applicable for display id = %d", display_id_);
-    return kErrorNotSupported;
-  }
-
   if (dpps_info_.disable_pu_ && enable) {
     // Nothing to be done.
     DLOGI("partial update is disabled by DPPS for display id = %d", display_id_);
@@ -780,7 +883,8 @@ DisplayError DisplayBuiltIn::GetStcColorModes(snapdragoncolor::ColorModeList *mo
     return kErrorNotSupported;
   }
 
-  return color_mgr_->ColorMgrGetStcModes(mode_list);
+  mode_list->list = stc_color_modes_.list;
+  return kErrorNone;
 }
 
 DisplayError DisplayBuiltIn::SetStcColorMode(const snapdragoncolor::ColorMode &color_mode) {
@@ -789,15 +893,8 @@ DisplayError DisplayBuiltIn::SetStcColorMode(const snapdragoncolor::ColorMode &c
     return kErrorNotSupported;
   }
   DisplayError ret = kErrorNone;
-  ret = color_mgr_->ColorMgrSetStcMode(color_mode);
-  if (ret != kErrorNone) {
-    DLOGE("Failed to set stc color mode, ret = %d display_type_ = %d", ret, display_type_);
-    return ret;
-  }
-  current_color_mode_ = color_mode;
   PrimariesTransfer blend_space = {};
-  blend_space.primaries = color_mode.gamut;
-  blend_space.transfer = color_mode.gamma;
+  blend_space = GetBlendSpaceFromStcColorMode(color_mode);
   ret = comp_manager_->SetBlendSpace(display_comp_ctx_, blend_space);
   if (ret != kErrorNone) {
     DLOGE("SetBlendSpace failed, ret = %d display_type_ = %d", ret, display_type_);
@@ -807,6 +904,13 @@ DisplayError DisplayBuiltIn::SetStcColorMode(const snapdragoncolor::ColorMode &c
   if (ret != kErrorNone) {
     DLOGE("Failed to pass blend space, ret = %d display_type_ = %d", ret, display_type_);
   }
+
+  ret = color_mgr_->ColorMgrSetStcMode(color_mode);
+  if (ret != kErrorNone) {
+    DLOGE("Failed to set stc color mode, ret = %d display_type_ = %d", ret, display_type_);
+    return ret;
+  }
+  current_color_mode_ = color_mode;
 
   DynamicRangeType dynamic_range = kSdrType;
   if (std::find(color_mode.hw_assets.begin(), color_mode.hw_assets.end(),
@@ -858,6 +962,7 @@ std::string DisplayBuiltIn::Dump() {
   os << "\n FPS min:" << hw_panel_info_.min_fps << " max:" << hw_panel_info_.max_fps
      << " cur:" << display_attributes_.fps;
   os << " TransferTime: " << hw_panel_info_.transfer_time_us << "us";
+  os << " AllowedModeSwitch: " << hw_panel_info_.allowed_mode_switch;
   os << " MaxBrightness:" << hw_panel_info_.panel_max_brightness;
   os << "\n Display WxH: " << display_attributes_.x_pixels << "x" << display_attributes_.y_pixels;
   os << " MixerWxH: " << mixer_attributes_.width << "x" << mixer_attributes_.height;
@@ -1113,6 +1218,12 @@ void DppsInfo::DppsNotifyOps(enum DppsNotifyOps op, void *payload, size_t size) 
 
 DisplayError DisplayBuiltIn::HandleSecureEvent(SecureEvent secure_event) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
+
+  if (!active_ && (pending_power_state_ == kPowerStateNone)) {
+    DLOGW("Cannot handle secure event when display is not active");
+    return kErrorPermission;
+  }
+
   DisplayError err = hw_intf_->HandleSecureEvent(secure_event, default_qos_data_);
   if (err != kErrorNone) {
     return err;
@@ -1120,6 +1231,31 @@ DisplayError DisplayBuiltIn::HandleSecureEvent(SecureEvent secure_event) {
   comp_manager_->HandleSecureEvent(display_comp_ctx_, secure_event);
   secure_event_ = secure_event;
 
+  if (vsync_enable_ && secure_event == kTUITransitionStart) {
+    err = SetVSyncState(false /* enable */);
+    if (err != kErrorNone) {
+      return err;
+    }
+    vsync_enable_pending_ = true;
+  } else if (secure_event == kTUITransitionEnd) {
+    err = HandlePendingVSyncEnable(nullptr);
+    if (err != kErrorNone) {
+      return err;
+    }
+    DisplayState state = kStateOff;
+    if (GetPendingDisplayState(&state) == kErrorNone) {
+      // Handle PowerOn and Doze during the next commit
+      if (state == kStateOn || state == kStateDoze) {
+        return kErrorNone;
+      }
+      shared_ptr<Fence> release_fence = nullptr;
+      err = SetDisplayState(state, false /* teardown */, &release_fence);
+      if (err != kErrorNone) {
+        DLOGE("SetDisplay state %d failed for %d err %d", state, display_id_, err);
+        return err;
+      }
+    }
+  }
   return kErrorNone;
 }
 
@@ -1456,6 +1592,25 @@ void DisplayBuiltIn::GetFpsConfig(HWDisplayAttributes *display_attr, HWPanelInfo
   display_attr->fps = display_attributes_.fps;
   display_attr->vsync_period_ns = display_attributes_.vsync_period_ns;
   panel_info->transfer_time_us = hw_panel_info_.transfer_time_us;
+}
+
+PrimariesTransfer DisplayBuiltIn::GetBlendSpaceFromStcColorMode(
+    const snapdragoncolor::ColorMode &color_mode) {
+  PrimariesTransfer blend_space = {};
+  if (!color_mgr_) {
+    return blend_space;
+  }
+
+  // Set sRGB as default blend space.
+  if (stc_color_modes_.list.empty() || color_mode.intent == snapdragoncolor::kNative ||
+      (color_mode.gamut == ColorPrimaries_Max && color_mode.gamma == Transfer_Max)) {
+    return blend_space;
+  }
+
+  blend_space.primaries = color_mode.gamut;
+  blend_space.transfer = color_mode.gamma;
+
+  return blend_space;
 }
 
 }  // namespace sdm
