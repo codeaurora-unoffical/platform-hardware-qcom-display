@@ -964,6 +964,11 @@ DisplayError HWDeviceDRM::GetConfigIndex(char *mode, uint32_t *index) {
 }
 
 DisplayError HWDeviceDRM::PowerOn(const HWQosData &qos_data, int *release_fence) {
+  if (last_power_mode_ == DRMPowerMode::ON) {
+    pending_doze_ = false;
+    return kErrorNone;
+  }
+
   SetQOSData(qos_data);
 
   int64_t release_fence_t = -1;
@@ -1007,6 +1012,11 @@ DisplayError HWDeviceDRM::PowerOff(bool teardown) {
     return kErrorNone;
   }
 
+  if (last_power_mode_ == DRMPowerMode::OFF) {
+    pending_doze_ = false;
+    return kErrorNone;
+  }
+
   ResetROI();
   int64_t retire_fence_t = -1;
   drmModeModeInfo current_mode = connector_info_.modes[current_mode_index_].mode;
@@ -1033,6 +1043,10 @@ DisplayError HWDeviceDRM::PowerOff(bool teardown) {
 
 DisplayError HWDeviceDRM::Doze(const HWQosData &qos_data, int *release_fence) {
   DTRACE_SCOPED();
+
+  if (last_power_mode_ == DRMPowerMode::DOZE) {
+    return kErrorNone;
+  }
 
   if (first_cycle_ || ((!switch_mode_valid_) && (last_power_mode_ != DRMPowerMode::OFF))) {
     pending_doze_ = true;
@@ -1077,6 +1091,11 @@ DisplayError HWDeviceDRM::Doze(const HWQosData &qos_data, int *release_fence) {
 
 DisplayError HWDeviceDRM::DozeSuspend(const HWQosData &qos_data, int *release_fence) {
   DTRACE_SCOPED();
+
+  if (last_power_mode_ == DRMPowerMode::DOZE_SUSPEND) {
+    pending_doze_ = false;
+    return kErrorNone;
+  }
 
   SetQOSData(qos_data);
 

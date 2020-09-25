@@ -517,6 +517,11 @@ DisplayError HWPeripheralDRM::PowerOn(const HWQosData &qos_data, int *release_fe
     doze_poms_switch_done_ = false;
   }
 
+  if (last_power_mode_ == DRMPowerMode::ON) {
+    pending_doze_ = false;
+    return kErrorNone;
+  }
+
   if (!idle_pc_enabled_) {
     drm_atomic_intf_->Perform(sde_drm::DRMOps::CRTC_SET_IDLE_PC_STATE, token_.crtc_id,
                               sde_drm::DRMIdlePCState::ENABLE);
@@ -557,6 +562,10 @@ DisplayError HWPeripheralDRM::PowerOff(bool teardown) {
 DisplayError HWPeripheralDRM::Doze(const HWQosData &qos_data, int *release_fence) {
   DTRACE_SCOPED();
 
+  if (last_power_mode_ == DRMPowerMode::DOZE) {
+    return kErrorNone;
+  }
+
   bool pending_poms_switch = false;
   if (!first_cycle_ && switch_mode_valid_ && !doze_poms_switch_done_ &&
     (current_mode_index_ == video_mode_index_)) {
@@ -589,6 +598,11 @@ DisplayError HWPeripheralDRM::Doze(const HWQosData &qos_data, int *release_fence
 
 DisplayError HWPeripheralDRM::DozeSuspend(const HWQosData &qos_data, int *release_fence) {
   DTRACE_SCOPED();
+
+  if (last_power_mode_ == DRMPowerMode::DOZE_SUSPEND) {
+    pending_doze_ = false;
+    return kErrorNone;
+  }
 
   if (switch_mode_valid_ && !doze_poms_switch_done_ &&
     (current_mode_index_ == video_mode_index_)) {
