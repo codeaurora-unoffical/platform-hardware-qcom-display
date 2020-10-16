@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+* Copyright (c) 2017-2018, 2020 The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -34,10 +34,9 @@
 #include <core/sdm_types.h>
 #include <drm_interface.h>
 #include <private/hw_info_types.h>
+#include <private/hw_info_interface.h>
 #include <bitset>
 #include <vector>
-
-#include "hw_info_interface.h"
 
 namespace sdm {
 
@@ -49,6 +48,8 @@ class HWInfoDRM: public HWInfoInterface {
   virtual DisplayError GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info);
   virtual DisplayError GetDisplaysStatus(HWDisplaysInfo *hw_displays_info);
   virtual DisplayError GetMaxDisplaysSupported(DisplayType type, int32_t *max_displays);
+  virtual DisplayError GetPipesStatus(HWPipesStateInfo *hw_pipes_info, bool update);
+  virtual DisplayError SetPipeHandoff(uint32_t pipe_id);
 
  private:
   void Deinit();

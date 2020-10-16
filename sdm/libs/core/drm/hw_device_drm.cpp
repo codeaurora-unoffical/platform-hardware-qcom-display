@@ -63,7 +63,6 @@
 #include <limits>
 
 #include "hw_device_drm.h"
-#include "hw_info_interface.h"
 
 #define __CLASS__ "HWDeviceDRM"
 
