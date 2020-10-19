@@ -277,6 +277,7 @@ void HWCSession::InitSupportedDisplaySlots() {
   map_info_primary_.client_id = qdutils::DISPLAY_PRIMARY;
 
   if (null_display_mode_) {
+    is_hdr_display_.resize(1);
     // Skip display slot initialization.
     return;
   }
