@@ -128,7 +128,7 @@ DisplayError HWPeripheralDRM::SetDynamicDSIClock(uint64_t bit_clk_rate) {
     return kErrorNotSupported;
   }
 
-  if (doze_poms_switch_done_ || pending_poms_switch_) {
+  if (doze_poms_switch_done_) {
     return kErrorNotSupported;
   }
 
@@ -147,7 +147,7 @@ DisplayError HWPeripheralDRM::GetDynamicDSIClock(uint64_t *bit_clk_rate) {
 
 
 DisplayError HWPeripheralDRM::SetRefreshRate(uint32_t refresh_rate) {
-  if (doze_poms_switch_done_ || pending_poms_switch_) {
+  if (doze_poms_switch_done_) {
     // poms switch in progress
     // Defer any refresh rate setting.
     return kErrorNotSupported;
@@ -162,7 +162,7 @@ DisplayError HWPeripheralDRM::SetRefreshRate(uint32_t refresh_rate) {
 }
 
 DisplayError HWPeripheralDRM::SetDisplayMode(const HWDisplayMode hw_display_mode) {
-  if (doze_poms_switch_done_ || pending_poms_switch_) {
+  if (doze_poms_switch_done_) {
     return kErrorNotSupported;
   }
 
@@ -205,13 +205,6 @@ DisplayError HWPeripheralDRM::Commit(HWLayers *hw_layers) {
   // Initialize to default after successful commit
   synchronous_commit_ = false;
   active_ = true;
-
-  if (pending_poms_switch_) {
-    HWDeviceDRM::SetDisplayMode(kModeCommand);
-    hw_panel_info_.bitclk_rates = bitclk_rates_;
-    doze_poms_switch_done_ = true;
-    pending_poms_switch_ = false;
-  }
 
   idle_pc_state_ = sde_drm::DRMIdlePCState::NONE;
 
@@ -524,6 +517,11 @@ DisplayError HWPeripheralDRM::PowerOn(const HWQosData &qos_data, int *release_fe
     doze_poms_switch_done_ = false;
   }
 
+  if (last_power_mode_ == DRMPowerMode::ON) {
+    pending_doze_ = false;
+    return kErrorNone;
+  }
+
   if (!idle_pc_enabled_) {
     drm_atomic_intf_->Perform(sde_drm::DRMOps::CRTC_SET_IDLE_PC_STATE, token_.crtc_id,
                               sde_drm::DRMIdlePCState::ENABLE);
@@ -541,7 +539,6 @@ DisplayError HWPeripheralDRM::PowerOn(const HWQosData &qos_data, int *release_fe
   }
   idle_pc_state_ = sde_drm::DRMIdlePCState::NONE;
   idle_pc_enabled_ = true;
-  pending_poms_switch_ = false;
   active_ = true;
 
   CacheDestScalarData();
@@ -557,7 +554,6 @@ DisplayError HWPeripheralDRM::PowerOff(bool teardown) {
     return err;
   }
 
-  pending_poms_switch_ = false;
   active_ = false;
 
   return kErrorNone;
@@ -566,6 +562,11 @@ DisplayError HWPeripheralDRM::PowerOff(bool teardown) {
 DisplayError HWPeripheralDRM::Doze(const HWQosData &qos_data, int *release_fence) {
   DTRACE_SCOPED();
 
+  if (last_power_mode_ == DRMPowerMode::DOZE) {
+    return kErrorNone;
+  }
+
+  bool pending_poms_switch = false;
   if (!first_cycle_ && switch_mode_valid_ && !doze_poms_switch_done_ &&
     (current_mode_index_ == video_mode_index_)) {
     if (active_) {
@@ -573,13 +574,19 @@ DisplayError HWPeripheralDRM::Doze(const HWQosData &qos_data, int *release_fence
       hw_panel_info_.bitclk_rates = bitclk_rates_;
       doze_poms_switch_done_ = true;
     } else {
-      pending_poms_switch_ = true;
+      pending_poms_switch = true;
     }
   }
 
   DisplayError err = HWDeviceDRM::Doze(qos_data, release_fence);
   if (err != kErrorNone) {
     return err;
+  }
+
+  if (pending_poms_switch) {
+    HWDeviceDRM::SetDisplayMode(kModeCommand);
+    hw_panel_info_.bitclk_rates = bitclk_rates_;
+    doze_poms_switch_done_ = true;
   }
 
   if (first_cycle_) {
@@ -591,6 +598,11 @@ DisplayError HWPeripheralDRM::Doze(const HWQosData &qos_data, int *release_fence
 
 DisplayError HWPeripheralDRM::DozeSuspend(const HWQosData &qos_data, int *release_fence) {
   DTRACE_SCOPED();
+
+  if (last_power_mode_ == DRMPowerMode::DOZE_SUSPEND) {
+    pending_doze_ = false;
+    return kErrorNone;
+  }
 
   if (switch_mode_valid_ && !doze_poms_switch_done_ &&
     (current_mode_index_ == video_mode_index_)) {
@@ -604,14 +616,13 @@ DisplayError HWPeripheralDRM::DozeSuspend(const HWQosData &qos_data, int *releas
     return err;
   }
 
-  pending_poms_switch_ = false;
   active_ = true;
 
   return kErrorNone;
 }
 
 DisplayError HWPeripheralDRM::SetDisplayAttributes(uint32_t index) {
-  if (doze_poms_switch_done_ || pending_poms_switch_ || bit_clk_rate_) {
+  if (doze_poms_switch_done_ || bit_clk_rate_) {
     return kErrorNotSupported;
   }
 
