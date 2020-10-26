@@ -146,6 +146,11 @@ void HWInfoDRM::Deinit() {
   delete hw_resource_;
   hw_resource_ = nullptr;
 
+  if (hw_first_display_info_) {
+    delete hw_first_display_info_;
+    hw_first_display_info_ = nullptr;
+  }
+
   if (drm_mgr_intf_) {
     DRMLibLoader::GetInstance()->FuncDestroyDRMManager()();
     drm_mgr_intf_ = nullptr;
@@ -767,6 +772,11 @@ void HWInfoDRM::GetSDMFormat(uint32_t drm_format, uint64_t drm_format_modifier,
 }
 
 DisplayError HWInfoDRM::GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_disp_info) {
+  if (hw_first_display_info_) {
+   *hw_disp_info = *hw_first_display_info_;
+   return kErrorNone;
+  }
+
   HWDisplaysInfo hw_displays_info;
   DisplayError error = kErrorNone;
 
@@ -784,6 +794,9 @@ DisplayError HWInfoDRM::GetFirstDisplayInterfaceType(HWDisplayInterfaceInfo *hw_
       }
     }
   }
+
+  hw_first_display_info_ = new HWDisplayInterfaceInfo;
+  *hw_first_display_info_ = *hw_disp_info;
 
   return error;
 }

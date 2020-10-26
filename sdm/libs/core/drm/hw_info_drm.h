@@ -70,6 +70,7 @@ class HWInfoDRM: public HWInfoInterface {
 
   sde_drm::DRMManagerInterface *drm_mgr_intf_ = {};
   bool default_mode_ = false;
+  HWDisplayInterfaceInfo *hw_first_display_info_ = nullptr;
 
   static const int kMaxStringLength = 1024;
   static const int kKiloUnit = 1000;
