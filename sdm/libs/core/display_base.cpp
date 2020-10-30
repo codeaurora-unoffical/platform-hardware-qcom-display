@@ -504,11 +504,8 @@ DisplayError DisplayBase::GetConfig(DisplayConfigFixedInfo *fixed_info) {
     hdr_supported = (hdr_supported && hw_panel_info_.hdr_enabled);
   }
 
-  // Built-in displays always support HDR10+ when the target supports HDR. For non-builtins, check
-  // panel capability.
-  if (kBuiltIn == display_type_) {
-    hdr_plus_supported = hdr_supported;
-  } else if (hdr_supported && hw_panel_info_.hdr_plus_enabled) {
+  // For non-builtin displays, check panel capability for HDR10+
+  if (hdr_supported && hw_panel_info_.hdr_plus_enabled) {
     hdr_plus_supported = true;
   }
 
@@ -551,7 +548,7 @@ DisplayError DisplayBase::SetDisplayState(DisplayState state, bool teardown,
   DLOGI("Set state = %d, display %d-%d, teardown = %d", state, display_id_,
         display_type_, teardown);
 
-  if (state == state_) {
+  if (state == state_ && !pending_doze_ && !pending_power_on_) {
     DLOGI("Same state transition is requested.");
     return kErrorNone;
   }
