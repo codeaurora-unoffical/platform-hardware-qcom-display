@@ -213,14 +213,17 @@ DisplayError HWTVDRM::PowerOff(bool teardown) {
     return kErrorHardware;
   }
 
+  last_power_mode_ = DRMPowerMode::OFF;
   return kErrorNone;
 }
 
 DisplayError HWTVDRM::Doze(const HWQosData &qos_data, int *release_fence) {
+  last_power_mode_ = DRMPowerMode::DOZE;
   return kErrorNone;
 }
 
 DisplayError HWTVDRM::DozeSuspend(const HWQosData &qos_data, int *release_fence) {
+  last_power_mode_ = DRMPowerMode::DOZE_SUSPEND;
   return kErrorNone;
 }
 
