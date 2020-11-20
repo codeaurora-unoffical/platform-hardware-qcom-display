@@ -672,7 +672,7 @@ DisplayError DisplayBuiltIn::SetRefreshRate(uint32_t refresh_rate, bool final_ra
     return kErrorParameters;
   }
 
-  if (handle_idle_timeout_ && !final_rate) {
+  if (handle_idle_timeout_ && !final_rate && !enable_qsync_idle_) {
     refresh_rate = hw_panel_info_.min_fps;
   }
 
@@ -1668,6 +1668,28 @@ PrimariesTransfer DisplayBuiltIn::GetBlendSpaceFromStcColorMode(
   blend_space.transfer = color_mode.gamma;
 
   return blend_space;
+}
+
+DisplayError DisplayBuiltIn::GetConfig(DisplayConfigFixedInfo *fixed_info) {
+  lock_guard<recursive_mutex> obj(recursive_mutex_);
+  fixed_info->is_cmdmode = (hw_panel_info_.mode == kModeCommand);
+
+  HWResourceInfo hw_resource_info = HWResourceInfo();
+  hw_info_intf_->GetHWResourceInfo(&hw_resource_info);
+
+  fixed_info->hdr_supported = hw_resource_info.has_hdr;
+  // Built-in displays always support HDR10+ when the target supports HDR
+  fixed_info->hdr_plus_supported = hw_resource_info.has_hdr;
+  // Populate luminance values only if hdr will be supported on that display
+  fixed_info->max_luminance = fixed_info->hdr_supported ? hw_panel_info_.peak_luminance: 0;
+  fixed_info->average_luminance = fixed_info->hdr_supported ? hw_panel_info_.average_luminance : 0;
+  fixed_info->min_luminance = fixed_info->hdr_supported ?  hw_panel_info_.blackness_level: 0;
+  fixed_info->hdr_eotf = hw_panel_info_.hdr_eotf;
+  fixed_info->hdr_metadata_type_one = hw_panel_info_.hdr_metadata_type_one;
+  fixed_info->partial_update = hw_panel_info_.partial_update;
+  fixed_info->readback_supported = hw_resource_info.has_concurrent_writeback;
+
+  return kErrorNone;
 }
 
 }  // namespace sdm
