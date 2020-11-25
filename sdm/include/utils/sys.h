@@ -49,7 +49,7 @@ class Sys {
 #endif
 
   // Pointers to system calls which are either mapped to actual system call or virtual driver.
-  typedef int (*ioctl)(int, int, ...);
+  typedef int (*ioctl)(int, long unsigned int, ...);
   typedef int (*access)(const char *, int);
   typedef int (*open)(const char *, int, ...);
   typedef int (*close)(int);
