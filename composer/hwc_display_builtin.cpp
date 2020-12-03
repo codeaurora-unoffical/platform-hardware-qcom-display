@@ -144,8 +144,8 @@ int HWCDisplayBuiltIn::Init() {
   is_primary_ = display_intf_->IsPrimaryDisplay();
 
   if (is_primary_) {
-    windowed_display_ = Debug::GetWindowRect(&window_rect_.left, &window_rect_.top,
-                      &window_rect_.right, &window_rect_.bottom) != kErrorUndefined;
+    windowed_display_ = (Debug::GetWindowRect(&window_rect_.left, &window_rect_.top,
+                         &window_rect_.right, &window_rect_.bottom) == 0);
     DLOGI("Window rect : [%f %f %f %f]", window_rect_.left, window_rect_.top,
            window_rect_.right, window_rect_.bottom);
 
@@ -176,6 +176,11 @@ int HWCDisplayBuiltIn::Init() {
   active_refresh_rate_ = attr.fps;
 
   DLOGI("active_refresh_rate: %d", active_refresh_rate_);
+
+  int enhance_idle_time = 0;
+  HWCDebugHandler::Get()->GetProperty(ENHANCE_IDLE_TIME, &enhance_idle_time);
+  enhance_idle_time_ = (enhance_idle_time == 1);
+  DLOGI("enhance_idle_time: %d", enhance_idle_time);
 
   return status;
 }
@@ -269,14 +274,16 @@ HWC2::Error HWCDisplayBuiltIn::Validate(uint32_t *out_num_types, uint32_t *out_n
   }
 
   uint32_t refresh_rate = GetOptimalRefreshRate(one_updating_layer);
-  error = display_intf_->SetRefreshRate(refresh_rate, force_refresh_rate_);
+  bool idle_screen = GetUpdatingAppLayersCount() == 0;
+  error = display_intf_->SetRefreshRate(refresh_rate, force_refresh_rate_, idle_screen);
 
   // Get the refresh rate set.
   display_intf_->GetRefreshRate(&refresh_rate);
   bool vsync_source = (callbacks_->GetVsyncSource() == id_);
 
   if (error == kErrorNone) {
-    if (vsync_source && (current_refresh_rate_ < refresh_rate)) {
+    if (vsync_source && ((current_refresh_rate_ < refresh_rate) ||
+                         (enhance_idle_time_ && (current_refresh_rate_ != refresh_rate)))) {
       DTRACE_BEGIN("HWC2::Vsync::Enable");
       // Display is ramping up from idle.
       // Client realizes need for resync upon change in config.
@@ -340,29 +347,36 @@ HWC2::Error HWCDisplayBuiltIn::CommitStitchLayers() {
     return HWC2::Error::None;
   }
 
+  LayerStitchContext ctx = {};
+  Layer *stitch_layer = stitch_target_->GetSDMLayer();
+  LayerBuffer &output_buffer = stitch_layer->input_buffer;
   for (auto &layer : layer_stack_.layers) {
     LayerComposition &composition = layer->composition;
     if (composition != kCompositionStitch) {
       continue;
     }
 
-    LayerStitchContext ctx = {};
+    StitchParams params = {};
     // Stitch target doesn't have an input fence.
     // Render all layers at specified destination.
     LayerBuffer &input_buffer = layer->input_buffer;
-    ctx.src_hnd = reinterpret_cast<const private_handle_t *>(input_buffer.buffer_id);
-    Layer *stitch_layer = stitch_target_->GetSDMLayer();
-    LayerBuffer &output_buffer = stitch_layer->input_buffer;
-    ctx.dst_hnd = reinterpret_cast<const private_handle_t *>(output_buffer.buffer_id);
-    SetRect(layer->stitch_info.dst_rect, &ctx.dst_rect);
-    SetRect(layer->stitch_info.slice_rect, &ctx.scissor_rect);
-    ctx.src_acquire_fence = input_buffer.acquire_fence;
+    params.src_hnd = reinterpret_cast<const private_handle_t *>(input_buffer.buffer_id);
+    params.dst_hnd = reinterpret_cast<const private_handle_t *>(output_buffer.buffer_id);
+    SetRect(layer->stitch_info.dst_rect, &params.dst_rect);
+    SetRect(layer->stitch_info.slice_rect, &params.scissor_rect);
+    params.src_acquire_fence = input_buffer.acquire_fence;
 
-    layer_stitch_task_.PerformTask(LayerStitchTaskCode::kCodeStitch, &ctx);
-
-    // Merge with current fence.
-    output_buffer.acquire_fence = Fence::Merge(output_buffer.acquire_fence, ctx.release_fence);
+    ctx.stitch_params.push_back(params);
   }
+
+  if (!ctx.stitch_params.size()) {
+    // No layers marked for stitch.
+    return HWC2::Error::None;
+  }
+
+  layer_stitch_task_.PerformTask(LayerStitchTaskCode::kCodeStitch, &ctx);
+  // Set release fence.
+  output_buffer.acquire_fence = ctx.release_fence;
 
   return HWC2::Error::None;
 }
@@ -608,6 +622,11 @@ HWC2::Error HWCDisplayBuiltIn::SetReadbackBuffer(const native_handle_t *buffer,
     return HWC2::Error::NoResources;
   }
 
+  if (secure_event_ != kSecureEventMax) {
+    DLOGE("CWB is not supported as TUI transition is in progress");
+    return HWC2::Error::Unsupported;
+  }
+
   const private_handle_t *handle = reinterpret_cast<const private_handle_t *>(buffer);
   if (!handle) {
     DLOGE("Bad parameter: handle is null");
@@ -668,18 +687,39 @@ HWC2::Error HWCDisplayBuiltIn::GetReadbackBufferFence(shared_ptr<Fence> *release
   return status;
 }
 
-DisplayError HWCDisplayBuiltIn::TeardownConcurrentWriteback(void) {
-  DisplayError error = kErrorNotSupported;
-  if (Fence::Wait(output_buffer_.release_fence) != kErrorNone) {
-    DLOGE("sync_wait error errno = %d, desc = %s", errno, strerror(errno));
-    return kErrorResources;
+DisplayError HWCDisplayBuiltIn::TeardownConcurrentWriteback(bool *needs_refresh) {
+  if (!needs_refresh) {
+    return kErrorParameters;
   }
-
-  if (display_intf_) {
-    error = display_intf_->TeardownConcurrentWriteback();
+  if (cwb_client_ == kCWBClientNone) {
+    *needs_refresh = false;
+    return kErrorNone;
   }
+  if (cwb_client_ == kCWBClientFrameDump) {
+    dump_frame_count_ = 0;
+    dump_output_to_file_ = false;
+    // Unmap and Free buffer
+    if (munmap(output_buffer_base_, output_buffer_info_.alloc_buffer_info.size) != 0) {
+      DLOGW("unmap failed with err %d", errno);
+    }
+    if (buffer_allocator_->FreeBuffer(&output_buffer_info_) != 0) {
+      DLOGW("FreeBuffer failed");
+    }
+    output_buffer_info_ = {};
+    output_buffer_base_ = nullptr;
+  } else if (cwb_client_ == kCWBClientColor) {
+    frame_capture_buffer_queued_ = false;
+    frame_capture_status_ = 0;
+  }
+  readback_buffer_queued_ = false;
+  post_processed_output_ = false;
+  readback_configured_ = false;
+  output_buffer_ = {};
+  cwb_client_ = kCWBClientNone;
+  validated_ = false;
 
-  return error;
+  *needs_refresh = true;
+  return kErrorNone;
 }
 
 HWC2::Error HWCDisplayBuiltIn::SetDisplayDppsAdROI(uint32_t h_start, uint32_t h_end,
@@ -988,7 +1028,6 @@ void HWCDisplayBuiltIn::HandleFrameDump() {
 
 HWC2::Error HWCDisplayBuiltIn::SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type,
                                                   int32_t format, bool post_processed) {
-  HWCDisplay::SetFrameDumpConfig(count, bit_mask_layer_type, format, post_processed);
   bool dump_output_to_file = bit_mask_layer_type & (1 << OUTPUT_LAYER_DUMP);
   DLOGI("output_layer_dump_enable %d", dump_output_to_file_);
 
@@ -999,11 +1038,11 @@ HWC2::Error HWCDisplayBuiltIn::SetFrameDumpConfig(uint32_t count, uint32_t bit_m
     }
   }
 
-  dump_output_to_file_ = dump_output_to_file;
-
-  if (!count || !dump_output_to_file_ || (output_buffer_info_.alloc_buffer_info.fd >= 0)) {
+  if (!count || !dump_output_to_file || (output_buffer_info_.alloc_buffer_info.fd >= 0)) {
     return HWC2::Error::None;
   }
+
+  HWCDisplay::SetFrameDumpConfig(count, bit_mask_layer_type, format, post_processed);
 
   // Allocate and map output buffer
   if (post_processed) {
@@ -1039,7 +1078,11 @@ HWC2::Error HWCDisplayBuiltIn::SetFrameDumpConfig(uint32_t count, uint32_t bit_m
 
   output_buffer_base_ = buffer;
   const native_handle_t *handle = static_cast<native_handle_t *>(output_buffer_info_.private_data);
-  SetReadbackBuffer(handle, nullptr, post_processed, kCWBClientFrameDump);
+  HWC2::Error err = SetReadbackBuffer(handle, nullptr, post_processed, kCWBClientFrameDump);
+  if (err != HWC2::Error::None) {
+    return err;
+  }
+  dump_output_to_file_ = dump_output_to_file;
 
   return HWC2::Error::None;
 }
@@ -1446,9 +1489,7 @@ void HWCDisplayBuiltIn::OnTask(const LayerStitchTaskCode &task_code,
     case LayerStitchTaskCode::kCodeStitch: {
         DTRACE_SCOPED();
         LayerStitchContext* ctx = reinterpret_cast<LayerStitchContext*>(task_context);
-        gl_layer_stitch_->Blit(ctx->src_hnd, ctx->dst_hnd, ctx->src_rect, ctx->dst_rect,
-                               ctx->scissor_rect, ctx->src_acquire_fence,
-                               ctx->dst_acquire_fence, &(ctx->release_fence));
+        gl_layer_stitch_->Blit(ctx->stitch_params, &(ctx->release_fence));
       }
       break;
     case LayerStitchTaskCode::kCodeDestroyInstance: {
@@ -1638,6 +1679,32 @@ void HWCDisplayBuiltIn::EnablePartialUpdate() {
     hwc_layer->SetPartialUpdate(partial_update_enabled_);
   }
   client_target_->SetPartialUpdate(partial_update_enabled_);
+}
+
+HWC2::Error HWCDisplayBuiltIn::NotifyDisplayCalibrationMode(bool in_calibration) {
+  auto status = color_mode_->NotifyDisplayCalibrationMode(in_calibration);
+  if (status != HWC2::Error::None) {
+    DLOGE("Failed for notify QDCM mode = %d", in_calibration);
+    return status;
+  }
+
+  return status;
+}
+
+uint32_t HWCDisplayBuiltIn::GetUpdatingAppLayersCount() {
+  uint32_t updating_count = 0;
+
+  for (uint i = 0; i < layer_stack_.layers.size(); i++) {
+    auto layer = layer_stack_.layers.at(i);
+    if (layer->composition == kCompositionGPUTarget) {
+      break;
+    }
+    if (layer->flags.updating) {
+      updating_count++;
+    }
+  }
+
+  return updating_count;
 }
 
 }  // namespace sdm

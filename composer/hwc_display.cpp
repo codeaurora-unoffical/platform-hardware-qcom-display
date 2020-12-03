@@ -206,6 +206,13 @@ HWC2::Error HWCColorMode::ApplyCurrentColorModeWithRenderIntent(bool hdr_present
       // fall back to display_p3/display_bt2020 SDR mode if there is no HDR mode
       mode_string = color_mode_map_[current_color_mode_][current_render_intent_][kSdrType];
     }
+
+    if (mode_string.empty() &&
+       (current_color_mode_ == ColorMode::BT2100_PQ) && (curr_dynamic_range_ == kSdrType)) {
+      // fallback to hdr mode.
+      mode_string = color_mode_map_[current_color_mode_][current_render_intent_][kHdrType];
+      DLOGI("fall back to hdr mode for ColorMode::BT2100_PQ kSdrType");
+    }
   }
 
   auto error = SetPreferredColorModeInternal(mode_string, false, NULL, NULL);
@@ -1223,12 +1230,6 @@ HWC2::Error HWCDisplay::SetClientTarget(buffer_handle_t target, shared_ptr<Fence
 
 HWC2::Error HWCDisplay::SetActiveConfig(hwc2_config_t config) {
   DTRACE_SCOPED();
-
-  // Cache refresh rate set by client.
-  DisplayConfigVariableInfo info = {};
-  GetDisplayAttributesForConfig(INT(config), &info);
-  active_refresh_rate_ = info.fps;
-
   hwc2_config_t current_config = 0;
   GetActiveConfig(&current_config);
   if (current_config == config) {
@@ -1239,7 +1240,26 @@ HWC2::Error HWCDisplay::SetActiveConfig(hwc2_config_t config) {
     return HWC2::Error::BadConfig;
   }
 
+  // DRM driver expects DRM_PREFERRED_MODE to be set as part of first commit.
+  if (!IsFirstCommitDone()) {
+    // Store client's config.
+    // Set this as part of post commit.
+    pending_first_commit_config_ = true;
+    pending_first_commit_config_index_ = config;
+    DLOGI("Defer config change to %d until first commit", UINT32(config));
+    return HWC2::Error::None;
+  } else if (pending_first_commit_config_) {
+    // Config override request from client.
+    // Honour latest request.
+    pending_first_commit_config_ = false;
+  }
+
   DLOGI("Active configuration changed to: %d", config);
+
+  // Cache refresh rate set by client.
+  DisplayConfigVariableInfo info = {};
+  GetDisplayAttributesForConfig(INT(config), &info);
+  active_refresh_rate_ = info.fps;
 
   // Store config index to be applied upon refresh.
   pending_config_ = true;
@@ -1320,6 +1340,7 @@ DisplayError HWCDisplay::HandleEvent(DisplayEvent event) {
       break;
     }
     case kSyncInvalidateDisplay:
+    case kIdlePowerCollapse:
     case kThermalEvent: {
       SEQUENCE_WAIT_SCOPE_LOCK(HWCSession::locker_[id_]);
       validated_ = false;
@@ -1343,8 +1364,6 @@ DisplayError HWCDisplay::HandleEvent(DisplayEvent event) {
               id_);
       }
     } break;
-    case kIdlePowerCollapse:
-      break;
     case kInvalidateDisplay:
       validated_ = false;
       break;
@@ -1726,6 +1745,16 @@ HWC2::Error HWCDisplay::PostCommitLayerStack(shared_ptr<Fence> *out_retire_fence
     DLOGI("Pause display %d-%d", sdm_id_, type_);
     display_paused_ = true;
     display_pause_pending_ = false;
+  }
+  if (secure_event_ == kTUITransitionEnd || secure_event_ == kSecureDisplayEnd) {
+    secure_event_ = kSecureEventMax;
+  }
+
+  // Handle pending config changes.
+  if (pending_first_commit_config_) {
+    DLOGI("Changing active config to %d", UINT32(pending_first_commit_config_));
+    pending_first_commit_config_ = false;
+    SetActiveConfig(pending_first_commit_config_index_);
   }
 
   return status;
@@ -2832,12 +2861,50 @@ int HWCDisplay::GetActiveConfigIndex() {
   return active_config_index_;
 }
 
+DisplayError HWCDisplay::ValidateTUITransition (SecureEvent secure_event) {
+  switch (secure_event) {
+    case kTUITransitionPrepare:
+      if (secure_event_ != kSecureEventMax) {
+        DLOGE("Invalid TUI transition from %d to %d", secure_event_, secure_event);
+        return kErrorParameters;
+      }
+      break;
+    case kTUITransitionUnPrepare:
+      if (secure_event_ != kTUITransitionPrepare) {
+        DLOGE("Invalid TUI transition from %d to %d", secure_event_, secure_event);
+        return kErrorParameters;
+      }
+      break;
+    case kTUITransitionStart:
+      if (secure_event_ != kSecureEventMax) {
+        DLOGE("Invalid TUI transition from %d to %d", secure_event_, secure_event);
+        return kErrorParameters;
+      }
+      break;
+    case kTUITransitionEnd:
+      if (secure_event_ != kTUITransitionStart) {
+        DLOGE("Invalid TUI transition from %d to %d", secure_event_, secure_event);
+        return kErrorParameters;
+      }
+      break;
+    default:
+      DLOGE("Invalid secure event %d", secure_event);
+      return kErrorParameters;
+  }
+  return kErrorNone;
+}
+
 DisplayError HWCDisplay::HandleSecureEvent(SecureEvent secure_event, bool *needs_refresh) {
+  DisplayError err = ValidateTUITransition(secure_event);
+  if (err != kErrorNone) {
+    return err;
+  }
+
   if (secure_event == secure_event_) {
     return kErrorNone;
   }
 
-  DisplayError err = display_intf_->HandleSecureEvent(secure_event, needs_refresh);
+  err = display_intf_->HandleSecureEvent(secure_event, needs_refresh);
   if (err != kErrorNone) {
     DLOGE("Handle secure event failed");
     return err;
@@ -2864,6 +2931,14 @@ DisplayError HWCDisplay::HandleSecureEvent(SecureEvent secure_event, bool *needs
 
   secure_event_ = secure_event;
 
+  return kErrorNone;
+}
+
+DisplayError HWCDisplay::TeardownConcurrentWriteback(bool *needs_refresh) {
+  if (!needs_refresh) {
+    return kErrorParameters;
+  }
+  *needs_refresh = false;
   return kErrorNone;
 }
 

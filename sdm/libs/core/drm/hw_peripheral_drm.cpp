@@ -487,6 +487,7 @@ bool HWPeripheralDRM::SetupConcurrentWriteback(const HWLayersInfo &hw_layer_info
     } else {
       // Tear down the Concurrent Writeback topology.
       drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_CRTC, cwb_config_.token.conn_id, 0);
+      DLOGI("Tear down the Concurrent Writeback topology");
     }
   }
 
@@ -714,7 +715,7 @@ DisplayError HWPeripheralDRM::DozeSuspend(const HWQosData &qos_data,
 }
 
 DisplayError HWPeripheralDRM::SetDisplayAttributes(uint32_t index) {
-  if (doze_poms_switch_done_ || pending_poms_switch_) {
+  if (doze_poms_switch_done_ || pending_poms_switch_ || bit_clk_rate_) {
     return kErrorNotSupported;
   }
 
