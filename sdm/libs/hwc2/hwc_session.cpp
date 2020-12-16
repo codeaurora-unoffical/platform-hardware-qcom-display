@@ -1114,6 +1114,14 @@ int32_t HWCSession::SetVsyncEnabled(hwc2_device_t *device, hwc2_display_t displa
 
   if (int_enabled == HWC2_VSYNC_ENABLE) {
     hwc_session->callbacks_.UpdateVsyncSource(display);
+
+    // Null display need at least 2 vsyncs to init DispSync period
+    if (hwc_session->null_display_mode_) {
+      nsecs_t now = systemTime(SYSTEM_TIME_MONOTONIC);
+      for (int i = 0; i < 2; i++) {
+        hwc_session->callbacks_.Vsync(display, now + 16666666LL * i);
+      }
+    }
   }
 
   return HWCSession::CallDisplayFunction(device, display, &HWCDisplay::SetVsyncEnabled, enabled);
