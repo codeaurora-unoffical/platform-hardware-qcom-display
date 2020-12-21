@@ -76,6 +76,8 @@
 #define DRM_FORMAT_MOD_QCOM_TIGHT fourcc_mod_code(QCOM, 0x4)
 #endif
 
+#define COUNT_OF(x)  (sizeof (x) / sizeof (*x))
+
 using std::string;
 using std::to_string;
 using std::fstream;
@@ -105,6 +107,49 @@ using sde_drm::DRMCscType;
 using sde_drm::DRMMultiRectMode;
 
 namespace sdm {
+
+/* Converting topologies to number of splits */
+static inline uint32_t ConvertTopology2Splits(enum HWTopology topology) {
+  static const uint32_t topoloty2splits_table[] = {
+    1, // kUnknown
+    1, // kSingleLM
+    1, // kSingleLMDSC
+    2, // kDualLM
+    2, // kDualLMDSC
+    2, // kDualLMMerge
+    2, // kDualLMMergeDSC
+    2, // kDualLMDSCMerge
+    3, // kTripleLM
+    3, // kTripleLMDSC
+    4, // kQuadLMMerge
+    4, // kQuadLMDSCMerge
+    4, // kQuadLMMergeDSC
+    6, // kSixLMMerge
+    6, // kSixLMDSCMerge
+    1, // kPPSplit
+  };
+
+  if (topology >= 0 && topology < COUNT_OF(topoloty2splits_table))
+    return topoloty2splits_table[topology];
+  return 1;
+}
+
+/* Converting number of splits to split type */
+static inline enum HWMixerSplit ConvertSplits2SplitType(uint32_t splits) {
+  static const enum HWMixerSplit splits2type_table[] = {
+    kNoSplit,     // 0
+    kNoSplit,     // 1
+    kDualSplit,   // 2
+    kTripleSplit, // 3
+    kQuadSplit,   // 4
+    kSixSplit,    // 5
+    kSixSplit,    // 6
+  };
+
+  if (splits < COUNT_OF(splits2type_table))
+    return splits2type_table[splits];
+  return kNoSplit;
+}
 
 static PPBlock GetPPBlock(const HWToneMapLut &lut_type) {
   PPBlock pp_block = kPPBlockMax;
@@ -637,6 +682,8 @@ DisplayError HWDeviceDRM::PopulateDisplayAttributes(uint32_t index) {
   display_attributes_[index].y_dpi = (FLOAT(mode.vdisplay) * 25.4f) / FLOAT(mm_height);
   SetTopology(topology, &display_attributes_[index].topology);
 
+  UpdateMixerSplitType(index);
+
   DLOGI("Display attributes[%d]: WxH: %dx%d, DPI: %fx%f, FPS: %d, LM_SPLIT: %d, V_BACK_PORCH: %d," \
         " V_FRONT_PORCH: %d, V_PULSE_WIDTH: %d, V_TOTAL: %d, H_TOTAL: %d, CLK: %dKHZ," \
         " TOPOLOGY: %d, HW_SPLIT: %d", index, display_attributes_[index].x_pixels,
@@ -658,19 +705,27 @@ void HWDeviceDRM::PopulateHWPanelInfo() {
            connector_info_.panel_name.c_str());
 
   uint32_t index = current_mode_index_;
-  hw_panel_info_.split_info.left_split = display_attributes_[index].x_pixels;
-  if (display_attributes_[index].is_device_split) {
+  UpdateMixerSplitType(index);
+  switch (mixer_attributes_.split_type) {
+  case kNoSplit:
+    hw_panel_info_.split_info.left_split = display_attributes_[index].x_pixels;
+    break;
+  case kDualSplit:
     hw_panel_info_.split_info.left_split = hw_panel_info_.split_info.right_split =
-        display_attributes_[index].x_pixels / 2;
-    if (display_attributes_[index].topology == kTripleLM ||
-        display_attributes_[index].topology == kTripleLMDSC) {
-      hw_panel_info_.split_info.left_split = hw_panel_info_.split_info.right_split =
-        display_attributes_[index].x_pixels * 2 / 3;
-    } else if (display_attributes_[index].topology == kSixLMMerge ||
-        display_attributes_[index].topology == kSixLMDSCMerge) {
-      hw_panel_info_.split_info.left_split = hw_panel_info_.split_info.right_split =
-        display_attributes_[index].x_pixels / 3;
-    }
+        (display_attributes_[index].x_pixels + 1) / 2;
+    break;
+  case kTripleSplit:
+    hw_panel_info_.split_info.left_split = hw_panel_info_.split_info.right_split =
+        (display_attributes_[index].x_pixels * 2 + 2) / 3;
+    break;
+  case kQuadSplit:
+    hw_panel_info_.split_info.left_split = hw_panel_info_.split_info.right_split =
+        (display_attributes_[index].x_pixels + 1) / 2;
+    break;
+  case kSixSplit:
+    hw_panel_info_.split_info.left_split = hw_panel_info_.split_info.right_split =
+        (display_attributes_[index].x_pixels + 2) / 3;
+    break;
   }
 
   hw_panel_info_.partial_update = connector_info_.modes[index].num_roi;
@@ -1628,7 +1683,7 @@ DisplayError HWDeviceDRM::SetPPFeatures(PPFeaturesConfig *feature_list) {
     bool crtc_feature = true;
 
     ret = feature_list->RetrieveNextFeature(&feature);
-    if (ret)
+    if (ret || !feature)
       break;
 
     hw_color_mgr_->ToDrmFeatureId(kDSPP, feature->feature_id_, &drm_id);
@@ -1637,26 +1692,25 @@ DisplayError HWDeviceDRM::SetPPFeatures(PPFeaturesConfig *feature_list) {
 
     kernel_params.id = drm_id.at(0);
     drm_mgr_intf_->GetCrtcPPInfo(token_.crtc_id, &kernel_params);
-    if (kernel_params.version == std::numeric_limits<uint32_t>::max())
+    if (kernel_params.version == std::numeric_limits<uint32_t>::max()) {
       crtc_feature = false;
-    if (feature) {
-      DLOGV_IF(kTagDriverConfig, "feature_id = %d", feature->feature_id_);
-      for (DRMPPFeatureID id : drm_id) {
-        if (id >= kPPFeaturesMax) {
-          DLOGE("Invalid feature id %d", id);
-          continue;
-        }
-        kernel_params.id = id;
-        ret = hw_color_mgr_->GetDrmFeature(feature, &kernel_params);
-        if (!ret && crtc_feature)
-          drm_atomic_intf_->Perform(DRMOps::CRTC_SET_POST_PROC,
-                                    token_.crtc_id, &kernel_params);
-        else if (!ret && !crtc_feature)
-          drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POST_PROC,
-                                    token_.conn_id, &kernel_params);
-
-        hw_color_mgr_->FreeDrmFeatureData(&kernel_params);
+    }
+    DLOGV_IF(kTagDriverConfig, "feature_id = %d", feature->feature_id_);
+    for (DRMPPFeatureID id : drm_id) {
+      if (id >= kPPFeaturesMax) {
+        DLOGE("Invalid feature id %d", id);
+        continue;
       }
+      kernel_params.id = id;
+      ret = hw_color_mgr_->GetDrmFeature(feature, &kernel_params);
+      if (!ret && crtc_feature)
+        drm_atomic_intf_->Perform(DRMOps::CRTC_SET_POST_PROC,
+                                  token_.crtc_id, &kernel_params);
+      else if (!ret && !crtc_feature)
+        drm_atomic_intf_->Perform(DRMOps::CONNECTOR_SET_POST_PROC,
+                                  token_.conn_id, &kernel_params);
+
+      hw_color_mgr_->FreeDrmFeatureData(&kernel_params);
     }
   }
 
@@ -1804,22 +1858,10 @@ DisplayError HWDeviceDRM::SetMixerAttributes(const HWMixerAttributes &mixer_attr
 
   mixer_attributes_ = mixer_attributes;
   mixer_attributes_.split_left = mixer_attributes_.width;
-  mixer_attributes_.split_type = kNoSplit;
   if (display_attributes_[index].is_device_split) {
     mixer_attributes_.split_left = UINT32(FLOAT(mixer_attributes.width) * mixer_split_ratio);
-    mixer_attributes_.split_type = kDualSplit;
-    if (display_attributes_[index].topology == kTripleLM ||
-        display_attributes_[index].topology == kTripleLMDSC) {
-      mixer_attributes_.split_type = kTripleSplit;
-    } else if (display_attributes_[index].topology == kQuadLMMerge ||
-        display_attributes_[index].topology == kQuadLMDSCMerge ||
-        display_attributes_[index].topology == kQuadLMMergeDSC) {
-      mixer_attributes_.split_type = kQuadSplit;
-    } else if (display_attributes_[index].topology == kSixLMMerge ||
-        display_attributes_[index].topology == kSixLMDSCMerge) {
-      mixer_attributes_.split_type = kSixSplit;
-    }
   }
+  UpdateMixerSplitType(index);
 
   return kErrorNone;
 }
@@ -1905,25 +1947,35 @@ void HWDeviceDRM::UpdateMixerAttributes() {
                                      ? hw_panel_info_.split_info.left_split
                                      : mixer_attributes_.width;
   mixer_attributes_.mixer_index = token_.crtc_index;
-  mixer_attributes_.split_type = kNoSplit;
-  if (display_attributes_[index].is_device_split) {
-    mixer_attributes_.split_type = kDualSplit;
-    if (display_attributes_[index].topology == kTripleLM ||
-        display_attributes_[index].topology == kTripleLMDSC) {
-      mixer_attributes_.split_type = kTripleSplit;
-    } else if (display_attributes_[index].topology == kQuadLMMerge ||
-        display_attributes_[index].topology == kQuadLMDSCMerge ||
-        display_attributes_[index].topology == kQuadLMMergeDSC) {
-      mixer_attributes_.split_type = kQuadSplit;
-    } else if (display_attributes_[index].topology == kSixLMMerge ||
-        display_attributes_[index].topology == kSixLMDSCMerge) {
-      mixer_attributes_.split_type = kSixSplit;
-    }
-  }
 
   DLOGI("Mixer WxH %dx%d-%d for %s", mixer_attributes_.width, mixer_attributes_.height,
         mixer_attributes_.split_type, device_name_);
   update_mode_ = true;
+}
+
+void HWDeviceDRM::UpdateMixerSplitType(uint32_t index) {
+  uint32_t splits, min_splits;
+  HWMixerSplit split_type;
+
+  splits = ConvertTopology2Splits(display_attributes_[index].topology);
+  mixer_attributes_.split_type = ConvertSplits2SplitType(splits);
+  if (splits > 2 && splits % 2 == 0) {
+    /* Pipes have to be in pairs */
+    min_splits = (display_attributes_[index].x_pixels / (splits / 2)
+                 + hw_resource_.max_pipe_width - 1)
+                 / hw_resource_.max_pipe_width * (splits / 2);
+  } else {
+    min_splits = (display_attributes_[index].x_pixels + hw_resource_.max_pipe_width - 1)
+                 / hw_resource_.max_pipe_width;
+  }
+
+  if (splits < min_splits) {
+    split_type = ConvertSplits2SplitType(min_splits);
+    if (mixer_attributes_.split_type != split_type) {
+      DLOGI("Upgrade split type %d -> %d\n", mixer_attributes_.split_type, split_type);
+      mixer_attributes_.split_type = split_type;
+    }
+  }
 }
 
 void HWDeviceDRM::SetSecureConfig(const LayerBuffer &input_buffer, DRMSecureMode *fb_secure_mode,
