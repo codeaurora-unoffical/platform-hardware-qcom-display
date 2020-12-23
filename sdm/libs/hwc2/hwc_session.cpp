@@ -2221,7 +2221,7 @@ int HWCSession::CreatePrimaryDisplay() {
 }
 
 int HWCSession::CreatePluggableDisplays(bool delay_hotplug) {
-  if (!primary_ready_) {
+  if (!primary_ready_ && !null_display_active_) {
     DLOGI("Primary display is not ready. Connect displays later if any.");
     return 0;
   }
