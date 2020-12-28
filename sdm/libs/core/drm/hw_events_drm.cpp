@@ -209,9 +209,11 @@ DisplayError HWEventsDRM::Init(int display_id, DisplayType display_type,
 }
 
 DisplayError HWEventsDRM::Deinit() {
-  std::lock_guard<std::mutex> lock(hw_events_mutex_);
+  {
+    std::lock_guard<std::mutex> lock(hw_events_mutex_);
+    hw_events_drm_ = NULL;
+  }
   exit_threads_ = true;
-  hw_events_drm_ = NULL;
   RegisterPanelDead(false);
   RegisterIdleNotify(false);
   RegisterIdlePowerCollapse(false);
