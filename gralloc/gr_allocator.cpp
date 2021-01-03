@@ -65,6 +65,7 @@
 #define ION_SD_FLAGS ION_SECURE
 #define ION_SC_FLAGS ION_SECURE
 #define ION_SC_PREVIEW_FLAGS ION_SECURE
+#define ION_SC_ENCODE_FLAGS ION_SECURE
 #else  // MASTER_SIDE_CP
 #ifdef HYPERVISOR
 #define CP_HEAP_ID ION_SECURE_DISPLAY_HEAP_ID
@@ -76,6 +77,7 @@
 #define ION_SD_FLAGS (ION_SECURE | ION_FLAG_CP_SEC_DISPLAY)
 #define ION_SC_FLAGS (ION_SECURE | ION_FLAG_CP_CAMERA)
 #define ION_SC_PREVIEW_FLAGS (ION_SECURE | ION_FLAG_CP_CAMERA_PREVIEW)
+#define ION_SC_ENCODE_FLAGS (ION_SECURE | ION_FLAG_CP_CAMERA_ENCODE | ION_FLAG_CP_CAMERA )
 #endif
 
 using std::shared_ptr;
@@ -219,6 +221,10 @@ void Allocator::GetIonHeapInfo(uint64_t usage, unsigned int *ion_heap_id, unsign
       }
       if (usage & BufferUsage::COMPOSER_OVERLAY) {
         flags |= UINT(ION_SC_PREVIEW_FLAGS);
+      } else if (usage & BufferUsage::VIDEO_ENCODER){
+        ALOGI("gralloc::secure camera encode use case allocation from video heap");
+        heap_id = ION_HEAP(ION_VIDEO_HEAP_ID);
+        flags |= UINT(ION_SC_ENCODE_FLAGS);
       } else {
         flags |= UINT(ION_SC_FLAGS);
       }
