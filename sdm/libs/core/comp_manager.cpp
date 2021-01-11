@@ -335,8 +335,9 @@ DisplayError CompManager::Prepare(Handle display_ctx, HWLayers *hw_layers) {
 
   if (error != kErrorNone) {
     resource_intf_->Stop(display_resource_ctx, hw_layers);
-    DLOGE("Composition strategies exhausted for display = %d. (first frame = %s)",
-          display_comp_ctx->display_type, display_comp_ctx->first_cycle_ ? "True" : "False");
+    DLOGE("Composition strategies exhausted for display = %d-%d. (first frame = %s)",
+          display_comp_ctx->display_id, display_comp_ctx->display_type,
+          display_comp_ctx->first_cycle_ ? "True" : "False");
     return error;
   }
 
@@ -431,13 +432,14 @@ void CompManager::Purge(Handle display_ctx) {
   display_comp_ctx->strategy->Purge();
 }
 
-DisplayError CompManager::SetIdleTimeoutMs(Handle display_ctx, uint32_t active_ms) {
+DisplayError CompManager::SetIdleTimeoutMs(Handle display_ctx, uint32_t active_ms,
+                                           uint32_t inactive_ms) {
   SCOPE_LOCK(locker_);
 
   DisplayCompositionContext *display_comp_ctx =
                              reinterpret_cast<DisplayCompositionContext *>(display_ctx);
 
-  return display_comp_ctx->strategy->SetIdleTimeoutMs(active_ms);
+  return display_comp_ctx->strategy->SetIdleTimeoutMs(active_ms, inactive_ms);
 }
 
 void CompManager::ProcessIdleTimeout(Handle display_ctx) {

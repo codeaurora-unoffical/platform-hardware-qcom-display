@@ -519,7 +519,7 @@ void DisplayBuiltIn::UpdateDisplayModeParams() {
     ControlPartialUpdate(false /* enable */, &pending);
   } else if (hw_panel_info_.mode == kModeCommand) {
     // Flush idle timeout value currently set.
-    comp_manager_->SetIdleTimeoutMs(display_comp_ctx_, 0);
+    comp_manager_->SetIdleTimeoutMs(display_comp_ctx_, 0, 0);
     switch_to_cmd_ = true;
   }
 }
@@ -563,9 +563,9 @@ DisplayError DisplayBuiltIn::SetDisplayState(DisplayState state, bool teardown,
   return kErrorNone;
 }
 
-void DisplayBuiltIn::SetIdleTimeoutMs(uint32_t active_ms) {
+void DisplayBuiltIn::SetIdleTimeoutMs(uint32_t active_ms, uint32_t inactive_ms) {
   lock_guard<recursive_mutex> obj(recursive_mutex_);
-  comp_manager_->SetIdleTimeoutMs(display_comp_ctx_, active_ms);
+  comp_manager_->SetIdleTimeoutMs(display_comp_ctx_, active_ms, inactive_ms);
 }
 
 DisplayError DisplayBuiltIn::SetDisplayMode(uint32_t mode) {
@@ -606,7 +606,7 @@ DisplayError DisplayBuiltIn::SetDisplayMode(uint32_t mode) {
       ControlPartialUpdate(false /* enable */, &pending);
     } else if (mode == kModeCommand) {
       // Flush idle timeout value currently set.
-      comp_manager_->SetIdleTimeoutMs(display_comp_ctx_, 0);
+      comp_manager_->SetIdleTimeoutMs(display_comp_ctx_, 0, 0);
       switch_to_cmd_ = true;
     }
   }
@@ -832,7 +832,7 @@ void DisplayBuiltIn::Histogram(int histogram_fd, uint32_t blob_id) {
 }
 
 void DisplayBuiltIn::HandleBacklightEvent(float brightness_level) {
-  DLOGI("backlight event occurred %f ipc_intf %x", brightness_level, ipc_intf_.get());
+  DLOGI("backlight event occurred %f ipc_intf %p", brightness_level, ipc_intf_.get());
   if (ipc_intf_) {
     GenericPayload in;
     IPCBacklightParams *backlight_params = nullptr;
@@ -877,11 +877,11 @@ DisplayError DisplayBuiltIn::GetPanelBrightnessFromLevel(float level, float *bri
     *brightness = (static_cast<float>(level) + level_remainder_ - min) / (max - min);
   } else {
     min >= max ? DLOGE("Minimum brightness is greater than or equal to maximum brightness") :
-                 DLOGE("Invalid brightness level %d", level);
+                 DLOGE("Invalid brightness level %f", level);
     return kErrorDriverData;
   }
 
-  DLOGI_IF(kTagDisplay, "Received level %d (%f percent)", level, *brightness * 100);
+  DLOGI_IF(kTagDisplay, "Received level %f (%f percent)", level, *brightness * 100);
 
   return kErrorNone;
 }

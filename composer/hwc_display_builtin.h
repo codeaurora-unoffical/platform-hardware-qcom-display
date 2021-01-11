@@ -94,7 +94,7 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   virtual int GetActiveSecureSession(std::bitset<kSecureMax> *secure_sessions);
   virtual int HandleSecureSession(const std::bitset<kSecureMax> &secure_session,
                                   bool *power_on_pending, bool is_active_secure_display);
-  virtual void SetIdleTimeoutMs(uint32_t timeout_ms);
+  virtual void SetIdleTimeoutMs(uint32_t timeout_ms, uint32_t inactive_ms);
   virtual HWC2::Error SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type,
                                          int32_t format, bool post_processed);
   virtual int FrameCaptureAsync(const BufferInfo &output_buffer_info, bool post_processed);
@@ -148,6 +148,8 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   virtual bool IsDisplayIdle();
   virtual bool HasReadBackBufferSupport();
   virtual HWC2::Error NotifyDisplayCalibrationMode(bool in_calibration);
+  virtual HWC2::Error PresentAndOrGetValidateDisplayOutput(uint32_t *out_num_types,
+                                                           uint32_t *out_num_requests);
 
  private:
   HWCDisplayBuiltIn(CoreInterface *core_intf, BufferAllocator *buffer_allocator,
@@ -229,6 +231,7 @@ class HWCDisplayBuiltIn : public HWCDisplay, public SyncTask<LayerStitchTaskCode
   bool disable_dyn_fps_ = false;
   bool enable_round_corner_ = false;
   bool enhance_idle_time_ = false;
+  shared_ptr<Fence> retire_fence_ = nullptr;
 };
 
 }  // namespace sdm

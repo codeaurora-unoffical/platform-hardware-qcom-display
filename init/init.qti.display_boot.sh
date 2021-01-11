@@ -1,5 +1,5 @@
 #!/vendor/bin/sh
-# Copyright (c) 2020, The Linux Foundation. All rights reserved.
+# Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are
@@ -44,12 +44,23 @@ case "$target" in
         # Set property for lahaina
         setprop vendor.display.target.version 1
         setprop vendor.display.enable_posted_start_dyn 2
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
+        setprop vendor.display.enable_allow_idle_fallback 1
         ;;
         450)
         # Set property for shima
         setprop vendor.display.target.version 2
         setprop vendor.display.enable_perf_hint_large_comp_cycle 1
         setprop vendor.display.enable_posted_start_dyn 1
+        setprop vendor.display.enable_qsync_idle 1
+        setprop vendor.display.enable_allow_idle_fallback 1
+        ;;
+        # SOC ID for Yupik is 475, Yupik P is 499
+        475|499)
+        # Set property for Yupik
+        setprop vendor.display.target.version 2
+        setprop vendor.display.enable_posted_start_dyn 2
+        setprop vendor.display.enable_perf_hint_large_comp_cycle 1
         setprop vendor.display.enable_qsync_idle 1
         ;;
     esac
@@ -61,5 +72,6 @@ case "$target" in
     setprop vendor.display.disable_rotator_ubwc 1
     setprop vendor.display.enable_perf_hint_large_comp_cycle 0
     setprop vendor.display.enable_posted_start_dyn 1
+    setprop vendor.display.enable_allow_idle_fallback 1
     ;;
 esac

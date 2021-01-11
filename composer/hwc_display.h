@@ -173,12 +173,17 @@ class HWCDisplay : public DisplayEventHandler {
     std::multiset<HWCLayer *, SortLayersByZ> layer_set;  // Maintain a set sorted by Z
   };
 
+  enum DisplayCommitState {
+    kNormalCommit,
+    kInternalCommit,
+  };
+
   virtual ~HWCDisplay() {}
   virtual int Init();
   virtual int Deinit();
 
   // Framebuffer configurations
-  virtual void SetIdleTimeoutMs(uint32_t timeout_ms);
+  virtual void SetIdleTimeoutMs(uint32_t timeout_ms, uint32_t inactive_ms);
   virtual HWC2::Error SetFrameDumpConfig(uint32_t count, uint32_t bit_mask_layer_type,
                                          int32_t format, bool post_processed);
   virtual DisplayError SetMaxMixerStages(uint32_t max_mixer_stages);
@@ -382,7 +387,8 @@ class HWCDisplay : public DisplayEventHandler {
     validated_ = false;
     return HWC2::Error::None;
   }
-  virtual HWC2::Error GetValidateDisplayOutput(uint32_t *out_num_types, uint32_t *out_num_requests);
+  virtual HWC2::Error PresentAndOrGetValidateDisplayOutput(uint32_t *out_num_types,
+                                                           uint32_t *out_num_requests);
   virtual bool IsDisplayCommandMode();
   virtual HWC2::Error SetQSyncMode(QSyncMode qsync_mode) {
     return HWC2::Error::Unsupported;
@@ -558,6 +564,8 @@ class HWCDisplay : public DisplayEventHandler {
   bool display_pause_pending_ = false;
   bool display_idle_ = false;
   bool animating_ = false;
+  DisplayValidateState validate_state_ = kNormalValidate;
+  DisplayCommitState commit_state_ = kNormalCommit;
 
  private:
   void DumpInputBuffers(void);
@@ -570,7 +578,6 @@ class HWCDisplay : public DisplayEventHandler {
   uint32_t geometry_changes_ = GeometryChanges::kNone;
   uint32_t geometry_changes_on_doze_suspend_ = GeometryChanges::kNone;
   int null_display_mode_ = 0;
-  DisplayValidateState validate_state_ = kNormalValidate;
   bool fast_path_enabled_ = true;
   bool first_cycle_ = true;  // false if a display commit has succeeded on the device.
   shared_ptr<Fence> fbt_release_fence_ = nullptr;
