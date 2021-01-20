@@ -107,9 +107,7 @@ HWCDisplayPluggable::HWCDisplayPluggable(CoreInterface *core_intf,
 
 HWC2::Error HWCDisplayPluggable::Validate(uint32_t *out_num_types, uint32_t *out_num_requests) {
   auto status = HWC2::Error::None;
-  if (display_null_.IsActive()) {
-    return HWC2::Error::None;
-  }
+
   if (secure_display_active_) {
     MarkLayersForGPUBypass();
     return status;
@@ -146,9 +144,7 @@ HWC2::Error HWCDisplayPluggable::Present(int32_t *out_retire_fence) {
       status = HWCDisplay::PostCommitLayerStack(out_retire_fence);
     }
   }
-  if (display_null_.IsActive()) {
-    return HWC2::Error::None;
-  }
+
   return status;
 }
 
@@ -276,6 +272,8 @@ int HWCDisplayPluggable::SetState(bool connected) {
       display_null_.SetFrameBufferConfig(fb_config);
 
       SetVsyncEnabled(HWC2::Vsync::Disable);
+      // Release all the buffers and fences by calling Flush()
+      display_intf_->Flush(&layer_stack_);
       core_intf_->DestroyDisplay(display_intf_);
       display_intf_ = &display_null_;
 
