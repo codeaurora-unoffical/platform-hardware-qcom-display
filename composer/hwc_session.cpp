@@ -735,6 +735,18 @@ void HWCSession::PerformQsyncCallback(hwc2_display_t display) {
   }
 }
 
+void HWCSession::PerformIdleStatusCallback(hwc2_display_t display) {
+  std::shared_ptr<DisplayConfig::ConfigCallback> callback = idle_callback_.lock();
+  if (!callback) {
+    return;
+  }
+
+  if (hwc_display_[display]->IsDisplayIdle()) {
+    DTRACE_SCOPED();
+    callback->NotifyIdleStatus(true);
+  }
+}
+
 int32_t HWCSession::PresentDisplay(hwc2_display_t display, shared_ptr<Fence> *out_retire_fence) {
   auto status = HWC2::Error::BadDisplay;
   DTRACE_SCOPED();
@@ -783,6 +795,7 @@ int32_t HWCSession::PresentDisplay(hwc2_display_t display, shared_ptr<Fence> *ou
         status = hwc_display_[target_display]->Present(out_retire_fence);
         if (status == HWC2::Error::None) {
           PerformQsyncCallback(target_display);
+          PerformIdleStatusCallback(target_display);
         }
       }
     }
@@ -1091,7 +1104,8 @@ int32_t HWCSession::SetPowerMode(hwc2_display_t display, int32_t int_mode) {
   }
 
   // async_powermode supported for power on and off
-  bool override_mode = async_powermode_ && display_ready_.test(UINT32(display));
+  bool override_mode = async_powermode_ && display_ready_.test(UINT32(display)) &&
+                       async_power_mode_triggered_;
   HWC2::PowerMode last_power_mode = hwc_display_[display]->GetCurrentPowerMode();
 
   if (last_power_mode == mode) {

@@ -53,7 +53,6 @@
 namespace sdm {
 
 uint32_t HWCDisplay::throttling_refresh_rate_ = 60;
-constexpr uint32_t kVsyncTimeDriftNs = 1000000;
 
 bool NeedsToneMap(const LayerStack &layer_stack) {
   for (Layer *layer : layer_stack.layers) {
@@ -65,7 +64,7 @@ bool NeedsToneMap(const LayerStack &layer_stack) {
 }
 
 bool IsTimeAfterOrEqualVsyncTime(int64_t time, int64_t vsync_time) {
-  return ((vsync_time != INT64_MAX) && ((time - (vsync_time - kVsyncTimeDriftNs)) >= 0));
+  return ((vsync_time != INT64_MAX) && ((time - vsync_time) >= 0));
 }
 
 HWCColorMode::HWCColorMode(DisplayInterface *display_intf) : display_intf_(display_intf) {}
@@ -1380,6 +1379,9 @@ DisplayError HWCDisplay::HandleEvent(DisplayEvent event) {
     case kInvalidateDisplay:
       validated_ = false;
       break;
+    case kPostIdleTimeout:
+      display_idle_ = true;
+      break;
     default:
       DLOGW("Unknown event: %d", event);
       break;
@@ -1396,6 +1398,7 @@ HWC2::Error HWCDisplay::PrepareLayerStack(uint32_t *out_num_types, uint32_t *out
   layer_changes_.clear();
   layer_requests_.clear();
   has_client_composition_ = false;
+  display_idle_ = false;
 
   DTRACE_SCOPED();
   if (shutdown_pending_) {
