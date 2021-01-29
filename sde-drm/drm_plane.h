@@ -140,6 +140,8 @@ class DRMPlaneManager {
   int fd_ = -1;
   // Map of plane id to DRMPlane *
   std::map<uint32_t, std::unique_ptr<DRMPlane>> plane_pool_{};
+  bool first_cycle_ = true;
+
   // Global Scaler LUT blobs
   uint32_t dir_lut_blob_id_ = 0;
   uint32_t cir_lut_blob_id_ = 0;
