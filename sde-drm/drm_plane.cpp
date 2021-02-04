@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+* Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -97,6 +97,17 @@ static struct sde_drm_csc_v1 csc_10bit_convert[kCscTypeMax] = {
     { 0xffc0, 0xfe00, 0xfe00,},
     { 0x0, 0x0, 0x0,},
     { 0x40, 0x3ac, 0x40, 0x3c0, 0x40, 0x3c0,},
+    { 0x0, 0x3ff, 0x0, 0x3ff, 0x0, 0x3ff,},
+  },
+  [kCscYuv2Rgb709FR] = {
+    {
+      0x100000000, 0x0, 0x193000000,
+      0x100000000, 0x7fd0000000, 0x7f88000000,
+      0x100000000, 0x1db000000, 0x0,
+    },
+    { 0x0, 0xfe00, 0xfe00,},
+    { 0x0, 0x0, 0x0, },
+    { 0x0, 0x3ff, 0x0, 0x3ff, 0x0, 0x3ff,},
     { 0x0, 0x3ff, 0x0, 0x3ff, 0x0, 0x3ff,},
   },
   [kCscYuv2Rgb2020L] = {
@@ -1195,6 +1206,7 @@ void DRMPlane::ResetCache(drmModeAtomicReq *req) {
   tmp_prop_val_map_.clear();
   committed_prop_val_map_.clear();
 
+#ifdef TRUSTED_VM
   for (int i = 0; i <= (int32_t)(DRMTonemapLutType::VIG_3D_GAMUT); i++) {
     auto itr = plane_type_info_.tonemap_lut_version_map.find(static_cast<DRMTonemapLutType>(i));
     if (itr != plane_type_info_.tonemap_lut_version_map.end()) {
@@ -1226,6 +1238,7 @@ void DRMPlane::ResetCache(drmModeAtomicReq *req) {
       ResetColorLUT(feature_id, req);
     }
   }
+#endif
 }
 
 }  // namespace sde_drm
