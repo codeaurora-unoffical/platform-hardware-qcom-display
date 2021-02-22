@@ -337,6 +337,13 @@ void DRMPlaneManager::UnsetUnusedResources(uint32_t crtc_id, bool is_commit, drm
     uint32_t requested_crtc = 0;
     plane.second->GetAssignedCrtc(&assigned_crtc);
     plane.second->GetRequestedCrtc(&requested_crtc);
+
+    // ToDo: Make sure no planes are allocated before compositor starts
+    if (first_cycle_ && is_commit) {
+      first_cycle_ = false;
+      plane.second->Unset(true, req);
+    }
+
     if (assigned_crtc == crtc_id && requested_crtc == 0) {
       plane.second->Unset(is_commit, req);
     } else if (requested_crtc == crtc_id) {
